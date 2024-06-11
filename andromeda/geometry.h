@@ -9,4 +9,6 @@
 const byte LEDS_PER_STRIP = 23;
 const byte NUM_STRIPS = 7;
 
+CRGB STRIPS[NUM_STRIPS][LEDS_PER_STRIP];
+
 #endif
