@@ -16,7 +16,7 @@ void setup() {
   randomSeed(analogRead(0));
 
   for (byte i = 0; i < NUM_STRIPS; i++) {
-    moodlights[i].Randomize();
+    moodlights[i].randomize();
   }
 }
 
@@ -30,33 +30,33 @@ void paint(CRGB color)
   }
 }
 
-void chaos_moodlight(float t)
+void chaosMoodlight(float t)
 {
   FOR_EACH_STRIP {
     for (int led = 0; led < LEDS_PER_STRIP; led = led + 1) {
-        STRIPS[strip][led] = moodlights[strip].Evaluate(led, t);
+        STRIPS[strip][led] = moodlights[strip].evaluate(led, t);
       }
   }
 }
 
-void whole_moodlight(float t)
+void wholeMoodlight(float t)
 {
-  CRGB color = moodlights[0].Evaluate(0, t);
+  CRGB color = moodlights[0].evaluate(0, t);
   paint(color);
 }
 
-void individual_moodlight(float t)
+void individualMoodlight(float t)
 {
   FOR_EACH_STRIP {
     for (byte led = 0; led < LEDS_PER_STRIP; led++) {
-        STRIPS[strip][led] = moodlights[strip].Evaluate(0, t);
+        STRIPS[strip][led] = moodlights[strip].evaluate(0, t);
     }
   }
 }
 
-void looping_point(float t)
+void loopinPoint(float t)
 {
-  CRGB color = moodlights[0].Evaluate(0, t);
+  CRGB color = moodlights[0].evaluate(0, t);
 
   int idx = (int)(t / 100.0) % (LEDS_PER_STRIP / 2);
 

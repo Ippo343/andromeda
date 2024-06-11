@@ -16,7 +16,7 @@ class MoodLight
     const float T_SPAN = 1.0f;
     const float L_SCALE = 1.0f;
 
-  void Randomize()
+  void randomize()
   {
     TR = MIN_T + randFloat() * T_SPAN;
     TG = MIN_T + randFloat() * T_SPAN;
@@ -27,7 +27,7 @@ class MoodLight
     LB = randFloat() * LEDS_PER_STRIP * 1.0f;
   }
 
-  CRGB Evaluate(int led, float t)
+  CRGB evaluate(int led, float t)
   {
     byte r = (byte)(255 * ssin(led / LR + t / TR));
     byte g = (byte)(255 * ssin(led / LG + t / TG));
