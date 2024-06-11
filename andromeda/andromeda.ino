@@ -9,13 +9,7 @@ MoodLight moodlights[NUM_STRIPS];
 // the setup function runs once when you press reset or power the board
 void setup() {
 
-  FastLED.addLeds<WS2812B, 1, GRB>(STRIPS[0], LEDS_PER_STRIP);
-  FastLED.addLeds<WS2812B, 2, GRB>(STRIPS[1], LEDS_PER_STRIP);
-  FastLED.addLeds<WS2812B, 3, GRB>(STRIPS[2], LEDS_PER_STRIP);
-  FastLED.addLeds<WS2812B, 4, GRB>(STRIPS[3], LEDS_PER_STRIP);
-  FastLED.addLeds<WS2812B, 5, GRB>(STRIPS[4], LEDS_PER_STRIP);
-  FastLED.addLeds<WS2812B, 6, GRB>(STRIPS[5], LEDS_PER_STRIP);
-  FastLED.addLeds<WS2812B, 7, GRB>(STRIPS[6], LEDS_PER_STRIP);
+  initializePins();
 
   FastLED.setBrightness(180);
 
