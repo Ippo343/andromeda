@@ -1,64 +1,19 @@
 #include <FastLED.h>
 
-#define byte uint8_t
-#define NUM_LEDS 23
+#include "utils.h"
+#include "geometry.h"
+#include "moodlight.h"
 
-CRGB strip0[NUM_LEDS];
-CRGB strip1[NUM_LEDS];
-CRGB strip2[NUM_LEDS];
-CRGB strip3[NUM_LEDS];
-CRGB strip4[NUM_LEDS];
-CRGB strip5[NUM_LEDS];
-CRGB strip6[NUM_LEDS];
+CRGB strip0[LEDS_PER_STRIP];
+CRGB strip1[LEDS_PER_STRIP];
+CRGB strip2[LEDS_PER_STRIP];
+CRGB strip3[LEDS_PER_STRIP];
+CRGB strip4[LEDS_PER_STRIP];
+CRGB strip5[LEDS_PER_STRIP];
+CRGB strip6[LEDS_PER_STRIP];
 
 CRGB test_colors[4];
 unsigned long period = 2500;
-
-float randFloat()
-{
-  return random(1000 + 1) / 1000.0;
-}
-
-float ssin(float x)
-{
-  return sin(x) / 2 + 0.5;
-}
-
-class MoodLight
-{
-  public:
-    float TR;
-    float TG;
-    float TB;
-
-    float LR;
-    float LG;
-    float LB;
-
-    const float MIN_T = .5f;
-    const float T_SPAN = 1.0f;
-    const float L_SCALE = 1.0f;
-
-  void Randomize()
-  {
-    TR = MIN_T + randFloat() * T_SPAN;
-    TG = MIN_T + randFloat() * T_SPAN;
-    TB = MIN_T + randFloat() * T_SPAN;
-
-    LR = randFloat() * NUM_LEDS * 1.0f;
-    LG = randFloat() * NUM_LEDS * 1.0f;
-    LB = randFloat() * NUM_LEDS * 1.0f;
-  }
-
-  CRGB Evaluate(int led, float t)
-  {
-    byte r = (byte)(255 * ssin(led / LR + t / TR));
-    byte g = (byte)(255 * ssin(led / LG + t / TG));
-    byte b = (byte)(255 * ssin(led / LB + t / TB));
-
-    return CRGB(r, g, b);
-  }
-};
 
 MoodLight moodlight_0;
 MoodLight moodlight_1;
@@ -71,13 +26,13 @@ MoodLight moodlight_6;
 // the setup function runs once when you press reset or power the board
 void setup() {
 
-  FastLED.addLeds<WS2812B,  1, GRB>(strip0, NUM_LEDS);
-  FastLED.addLeds<WS2812B,  2, GRB>(strip1, NUM_LEDS);
-  FastLED.addLeds<WS2812B,  3, GRB>(strip2, NUM_LEDS);
-  FastLED.addLeds<WS2812B,  4, GRB>(strip3, NUM_LEDS);
-  FastLED.addLeds<WS2812B,  5, GRB>(strip4, NUM_LEDS);
-  FastLED.addLeds<WS2812B,  6, GRB>(strip5, NUM_LEDS);
-  FastLED.addLeds<WS2812B,  7, GRB>(strip6, NUM_LEDS);
+  FastLED.addLeds<WS2812B,  1, GRB>(strip0, LEDS_PER_STRIP);
+  FastLED.addLeds<WS2812B,  2, GRB>(strip1, LEDS_PER_STRIP);
+  FastLED.addLeds<WS2812B,  3, GRB>(strip2, LEDS_PER_STRIP);
+  FastLED.addLeds<WS2812B,  4, GRB>(strip3, LEDS_PER_STRIP);
+  FastLED.addLeds<WS2812B,  5, GRB>(strip4, LEDS_PER_STRIP);
+  FastLED.addLeds<WS2812B,  6, GRB>(strip5, LEDS_PER_STRIP);
+  FastLED.addLeds<WS2812B,  7, GRB>(strip6, LEDS_PER_STRIP);
   
   FastLED.setBrightness(180);
 
@@ -94,7 +49,7 @@ void setup() {
 
 void chaos_moodlight(float t)
 {
-  for (int led = 0; led < NUM_LEDS; led = led + 1) {
+  for (int led = 0; led < LEDS_PER_STRIP; led = led + 1) {
     strip0[led] = moodlight_0.Evaluate(led, t);
     strip1[led] = moodlight_1.Evaluate(led, t);
     strip2[led] = moodlight_2.Evaluate(led, t);
@@ -108,7 +63,7 @@ void chaos_moodlight(float t)
 void whole_moodlight(float t)
 {
   CRGB color = moodlight_0.Evaluate(0, t);
-  for (int led = 0; led < NUM_LEDS; led = led + 1) {
+  for (int led = 0; led < LEDS_PER_STRIP; led = led + 1) {
     strip0[led] = color;
     strip1[led] = color;
     strip2[led] = color;
@@ -122,7 +77,7 @@ void whole_moodlight(float t)
 void individual_moodlight(float t)
 {
   CRGB color = moodlight_0.Evaluate(0, t);
-  for (int led = 0; led < NUM_LEDS; led = led + 1) {
+  for (int led = 0; led < LEDS_PER_STRIP; led = led + 1) {
     strip0[led] = moodlight_0.Evaluate(0, t);
     strip1[led] = moodlight_1.Evaluate(0, t);
     strip2[led] = moodlight_2.Evaluate(0, t);
@@ -135,11 +90,11 @@ void individual_moodlight(float t)
 
 void loop(float t)
 {
-  int idx = (int)(t / 100.0) % (NUM_LEDS / 2);
-  int sidx = idx + (NUM_LEDS / 2);
+  int idx = (int)(t / 100.0) % (LEDS_PER_STRIP / 2);
+  int sidx = idx + (LEDS_PER_STRIP / 2);
   CRGB color = moodlight_0.Evaluate(0, t);
 
-  for (int led = 0; led < NUM_LEDS; led = led + 1) {
+  for (int led = 0; led < LEDS_PER_STRIP; led = led + 1) {
     strip0[led] = CRGB::Black;
     strip1[led] = CRGB::Black;
     strip2[led] = CRGB::Black;
@@ -168,7 +123,7 @@ void loop(float t)
 
 void paint(CRGB color)
 {
-  for (int led = 0; led < NUM_LEDS; led = led + 1) {
+  for (int led = 0; led < LEDS_PER_STRIP; led = led + 1) {
     strip0[led] = color;
     strip1[led] = color;
     strip2[led] = color;
