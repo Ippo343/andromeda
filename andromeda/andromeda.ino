@@ -29,8 +29,8 @@ void setup() {
 // Fills every LED with the same color
 void paint(CRGB color)
 {
-  for (byte strip = 0; strip < NUM_STRIPS; strip++) {
-    for (byte led = 0; led < LEDS_PER_STRIP; led = led + 1) {
+  FOR_EACH_STRIP {
+    FOR_EACH_LED {
       STRIPS[strip][led] = color;
     }
   }
@@ -38,7 +38,7 @@ void paint(CRGB color)
 
 void chaos_moodlight(float t)
 {
-  for (byte strip = 0; strip < NUM_STRIPS; strip ++) {
+  FOR_EACH_STRIP {
     for (int led = 0; led < LEDS_PER_STRIP; led = led + 1) {
         STRIPS[strip][led] = moodlights[strip].Evaluate(led, t);
       }
@@ -53,7 +53,7 @@ void whole_moodlight(float t)
 
 void individual_moodlight(float t)
 {
-  for (byte strip = 0; strip < NUM_STRIPS; strip++) {
+  FOR_EACH_STRIP {
     for (byte led = 0; led < LEDS_PER_STRIP; led++) {
         STRIPS[strip][led] = moodlights[strip].Evaluate(0, t);
     }
@@ -71,7 +71,7 @@ void looping_point(float t)
   
   paint(CRGB::Black);
 
-  for (byte strip = 0; strip < NUM_STRIPS; strip++) {
+  FOR_EACH_STRIP {
     STRIPS[strip][idx] = color;
     // STRIPS[strip][sidx] = color;
   }

@@ -6,6 +6,10 @@
 
 #define byte uint8_t
 
+// I hate typing
+#define FOR_EACH_STRIP  for (byte strip = 0; strip < NUM_STRIPS; strip++)
+#define FOR_EACH_LED    for (byte led = 0; led < LEDS_PER_STRIP; led++)
+
 float randFloat()
 {
   return random(1000 + 1) / 1000.0;
