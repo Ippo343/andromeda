@@ -25,7 +25,7 @@ class AbstractEffect
     {
       FOR_EACH_STRIP {
         FOR_EACH_LED {
-          strips[strip].buffer[led] = this->evaluate(strips[strip], strips[strip].leds[led], t);
+          strips[iStrip].buffer[iLed] = this->evaluate(strips[iStrip], strips[iStrip].leds[iLed], t);
         }
       }
     }

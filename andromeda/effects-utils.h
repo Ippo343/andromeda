@@ -9,7 +9,7 @@ void paint(CRGB color)
 {
   FOR_EACH_STRIP {
     FOR_EACH_LED {
-      STRIPS[strip].buffer[led] = color;
+      STRIPS[iStrip].buffer[iLed] = color;
     }
   }
 }

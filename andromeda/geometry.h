@@ -41,7 +41,7 @@ class LedStrip
     LedStrip() {
       // Initialize each led with its index in the strip
       FOR_EACH_LED {
-        this->leds[led].idx = led;
+        this->leds[iLed].idx = iLed;
       }
     }
 };
@@ -54,7 +54,7 @@ LedStrip STRIPS[NUM_STRIPS];
 void initializeGeometry() {
 
   FOR_EACH_STRIP {
-    STRIPS[strip].idx = strip;
+    STRIPS[iStrip].idx = iStrip;
   }
 
   // Setup FastLED to map each strip's pin to the corresponding color buffer

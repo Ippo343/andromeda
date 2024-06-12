@@ -6,24 +6,29 @@
 #include "effects.h"
 
 
-// the setup function runs once when you press reset or power the board
 void setup() {
 
   initializeGeometry();
 
+  // Right now the mirrors are not attached and the leds are exposed,
+  // and it's really fucking bright
+  // TODO: hey look, another parameter where I can hook up a wave function!
   FastLED.setBrightness(180);
 
+  // pin 0 is not attached to anything, so the voltage fluctuates
+  // doing an analog read from it returns noise for the RNG
   randomSeed(analogRead(0));
 
+  // TODO: these need to go
   for (byte i = 0; i < NUM_STRIPS; i++) {
     moodlights[i].randomize();
   }
 }
 
 
-// the loop function runs over and over again forever
 void loop() {
 
+  // TODO: floating point time is not very MCU-friendly
   float t = millis() / 1000.0;
 
   CRGB color;

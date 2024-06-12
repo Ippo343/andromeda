@@ -7,15 +7,17 @@
 #define byte uint8_t
 
 // I hate typing
-#define FOR_EACH_STRIP  for (byte strip = 0; strip < NUM_STRIPS; strip++)
-#define FOR_EACH_LED    for (byte led = 0; led < LEDS_PER_STRIP; led++)
+#define FOR_EACH_STRIP  for (byte iStrip = 0; iStrip < NUM_STRIPS; iStrip++)
+#define FOR_EACH_LED    for (byte iLed = 0; iLed < LEDS_PER_STRIP; iLed++)
 
+// TODO: replace with FastLED's fast random sources
 float randFloat()
 {
   return random(1000 + 1) / 1000.0;
 }
 
 // Scaled Sin function (between 0 and 1, centered around 0.5)
+// TODO: replace with FastLED's integer math sine
 float ssin(float x)
 {
   return sin(x) / 2 + 0.5;

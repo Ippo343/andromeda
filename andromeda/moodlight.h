@@ -1,6 +1,15 @@
 #ifndef MOODLIGHT_H
 #define MOODLIGHT_H
 
+// Moodlights are essentially sources of fluctuating colors,
+// because each RGB channel is attached to a sine wave.
+// To make things even more spacy I am also using different values
+// for both the time and space period of each channel chosen at random.
+
+// Which is admittedly a bit much and doesn't make a huge difference:
+// the first test we did showed that having different colors on each led
+// is basically indistinguishable from using the whole strip as a moodlight.
+
 class MoodLight
 {
   public:
