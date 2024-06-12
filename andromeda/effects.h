@@ -2,6 +2,7 @@
 #define EFFECTS_H
 
 #include <FastLED.h>
+#include "geometry.h"
 #include "utils.h"
 
 
@@ -12,7 +13,7 @@ void paint(CRGB color)
 {
   FOR_EACH_STRIP {
     FOR_EACH_LED {
-      STRIPS[strip][led] = color;
+      STRIPS[strip].buffer[led] = color;
     }
   }
 }
@@ -21,7 +22,7 @@ void chaosMoodlight(float t)
 {
   FOR_EACH_STRIP {
     for (int led = 0; led < LEDS_PER_STRIP; led = led + 1) {
-        STRIPS[strip][led] = moodlights[strip].evaluate(led, t);
+        STRIPS[strip].buffer[led] = moodlights[strip].evaluate(led, t);
       }
   }
 }
@@ -36,7 +37,7 @@ void individualMoodlight(float t)
 {
   FOR_EACH_STRIP {
     for (byte led = 0; led < LEDS_PER_STRIP; led++) {
-        STRIPS[strip][led] = moodlights[strip].evaluate(0, t);
+        STRIPS[strip].buffer[led] = moodlights[strip].evaluate(0, t);
     }
   }
 }
@@ -53,8 +54,8 @@ void loopinPoint(float t)
   paint(CRGB::Black);
 
   FOR_EACH_STRIP {
-    STRIPS[strip][idx] = color;
-    // STRIPS[strip][sidx] = color;
+    STRIPS[strip].buffer[idx] = color;
+    // STRIPS[strip].buffer[sidx] = color;
   }
 }
 
