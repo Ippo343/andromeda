@@ -36,6 +36,9 @@ class IndividualStripMoodlight : public AbstractEffect
 class LoopingPoint : public AbstractEffect
 {
   public:
+
+    float speed = 30.0;
+
     CRGB evaluate(LedStrip strip, Led led, float t) override
     {
       CRGB color = moodlights[0].evaluate(0, t);
@@ -44,7 +47,7 @@ class LoopingPoint : public AbstractEffect
       // all the others will be black
       // TODO: this 100.0 is a parameter that should be either randomized or set more intelligently
       // TODO: this index should be precomputed before rendering each loop
-      int idxOn = (int)(t / 100.0) % (LEDS_PER_STRIP);
+      int idxOn = (int)(t * (speed + 2 * strip.idx)) % (LEDS_PER_STRIP);
 
       return led.idx == idxOn ? color : CRGB::Black;
     }
