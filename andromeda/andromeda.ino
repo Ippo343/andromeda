@@ -6,6 +6,8 @@
 #include "effects.h"
 
 #define PERF
+#define MIN_BRIGHTNESS 25
+#define MAX_BRIGHTNESS 75
 
 void setup() {
 
@@ -20,7 +22,7 @@ void setup() {
   // Right now the mirrors are not attached and the leds are exposed,
   // and it's really fucking bright
   // TODO: hey look, another parameter where I can hook up a wave function!
-  FastLED.setBrightness(180);
+  FastLED.setBrightness(MAX_BRIGHTNESS);
 
   // pin 0 is not attached to anything, so the voltage fluctuates
   // doing an analog read from it returns noise for the RNG
@@ -53,7 +55,7 @@ void loop() {
 
   float pulse = ssin(t / 2);
   pulse = pulse * pulse * pulse * pulse * pulse;
-  uint8_t brightness = (uint8_t)(10.0 + (255.0 - 10.0) * pulse);
+  uint8_t brightness = (uint8_t)(MIN_BRIGHTNESS + (MAX_BRIGHTNESS - MIN_BRIGHTNESS) * pulse);
   FastLED.setBrightness(brightness);
 
   FastLED.show();
