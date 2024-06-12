@@ -5,8 +5,15 @@
 #include "moodlight.h"
 #include "effects.h"
 
+#define PERF
 
 void setup() {
+
+#ifdef ARDUINO_UNOR4_WIFI
+  Serial.begin(115200);
+#else
+  Serial.begin(9600);
+#endif
 
   initializeGeometry();
 
@@ -28,6 +35,8 @@ void setup() {
 
 void loop() {
 
+  unsigned long start = millis();
+
   // TODO: floating point time is not very MCU-friendly
   float t = millis() / 1000.0;
 
@@ -38,10 +47,21 @@ void loop() {
 
   paint(color);
 
+  LoopingPoint effect;
+  effect.render(STRIPS, t);
+
   float pulse = ssin(t / 2);
   pulse = pulse * pulse * pulse * pulse * pulse;
   uint8_t brightness = (uint8_t)(10.0 + (255.0 - 10.0) * pulse);
   FastLED.setBrightness(brightness);
 
   FastLED.show();
+
+  unsigned long end = millis();
+
+#ifdef PERF
+  float duration = (float)(end - start) / 1000.0;
+  float fps = 1.0 / duration;
+  Serial.println(fps);
+#endif
 }

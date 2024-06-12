@@ -67,6 +67,8 @@ void initializeGeometry() {
   FastLED.addLeds<WS2812B, 5, GRB>(STRIPS[4].buffer, LEDS_PER_STRIP);
   FastLED.addLeds<WS2812B, 6, GRB>(STRIPS[5].buffer, LEDS_PER_STRIP);
   FastLED.addLeds<WS2812B, 7, GRB>(STRIPS[6].buffer, LEDS_PER_STRIP);
+
+  Serial.println("Initialized geometry");
 }
 
 #endif
