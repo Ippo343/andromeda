@@ -39,17 +39,20 @@ class LoopingPoint : public AbstractEffect
 
     float speed = 30.0;
 
+    CRGB color[NUM_STRIPS];
+
+    virtual void precompute(float t) override
+    {
+      FOR_EACH_STRIP {
+        color[iStrip] = moodlights[iStrip].evaluate(0, t);
+      }
+    }
+
     CRGB evaluate(LedStrip strip, Led led, float t) override
     {
-      CRGB color = moodlights[0].evaluate(0, t);
-      
-      // Index of the only led that should be on,
-      // all the others will be black
-      // TODO: this 100.0 is a parameter that should be either randomized or set more intelligently
-      // TODO: this index should be precomputed before rendering each loop
+      // Index of the only led that should be on, all the others will be black
       int idxOn = (int)(t * (speed + 2 * strip.idx)) % (LEDS_PER_STRIP);
-
-      return led.idx == idxOn ? color : CRGB::Black;
+      return led.idx == idxOn ? color[strip.idx] : CRGB::Black;
     }
 };
 

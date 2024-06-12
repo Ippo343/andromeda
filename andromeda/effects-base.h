@@ -14,7 +14,7 @@ class AbstractEffect
 {
   public:
 
-    // TODO: this needs a method to precompute values at the start of each refresh
+    virtual void precompute(float t) { return ; }
 
     virtual CRGB evaluate(LedStrip strip, Led led, float t);
 

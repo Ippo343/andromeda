@@ -32,6 +32,7 @@ void setup() {
   }
 }
 
+LoopingPoint effect;
 
 void loop() {
 
@@ -47,7 +48,7 @@ void loop() {
 
   paint(color);
 
-  LoopingPoint effect;
+  effect.precompute(t);
   effect.render(STRIPS, t);
 
   float pulse = ssin(t / 2);
