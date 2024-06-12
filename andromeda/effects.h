@@ -4,59 +4,50 @@
 #include <FastLED.h>
 #include "geometry.h"
 #include "utils.h"
+#include "effects-base.h"
+#include "effects-utils.h"
 
-
+// Most of the effects I have written or plan to write
+// use one or more moodlights. Not great to have them here,
+// but it will do for the time being.
+// TODO: In the future any effect that wants a moodlight should have it as a member.
 MoodLight moodlights[NUM_STRIPS];
 
-// Fills every LED with the same color
-void paint(CRGB color)
+
+// Use each individual led strip as an independent moodlight.
+// All leds in the same strip have the same color,
+// but each strip fluctuates independently
+class IndividualStripMoodlight : public AbstractEffect
 {
-  FOR_EACH_STRIP {
-    FOR_EACH_LED {
-      STRIPS[strip].buffer[led] = color;
+  public:
+    CRGB evaluate(LedStrip strip, Led led, float t) override
+    {
+      // ignore the led index to force each led to the same color
+      // TODO: this is horribly inefficient.
+      // There should be a base class for all effects that apply to the full strip
+      // to avoid recomputing the same thing 23 times
+      return moodlights[strip.idx].evaluate(0, t);
     }
-  }
-}
+};
 
-void chaosMoodlight(float t)
-{
-  FOR_EACH_STRIP {
-    for (int led = 0; led < LEDS_PER_STRIP; led = led + 1) {
-        STRIPS[strip].buffer[led] = moodlights[strip].evaluate(led, t);
-      }
-  }
-}
 
-void wholeMoodlight(float t)
+// One single led turned on per strip,
+// looping around it very fast
+class LoopingPoint : public AbstractEffect
 {
-  CRGB color = moodlights[0].evaluate(0, t);
-  paint(color);
-}
+  public:
+    CRGB evaluate(LedStrip strip, Led led, float t) override
+    {
+      CRGB color = moodlights[0].evaluate(0, t);
+      
+      // Index of the only led that should be on,
+      // all the others will be black
+      // TODO: this 100.0 is a parameter that should be either randomized or set more intelligently
+      // TODO: this index should be precomputed before rendering each loop
+      int idxOn = (int)(t / 100.0) % (LEDS_PER_STRIP);
 
-void individualMoodlight(float t)
-{
-  FOR_EACH_STRIP {
-    for (byte led = 0; led < LEDS_PER_STRIP; led++) {
-        STRIPS[strip].buffer[led] = moodlights[strip].evaluate(0, t);
+      return led.idx == idxOn ? color : CRGB::Black;
     }
-  }
-}
-
-void loopinPoint(float t)
-{
-  CRGB color = moodlights[0].evaluate(0, t);
-
-  int idx = (int)(t / 100.0) % (LEDS_PER_STRIP / 2);
-
-  // Index of the symmetrically opposite LED (if you want two points)
-  int sidx = idx + (LEDS_PER_STRIP / 2);
-  
-  paint(CRGB::Black);
-
-  FOR_EACH_STRIP {
-    STRIPS[strip].buffer[idx] = color;
-    // STRIPS[strip].buffer[sidx] = color;
-  }
-}
+};
 
 #endif

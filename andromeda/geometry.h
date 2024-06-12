@@ -26,6 +26,12 @@ struct Led
 class LedStrip
 {
   public:
+
+    // Index of the strip in the structure.
+    // The central one is 0, the top one is 1,
+    // and the indices increase clockwise.
+    byte idx;
+
     // geometry info for each led in the strip
     Led leds[LEDS_PER_STRIP];
 
@@ -45,7 +51,12 @@ class LedStrip
 LedStrip STRIPS[NUM_STRIPS];
 
 
-void initializePins() {
+void initializeGeometry() {
+
+  FOR_EACH_STRIP {
+    STRIPS[strip].idx = strip;
+  }
+
   // Setup FastLED to map each strip's pin to the corresponding color buffer
   // Note that because this is a template method you cannot use a loop,
   // the pin number must be a compile-time constant
