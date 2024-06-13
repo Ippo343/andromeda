@@ -34,7 +34,7 @@ void setup() {
   }
 }
 
-LoopingPoint effect;
+IndividualStripMoodlight effect;
 
 void loop() {
 
