@@ -20,7 +20,7 @@ MoodLight moodlights[NUM_STRIPS];
 class IndividualStripMoodlight : public AbstractEffect
 {
   public:
-    CRGB evaluate(LedStrip strip, Led led, float t) override
+    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
     {
       // ignore the led index to force each led to the same color
       // TODO: this is horribly inefficient.
@@ -37,21 +37,21 @@ class LoopingPoint : public AbstractEffect
 {
   public:
 
-    float speed = 30.0;
+    milliseconds step = 30;
 
     CRGB color[NUM_STRIPS];
 
-    virtual void precompute(float t) override
+    virtual void precompute(milliseconds t) override
     {
       FOR_EACH_STRIP {
         color[iStrip] = moodlights[iStrip].evaluate(0, t);
       }
     }
 
-    CRGB evaluate(LedStrip strip, Led led, float t) override
+    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
     {
       // Index of the only led that should be on, all the others will be black
-      int idxOn = (int)(t * (speed + 2 * strip.idx)) % (LEDS_PER_STRIP);
+      int idxOn = (int)(t / step) % (LEDS_PER_STRIP);
       return led.idx == idxOn ? color[strip.idx] : CRGB::Black;
     }
 };

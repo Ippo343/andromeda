@@ -3,6 +3,7 @@
 
 // This header defines the base classes that all effects are built upon
 
+#include "utils.h"
 #include "geometry.h"
 
 // Abstract base class for all effects.
@@ -14,14 +15,14 @@ class AbstractEffect
 {
   public:
 
-    virtual void precompute(float t) { return ; }
+    virtual void precompute(milliseconds t) { return ; }
 
-    virtual CRGB evaluate(LedStrip strip, Led led, float t);
+    virtual CRGB evaluate(LedStrip strip, Led led, milliseconds t);
 
     virtual void randomize() { return; }
 
     // Computes the function over all the strips
-    void render(LedStrip* strips, float t)
+    void render(LedStrip* strips, milliseconds t)
     {
       FOR_EACH_STRIP {
         FOR_EACH_LED {

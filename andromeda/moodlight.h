@@ -1,35 +1,41 @@
 #ifndef MOODLIGHT_H
 #define MOODLIGHT_H
 
+#include <FastLED.h>
+#include "utils.h"
+
 // Moodlights are essentially sources of fluctuating colors,
 // because each RGB channel is attached to a sine wave.
-
-// Which is admittedly a bit much and doesn't make a huge difference:
-// the first test we did showed that having different colors on each led
-// is basically indistinguishable from using the whole strip as a moodlight.
 
 class MoodLight
 {
   public:
-    float TR;
-    float TG;
-    float TB;
+    // Period of each channel's wave (milliseconds)
+    byte bpmR;
+    byte bpmG;
+    byte bpmB;
 
-    const float MIN_T = .5f;
-    const float T_SPAN = 1.0f;
+    // Min period and period range
+    const byte MIN_BPM = 6;
+    const byte MAX_BPM = 30;
 
   void randomize()
   {
-    TR = MIN_T + randFloat() * T_SPAN;
-    TG = MIN_T + randFloat() * T_SPAN;
-    TB = MIN_T + randFloat() * T_SPAN;
+    bpmR = random8(MIN_BPM, MAX_BPM);
+    bpmG = random8(MIN_BPM, MAX_BPM);
+    bpmB = random8(MIN_BPM, MAX_BPM);
   }
 
-  CRGB evaluate(int led, float t)
+  CRGB evaluate(int led, milliseconds t)
   {
-    byte r = (byte)(255 * ssin(t / TR));
-    byte g = (byte)(255 * ssin(t / TG));
-    byte b = (byte)(255 * ssin(t / TB));
+    // NOTE: this actually ignores the t argument
+    // because computing sin(t) has horrible performance
+    // which also gets much worse very quickly as t increases.
+    // FastLED implements integer approximations, but they get the time
+    // by calling millis() internally.
+    byte r = beatsin8(bpmR);
+    byte g = beatsin8(bpmG);
+    byte b = beatsin8(bpmB);
 
     return CRGB(r, g, b);
   }
