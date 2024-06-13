@@ -42,6 +42,7 @@ class LedStrip
       // Initialize each led with its index in the strip
       FOR_EACH_LED {
         this->leds[iLed].idx = iLed;
+        this->buffer[iLed] = CRGB::Black;
       }
     }
 };
