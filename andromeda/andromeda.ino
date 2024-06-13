@@ -63,8 +63,7 @@ void loop() {
   unsigned long end = millis();
 
 #ifdef PERF
-  float duration = (float)(end - start) / 1000.0;
-  float fps = 1.0 / duration;
+  float fps = 1000.0 / (float)(end - start);
   Serial.println(fps);
 #endif
 }
