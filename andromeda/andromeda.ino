@@ -11,8 +11,8 @@
 #define MIN_BRIGHTNESS 25
 #define MAX_BRIGHTNESS 75
 
-SweepRGBW animation;
-LoopingPoint effect;
+AbstractAnimation* animation;
+AbstractEffect*    effect;
 
 void setup() {
 
@@ -42,17 +42,21 @@ void setup() {
     moodlights[i].randomize();
   }
 
-  animation.run();
-  animation.cleanup();
+  animation = getRandomAnimation();
+  animation->run();
+  animation->cleanup();
+  delete animation;
+
+  effect = getRandomEffect();
 }
 
 void loop() {
 
   unsigned long t = millis();
 
-  effect.precompute(t);
-  effect.render(STRIPS, t);
-  effect.postprocess(t);
+  effect->precompute(t);
+  effect->render(STRIPS, t);
+  effect->postprocess(t);
 
   // TODO: disabled while I figure out the integer sin functions
   // float pulse = ssin(t / 2);

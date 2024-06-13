@@ -70,4 +70,41 @@ class LoopingPoint : public AbstractEffect
     }
 };
 
+
+// I don't think this will ever show, but why not
+class ErrorEffect : public AbstractEffect
+{
+  public:
+    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    {
+      if (strip.idx == 0)
+        return CRGB::Red;
+      else
+        return CRGB::Black;
+    }
+};
+
+
+AbstractEffect* getRandomEffect() {
+
+  // You cannot have an array of types on this thing.
+  // I have a prototype where I had an array of template functions
+  // that would instantiate each effect, but unsurprisingly it crashes.
+  // For the moment, KISS will do.
+  // TODO: array of template functions because I can.
+
+  byte EFFECTS_COUNT = 2;
+  byte selection = random() % EFFECTS_COUNT;
+
+  switch (selection)
+  {
+    case 0:
+      return new IndividualStripMoodlight();
+    case 1:
+      return new LoopingPoint();
+    default:
+      return new ErrorEffect();
+  }
+}
+
 #endif
