@@ -38,6 +38,7 @@ class LoopingPoint : public AbstractEffect
   public:
 
     milliseconds step = 30;
+    byte idxOn;
 
     CRGB color[NUM_STRIPS];
 
@@ -46,13 +47,26 @@ class LoopingPoint : public AbstractEffect
       FOR_EACH_STRIP {
         color[iStrip] = moodlights[iStrip].evaluate(0, t);
       }
+
+      // Pick an LED to turn on, rotating along the strip
+      idxOn = (int)(t / step) % (LEDS_PER_STRIP);
     }
 
     CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
     {
-      // Index of the only led that should be on, all the others will be black
-      int idxOn = (int)(t / step) % (LEDS_PER_STRIP);
-      return led.idx == idxOn ? color[strip.idx] : CRGB::Black;
+      // If this is the led to turn on, apply the color;
+      // otherwise, leave it unchanged.
+      // They will be faded away in postprocessing
+      return led.idx == idxOn
+        ? color[strip.idx]
+        : strip.buffer[led.idx];
+    }
+
+    virtual void postprocess(milliseconds t) override
+    {
+      FOR_EACH_STRIP {
+        fadeToBlackBy(STRIPS[iStrip].buffer, LEDS_PER_STRIP, 25);
+      }
     }
 };
 

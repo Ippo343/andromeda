@@ -39,21 +39,15 @@ void setup() {
   }
 }
 
-IndividualStripMoodlight effect;
+LoopingPoint effect;
 
 void loop() {
 
   unsigned long t = millis();
 
-  CRGB color;
-  color.r = 75;
-  color.g = 1;
-  color.b = 0;
-
-  paint(color);
-
   effect.precompute(t);
   effect.render(STRIPS, t);
+  effect.postprocess(t);
 
   // TODO: disabled while I figure out the integer sin functions
   // float pulse = ssin(t / 2);

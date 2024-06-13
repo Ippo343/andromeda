@@ -15,10 +15,18 @@ class AbstractEffect
 {
   public:
 
+    // Called at the beginning of the frame.
+    // Allows the effect to cache values that will be reused during evaluate
     virtual void precompute(milliseconds t) { return ; }
 
+    // Evaluates the effect on each led
     virtual CRGB evaluate(LedStrip strip, Led led, milliseconds t);
 
+    // Called when all the led's have been evaluated
+    // to allow postprocess effects like blurring and fading
+    virtual void postprocess(milliseconds t) { return ; }
+
+    // Randomize the effect's parameters
     virtual void randomize() { return; }
 
     // Computes the function over all the strips
