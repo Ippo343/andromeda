@@ -6,9 +6,13 @@
 #include "geometry.h"
 #include "moodlight.h"
 #include "effects.h"
+#include "animations.h"
 
 #define MIN_BRIGHTNESS 25
 #define MAX_BRIGHTNESS 75
+
+SweepRGBW animation;
+LoopingPoint effect;
 
 void setup() {
 
@@ -37,9 +41,10 @@ void setup() {
   for (byte i = 0; i < NUM_STRIPS; i++) {
     moodlights[i].randomize();
   }
-}
 
-LoopingPoint effect;
+  animation.run();
+  animation.cleanup();
+}
 
 void loop() {
 
