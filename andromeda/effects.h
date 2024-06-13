@@ -20,13 +20,19 @@ MoodLight moodlights[NUM_STRIPS];
 class IndividualStripMoodlight : public AbstractEffect
 {
   public:
+
+    CRGB colors[NUM_STRIPS];
+
+    void precompute(milliseconds t) override
+    {
+      FOR_EACH_STRIP {
+        colors[iStrip] = moodlights[iStrip].evaluate(0, t);
+      }
+    }
+
     CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
     {
-      // ignore the led index to force each led to the same color
-      // TODO: this is horribly inefficient.
-      // There should be a base class for all effects that apply to the full strip
-      // to avoid recomputing the same thing 23 times
-      return moodlights[strip.idx].evaluate(0, t);
+      return colors[strip.idx];
     }
 };
 
