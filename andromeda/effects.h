@@ -152,6 +152,25 @@ class ElectricSparks : public AbstractEffect
 };
 
 
+class Glow : public AbstractEffect
+{
+  public:
+    // TODO: randomize
+    byte bpm = 12;
+    CRGB color = CRGB(255, 220, 50);
+
+    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    {
+      return color;
+    }
+
+    void postprocess(milliseconds t) override
+    {
+      byte brightness = beatsin8(bpm, 128, 255);
+      FastLED.setBrightness(brightness);
+    }
+};
+
 // I don't think this will ever show, but why not
 class ErrorEffect : public AbstractEffect
 {
@@ -174,7 +193,7 @@ AbstractEffect* getRandomEffect() {
   // For the moment, KISS will do.
   // TODO: array of template functions because I can.
 
-  byte EFFECTS_COUNT = 3;
+  byte EFFECTS_COUNT = 4;
   byte selection = analogRead(0) % EFFECTS_COUNT;
 
   switch (selection)
@@ -185,6 +204,8 @@ AbstractEffect* getRandomEffect() {
       return new LoopingPoint();
     case 2:
       return new ElectricSparks();
+    case 3:
+      return new Glow();
     default:
       return new ErrorEffect();
   }

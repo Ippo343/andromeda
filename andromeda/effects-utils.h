@@ -3,6 +3,7 @@
 
 #include <FastLED.h>
 #include "geometry.h"
+#include "utils.h"
 
 // Fills every LED with the same color
 void paint(CRGB color)

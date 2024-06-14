@@ -14,7 +14,7 @@ AbstractEffect*    effect;
 // Set either of these to force the controller to use it
 // Useful when developing a new effect or animation
 AbstractAnimation* forcedAnimation = NULL;
-AbstractEffect*    forcedEffect = NULL;
+AbstractEffect*    forcedEffect = new Glow();
 
 void setup() {
 
@@ -36,7 +36,7 @@ void setup() {
   animation->run();
   animation->cleanup();
   delay(250);
-  
+
   delete animation;
 
   if (forcedEffect == NULL)
