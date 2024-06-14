@@ -16,11 +16,7 @@ AbstractEffect*    effect;
 
 void setup() {
 
-#ifdef ARDUINO_UNOR4_WIFI
   Serial.begin(115200);
-#else
-  Serial.begin(9600);
-#endif
 
   initializeGeometry();
 
