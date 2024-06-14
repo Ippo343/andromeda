@@ -10,7 +10,7 @@ class SweepRGBW : public AbstractAnimation
 {
   public:
 
-    byte timeStep = 10;
+    byte timeStep = 7;
 
     void run() override {
       colorSweep(CRGB::Red);
