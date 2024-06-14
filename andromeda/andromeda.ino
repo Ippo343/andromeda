@@ -14,6 +14,9 @@
 AbstractAnimation* animation;
 AbstractEffect*    effect;
 
+AbstractAnimation* forcedAnimation = NULL;
+AbstractEffect*    forcedEffect = new LoopingPoint();
+
 void setup() {
 
   Serial.begin(115200);
@@ -38,12 +41,19 @@ void setup() {
     moodlights[i].randomize();
   }
 
-  animation = getRandomAnimation();
+  if (forcedAnimation == NULL)
+    animation = getRandomAnimation();
+  else
+    animation = forcedAnimation;
+
   animation->run();
   animation->cleanup();
   delete animation;
 
-  effect = getRandomEffect();
+  if (forcedEffect == NULL)
+    effect = getRandomEffect();
+  else
+    effect = forcedEffect;
 }
 
 void loop() {
