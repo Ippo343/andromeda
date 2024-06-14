@@ -12,6 +12,9 @@
 class AbstractAnimation
 {
   public:
+
+    virtual ~AbstractAnimation() { }
+
     virtual void run();
 
     // Reset all buffers to black and brightness to max,

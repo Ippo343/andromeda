@@ -15,6 +15,8 @@ class AbstractEffect
 {
   public:
 
+    virtual ~AbstractEffect() { }
+
     // Called at the beginning of the frame.
     // Allows the effect to cache values that will be reused during evaluate
     virtual void precompute(milliseconds t) { return ; }
