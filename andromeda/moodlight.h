@@ -17,8 +17,8 @@ class MoodLight
     byte bpmB;
 
     // Min period and period range
-    const byte MIN_BPM = 6;
-    const byte MAX_BPM = 30;
+    byte MIN_BPM = 6;
+    byte MAX_BPM = 30;
 
   void randomize()
   {

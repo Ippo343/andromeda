@@ -197,6 +197,7 @@ class ElectricSparks : public AbstractEffect
 };
 
 
+// Whole mirror moodlight with pulsating brightness
 class Glow : public AbstractEffect
 {
   public:
@@ -205,12 +206,25 @@ class Glow : public AbstractEffect
     byte MAX_BPM = 15;
     byte bpm;
 
+    byte MIN_BRIGHTNESS = 50;
+    byte MAX_BRIGHTNESS = 255;
+
     CRGB color;
+    MoodLight moodlight;
 
     void randomize() override
     {
-      color = randomColor();
+      // Use a very very slow moodlight
+      moodlight.MIN_BPM = 1;
+      moodlight.MAX_BPM = 3;
+      moodlight.randomize();
+
       bpm = random(MIN_BPM, MAX_BPM);
+    }
+
+    void precompute(milliseconds t) override
+    {
+      color = moodlight.evaluate(0, t);
     }
 
     CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
@@ -220,7 +234,7 @@ class Glow : public AbstractEffect
 
     void postprocess(milliseconds t) override
     {
-      byte brightness = beatsin8(bpm, 128, 255);
+      byte brightness = beatsin8(bpm, MIN_BRIGHTNESS, MAX_BRIGHTNESS);
       FastLED.setBrightness(brightness);
     }
 };
