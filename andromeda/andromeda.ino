@@ -1,6 +1,6 @@
 #include <FastLED.h>
 
-#define PERF
+// #define PERF
 
 #include "utils.h"
 #include "geometry.h"
