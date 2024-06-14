@@ -8,33 +8,20 @@
 #include "effects.h"
 #include "animations.h"
 
-#define MIN_BRIGHTNESS 25
-#define MAX_BRIGHTNESS 75
-
 AbstractAnimation* animation;
 AbstractEffect*    effect;
 
+// Set either of these to force the controller to use it
+// Useful when developing a new effect or animation
 AbstractAnimation* forcedAnimation = NULL;
-AbstractEffect*    forcedEffect = new ElectricSparks();
+AbstractEffect*    forcedEffect = NULL;
 
 void setup() {
 
   Serial.begin(115200);
 
   initializeGeometry();
-
-  // Right now the mirrors are not attached and the leds are exposed,
-  // and it's really fucking bright
-  // TODO: hey look, another parameter where I can hook up a wave function!
-  FastLED.setBrightness(MAX_BRIGHTNESS);
-
-  // The analog pins not attached to anything, so the voltage fluctuates
-  // doing an analog read from it returns noise for the RNG
-  randomSeed(analogRead(0));
-  delay(10);
-  random16_set_seed(analogRead(1));
-  delay(10);
-  random16_add_entropy(analogRead(2));
+  seedRNGs();
 
   // TODO: these need to go
   for (byte i = 0; i < NUM_STRIPS; i++) {
@@ -48,6 +35,8 @@ void setup() {
 
   animation->run();
   animation->cleanup();
+  delay(250);
+  
   delete animation;
 
   if (forcedEffect == NULL)
@@ -63,12 +52,6 @@ void loop() {
   effect->precompute(t);
   effect->render(STRIPS, t);
   effect->postprocess(t);
-
-  // TODO: disabled while I figure out the integer sin functions
-  // float pulse = ssin(t / 2);
-  // pulse = pulse * pulse * pulse * pulse * pulse;
-  // uint8_t brightness = (uint8_t)(MIN_BRIGHTNESS + (MAX_BRIGHTNESS - MIN_BRIGHTNESS) * pulse);
-  // FastLED.setBrightness(brightness);
 
   FastLED.show();
 

@@ -10,7 +10,8 @@
 class MoodLight
 {
   public:
-    // Period of each channel's wave (milliseconds)
+    // Period of each channel's wave
+    // (in beats per minutes since that's what FastLED uses)
     byte bpmR;
     byte bpmG;
     byte bpmB;

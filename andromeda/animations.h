@@ -33,6 +33,43 @@ class SweepRGBW : public AbstractAnimation
 };
 
 
+// Alternates Y shapes around the mirror showing all colors
+// TODO: improve name of this
+class RotateRGBW : public AbstractAnimation
+{
+  public:
+    void run() override
+    {
+      paint(CRGB::Black);
+      paintStrip(0, CRGB::Red);
+      paintStrip(1, CRGB::Red);
+      paintStrip(3, CRGB::Red);
+      paintStrip(5, CRGB::Red);
+      FastLED.show();
+      delay(500);
+
+      paint(CRGB::Black);
+      paintStrip(0, CRGB::Green);
+      paintStrip(2, CRGB::Green);
+      paintStrip(4, CRGB::Green);
+      paintStrip(6, CRGB::Green);
+      FastLED.show();
+      delay(500);
+
+      paint(CRGB::Black);
+      paintStrip(0, CRGB::Blue);
+      paintStrip(1, CRGB::Blue);
+      paintStrip(3, CRGB::Blue);
+      paintStrip(5, CRGB::Blue);
+      FastLED.show();
+      delay(500);
+
+      paint(CRGB::White);
+      FastLED.show();
+      delay(500);
+    }
+};
+
 // I don't think this will ever show, but why not
 class ErrorAnimation : public AbstractAnimation
 {
@@ -60,13 +97,15 @@ AbstractAnimation* getRandomAnimation() {
   // For the moment, KISS will do.
   // TODO: array of template functions because I can.
 
-  byte ANIMATIONS_COUNT = 1;
+  byte ANIMATIONS_COUNT = 2;
   byte selection = analogRead(0) % ANIMATIONS_COUNT;
 
   switch (selection)
   {
     case 0:
       return new SweepRGBW();
+    case 1:
+      return new RotateRGBW();
     default:
       return new ErrorAnimation();
   }

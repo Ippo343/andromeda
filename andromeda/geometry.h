@@ -4,6 +4,20 @@
 // Data related to the geometry of the mirror,
 // e.g. dimensions, number of leds, and so on
 
+
+// Data cable connections are as follows:
+//
+//         1
+//       /¯¯\           0: yellow
+// 6 /¯¯\\__//¯¯\ 2     1: also yellow, but from below the structure (we ran out of colors)
+//   \__//¯¯\\__/       2: blue
+//   /¯¯\\__//¯¯\       3: purple
+// 5 \__//¯¯\\__/ 3     4: white
+//       \__/           5: grey
+//         4            6: green
+//
+//
+
 #include <FastLED.h>
 #include "utils.h"
 
@@ -28,8 +42,7 @@ class LedStrip
   public:
 
     // Index of the strip in the structure.
-    // The central one is 0, the top one is 1,
-    // and the indices increase clockwise.
+    // See map above.
     byte idx;
 
     // geometry info for each led in the strip
@@ -48,7 +61,6 @@ class LedStrip
 };
 
 
-// The actual strips the program is controlling
 LedStrip STRIPS[NUM_STRIPS];
 
 
@@ -68,6 +80,8 @@ void initializeGeometry() {
   FastLED.addLeds<WS2812B, 5, GRB>(STRIPS[4].buffer, LEDS_PER_STRIP);
   FastLED.addLeds<WS2812B, 6, GRB>(STRIPS[5].buffer, LEDS_PER_STRIP);
   FastLED.addLeds<WS2812B, 7, GRB>(STRIPS[6].buffer, LEDS_PER_STRIP);
+
+  // TODO: actually initialize geometry (i.e. compute each led's coordinates)
 
   Serial.println("Initialized geometry");
 }

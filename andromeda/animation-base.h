@@ -21,13 +21,9 @@ class AbstractAnimation
     // to prevent funny inputs going into the next effect
     virtual void cleanup()
     {
-      FOR_EACH_STRIP {
-        FOR_EACH_LED {
-          STRIPS[iStrip].buffer[iLed] = CRGB::Black;
-        }
-      }
-
+      paint(CRGB::Black);
       FastLED.setBrightness(255);
+      FastLED.show();
     }
 };
 
