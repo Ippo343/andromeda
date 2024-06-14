@@ -98,7 +98,7 @@ AbstractAnimation* getRandomAnimation() {
   // TODO: array of template functions because I can.
 
   byte ANIMATIONS_COUNT = 2;
-  byte selection = analogRead(0) % ANIMATIONS_COUNT;
+  byte selection = random(ANIMATIONS_COUNT);
 
   switch (selection)
   {

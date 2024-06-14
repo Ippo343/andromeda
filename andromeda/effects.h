@@ -194,7 +194,7 @@ AbstractEffect* getRandomEffect() {
   // TODO: array of template functions because I can.
 
   byte EFFECTS_COUNT = 4;
-  byte selection = analogRead(0) % EFFECTS_COUNT;
+  byte selection = random(EFFECTS_COUNT);
 
   switch (selection)
   {
