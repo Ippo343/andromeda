@@ -43,13 +43,19 @@ class LoopingPoint : public AbstractEffect
 {
   public:
     MoodLight moodlights[NUM_STRIPS];
-    milliseconds step = 30;
+
+    const milliseconds MIN_STEP = 25;
+    const milliseconds MAX_STEP = 50;
+    milliseconds step;
+
     byte idxOn;
 
     CRGB color[NUM_STRIPS];
 
     void randomize() override
     {
+      step = random(MIN_STEP, MAX_STEP);
+
       FOR_EACH_STRIP {
         moodlights[iStrip].randomize();
       }
@@ -115,6 +121,8 @@ class ElectricSparks : public AbstractEffect
       return newV / 3;
     }
 
+    // TODO: randomize
+
     void precompute(milliseconds t) override
     {
       FOR_EACH_STRIP {
@@ -163,8 +171,17 @@ class Glow : public AbstractEffect
 {
   public:
     // TODO: randomize
-    byte bpm = 12;
-    CRGB color = CRGB(255, 220, 50);
+    byte MIN_BPM = 6;
+    byte MAX_BPM = 15;
+    byte bpm;
+
+    CRGB color;
+
+    void randomize() override
+    {
+      color = randomColor();
+      bpm = random(MIN_BPM, MAX_BPM);
+    }
 
     CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
     {
