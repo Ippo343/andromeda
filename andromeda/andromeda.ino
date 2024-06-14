@@ -15,7 +15,7 @@ AbstractAnimation* animation;
 AbstractEffect*    effect;
 
 AbstractAnimation* forcedAnimation = NULL;
-AbstractEffect*    forcedEffect = new LoopingPoint();
+AbstractEffect*    forcedEffect = new ElectricSparks();
 
 void setup() {
 

@@ -11,4 +11,9 @@
 #define FOR_EACH_STRIP  for (byte iStrip = 0; iStrip < NUM_STRIPS; iStrip++)
 #define FOR_EACH_LED    for (byte iLed = 0; iLed < LEDS_PER_STRIP; iLed++)
 
+byte clamp8(unsigned int x)
+{
+  return x < 255 ? x : 255;
+}
+
 #endif
