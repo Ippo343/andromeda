@@ -13,7 +13,7 @@ AbstractEffect*    effect;
 
 // Set either of these to force the controller to use it
 // Useful when developing a new effect or animation
-AbstractAnimation* forcedAnimation = NULL;
+AbstractAnimation* forcedAnimation = new RotateRGBW();
 AbstractEffect*    forcedEffect = NULL;
 
 void setup() {

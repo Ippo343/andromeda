@@ -43,23 +43,17 @@ class RotateRGBW : public AbstractAnimation
       paint(CRGB::Black);
       paintStrip(0, CRGB::Red);
       paintStrip(1, CRGB::Red);
-      paintStrip(3, CRGB::Red);
-      paintStrip(5, CRGB::Red);
       FastLED.show();
       delay(500);
 
       paint(CRGB::Black);
       paintStrip(0, CRGB::Green);
-      paintStrip(2, CRGB::Green);
-      paintStrip(4, CRGB::Green);
-      paintStrip(6, CRGB::Green);
+      paintStrip(3, CRGB::Green);
       FastLED.show();
       delay(500);
 
       paint(CRGB::Black);
       paintStrip(0, CRGB::Blue);
-      paintStrip(1, CRGB::Blue);
-      paintStrip(3, CRGB::Blue);
       paintStrip(5, CRGB::Blue);
       FastLED.show();
       delay(500);
