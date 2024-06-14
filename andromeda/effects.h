@@ -55,7 +55,7 @@ class LoopingPoint : public AbstractEffect
       }
     }
 
-    virtual void precompute(milliseconds t) override
+    void precompute(milliseconds t) override
     {
       FOR_EACH_STRIP {
         color[iStrip] = moodlights[iStrip].evaluate(0, t);
@@ -75,7 +75,7 @@ class LoopingPoint : public AbstractEffect
         : strip.buffer[led.idx];
     }
 
-    virtual void postprocess(milliseconds t) override
+    void postprocess(milliseconds t) override
     {
       FOR_EACH_STRIP {
         fadeToBlackBy(STRIPS[iStrip].buffer, LEDS_PER_STRIP, 25);
