@@ -92,8 +92,8 @@ class LoopingPoint : public AbstractEffect
 
 DEFINE_GRADIENT_PALETTE (electric_spark_gp) {
     0,   0,   0,  50, // dark blue
-  100,   0,   0, 255, // full blue
-  200, 100, 100, 255, // bright blue
+   25,   0,   0, 255, // full blue
+   50, 100, 100, 255, // bright blue
   255, 255, 255, 255  // white
 };
 
@@ -109,6 +109,21 @@ class ElectricSparks : public AbstractEffect
     byte preValues[NUM_STRIPS][LEDS_PER_STRIP];
     byte newValues[NUM_STRIPS][LEDS_PER_STRIP];
 
+    // This is tricky to figure out if not by trial and error.
+    // We roll a dice every frame for every led, so the chance must be really small.
+    // These are values that I like experimentally, I cannot justify them.
+    // TODO: better way to define the frequency
+    unsigned short DICE_LIMIT = 10000;
+    byte MIN_CHANCE = 1;
+    byte MAX_CHANCE = 3;
+    byte sparkChance;
+
+    // Chance that the spark is bigger than usual.
+    // These are out of 100 (they control the size of the spark, not the frequency)
+    // and rolled sequentially (sparks have a chance to be big, big sparks have a chance to be bigger)
+    byte BIG_SPARK_CHANCE = 15;
+    byte REALLY_BIG_SPARK_CHANCE = 10;
+
     ElectricSparks()
     {
       memset(preValues, 0, NUM_STRIPS * LEDS_PER_STRIP);
@@ -121,7 +136,10 @@ class ElectricSparks : public AbstractEffect
       return newV / 3;
     }
 
-    // TODO: randomize
+    void randomize() override
+    {
+      sparkChance = random(MIN_CHANCE, MAX_CHANCE);
+    }
 
     void precompute(milliseconds t) override
     {
@@ -133,21 +151,33 @@ class ElectricSparks : public AbstractEffect
         // TODO: unsurprisingly it sucks. It dissipates way too fast.
         // TODO: solve the heat conduction partial differential equation
 
-        // Handle head and tail individually for obvious memory reasons
-        newValues[iStrip][0] = avg38(preValues[iStrip][LEDS_PER_STRIP - 1], preValues[iStrip][0],  preValues[iStrip][1]);
-        newValues[iStrip][LEDS_PER_STRIP - 1] =
-          avg38(preValues[iStrip][LEDS_PER_STRIP - 2], preValues[iStrip][LEDS_PER_STRIP - 1], preValues[iStrip][0]);
-
-        for (byte iLed = 1; iLed < LEDS_PER_STRIP - 1; iLed++)
-          newValues[iStrip][iLed] = avg38(preValues[iStrip][iLed - 1], preValues[iStrip][iLed], preValues[iStrip][iLed + 1]);
+        for (byte iLed = 0; iLed < LEDS_PER_STRIP; iLed++)
+          newValues[iStrip][iLed] = avg38(
+            preValues[iStrip][LI(iLed - 1)],
+            preValues[iStrip][iLed],
+            preValues[iStrip][LI(iLed + 1)]);
       }
     }
 
     CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
     {
       // Random injection of new spikes
-      if (random(10000) < 15)
+      if (random(DICE_LIMIT) < sparkChance)
+      {
         newValues[strip.idx][led.idx] = 255;
+
+        if (random(100) < BIG_SPARK_CHANCE)
+        {
+          newValues[strip.idx][LI(led.idx + 1)] = 255;
+          newValues[strip.idx][LI(led.idx - 1)] = 255;
+
+          if (random(100) < REALLY_BIG_SPARK_CHANCE)
+          {
+            newValues[strip.idx][LI(led.idx + 2)] = 255;
+            newValues[strip.idx][LI(led.idx - 2)] = 255;
+          }
+        }
+      }
 
       return ColorFromPalette(electric_spark_map, preValues[strip.idx][led.idx]);
     }
