@@ -1,21 +1,4 @@
-#include <FastLED.h>
-
-// #define PERF
-
-#include "utils.h"
-#include "geometry.h"
-#include "moodlight.h"
-#include "effects.h"
-#include "animations.h"
-
-AbstractAnimation* animation;
-AbstractEffect*    effect;
-
-// Set either of these to force the controller to use it
-// Useful when developing a new effect or animation
-AbstractAnimation* forcedAnimation = NULL;
-AbstractEffect*    forcedEffect = NULL;
-
+#include "control-logic.h"
 
 void setup() {
 
@@ -24,64 +7,18 @@ void setup() {
   initializeGeometry();
   seedRNGs();
 
-  if (forcedAnimation == NULL)
-    animation = getRandomAnimation();
-  else
-    animation = forcedAnimation;
-
-  animation->run();
-  animation->cleanup();
-  delay(250);
-
-  delete animation;
-
-  if (forcedEffect == NULL)
-    effect = getRandomEffect();
-  else
-    effect = forcedEffect;
-
-  effect->randomize();
-
+  runRandomAnimation();
+  setEffect();
   setNextTransition();
 }
 
 void loop() {
 
   unsigned long t = millis();
-
-  if (t > nextTransition)
-  {
-    if (!forcedAnimation)
-      animation = getRandomAnimation();
-
-    animation->run();
-    animation->cleanup();
-    delay(250);
-    
-    if (!forcedAnimation)
-      delete animation;
-
-    if (forcedEffect)
-      effect = forcedEffect;
-    else
-    {
-      delete effect;
-      effect = getRandomEffect();
-      effect->randomize();
-    }
-
-    setNextTransition();
-  }
-
-  effect->precompute(t);
-  effect->render(STRIPS, t);
-  effect->postprocess(t);
-
-  FastLED.show();
-
-  unsigned long end = millis();
+  update(t);
 
 #ifdef PERF
+  unsigned long end = millis();
   float fps = 1000.0 / (float)(end - t);
   Serial.println(fps);
 #endif
