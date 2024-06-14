@@ -7,21 +7,21 @@
 #include "effects-base.h"
 #include "effects-utils.h"
 
-// Most of the effects I have written or plan to write
-// use one or more moodlights. Not great to have them here,
-// but it will do for the time being.
-// TODO: In the future any effect that wants a moodlight should have it as a member.
-MoodLight moodlights[NUM_STRIPS];
-
-
 // Use each individual led strip as an independent moodlight.
 // All leds in the same strip have the same color,
 // but each strip fluctuates independently
 class IndividualStripMoodlight : public AbstractEffect
 {
   public:
-
+    MoodLight moodlights[NUM_STRIPS];
     CRGB colors[NUM_STRIPS];
+
+    void randomize() override
+    {
+      FOR_EACH_STRIP {
+        moodlights[iStrip].randomize();
+      }
+    }
 
     void precompute(milliseconds t) override
     {
@@ -42,11 +42,18 @@ class IndividualStripMoodlight : public AbstractEffect
 class LoopingPoint : public AbstractEffect
 {
   public:
-
+    MoodLight moodlights[NUM_STRIPS];
     milliseconds step = 30;
     byte idxOn;
 
     CRGB color[NUM_STRIPS];
+
+    void randomize() override
+    {
+      FOR_EACH_STRIP {
+        moodlights[iStrip].randomize();
+      }
+    }
 
     virtual void precompute(milliseconds t) override
     {

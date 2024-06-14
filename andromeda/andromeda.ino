@@ -23,11 +23,6 @@ void setup() {
   initializeGeometry();
   seedRNGs();
 
-  // TODO: these need to go
-  for (byte i = 0; i < NUM_STRIPS; i++) {
-    moodlights[i].randomize();
-  }
-
   if (forcedAnimation == NULL)
     animation = getRandomAnimation();
   else
