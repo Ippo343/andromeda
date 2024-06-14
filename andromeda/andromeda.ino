@@ -14,7 +14,8 @@ AbstractEffect*    effect;
 // Set either of these to force the controller to use it
 // Useful when developing a new effect or animation
 AbstractAnimation* forcedAnimation = NULL;
-AbstractEffect*    forcedEffect = new Glow();
+AbstractEffect*    forcedEffect = NULL;
+
 
 void setup() {
 
@@ -40,11 +41,37 @@ void setup() {
     effect = forcedEffect;
 
   effect->randomize();
+
+  setNextTransition();
 }
 
 void loop() {
 
   unsigned long t = millis();
+
+  if (t > nextTransition)
+  {
+    if (!forcedAnimation)
+      animation = getRandomAnimation();
+
+    animation->run();
+    animation->cleanup();
+    delay(250);
+    
+    if (!forcedAnimation)
+      delete animation;
+
+    if (forcedEffect)
+      effect = forcedEffect;
+    else
+    {
+      delete effect;
+      effect = getRandomEffect();
+      effect->randomize();
+    }
+
+    setNextTransition();
+  }
 
   effect->precompute(t);
   effect->render(STRIPS, t);

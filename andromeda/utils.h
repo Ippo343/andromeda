@@ -25,4 +25,13 @@ void seedRNGs()
   random16_add_entropy(analogRead(65536));
 }
 
+milliseconds MIN_EFFECT_DURATION = 10000;
+milliseconds MAX_EFFECT_DURATION = 30000;
+milliseconds nextTransition;
+
+void setNextTransition()
+{
+  nextTransition = millis() + random(MIN_EFFECT_DURATION, MAX_EFFECT_DURATION);
+}
+
 #endif
