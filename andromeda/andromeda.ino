@@ -43,6 +43,8 @@ void setup() {
     effect = getRandomEffect();
   else
     effect = forcedEffect;
+
+  effect->randomize();
 }
 
 void loop() {
