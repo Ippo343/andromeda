@@ -6,6 +6,7 @@
 #include "utils.h"
 #include "effects-base.h"
 #include "effects-utils.h"
+#include "color-palettes.h"
 
 // Use each individual led strip as an independent moodlight.
 // All leds in the same strip have the same color,
@@ -90,15 +91,6 @@ class LoopingPoint : public AbstractEffect
 };
 
 
-DEFINE_GRADIENT_PALETTE (electric_spark_gp) {
-    0,   0,   0,  50, // dark blue
-   25,   0,   0, 255, // full blue
-   50, 100, 100, 255, // bright blue
-  255, 255, 255, 255  // white
-};
-
-CRGBPalette16 electric_spark_map = electric_spark_gp;
-
 // Lights up the whole mirror blue, and randomly adds sparks of white
 // that die out very quickly diffusing to neighbouring leds
 class ElectricSparks : public AbstractEffect
@@ -108,6 +100,8 @@ class ElectricSparks : public AbstractEffect
     // Needs double buffering to correctly compute the averaging of neighbouring pixels
     byte preValues[NUM_STRIPS][LEDS_PER_STRIP];
     byte newValues[NUM_STRIPS][LEDS_PER_STRIP];
+
+    CRGBPalette16 palette;
 
     // This is tricky to figure out if not by trial and error.
     // We roll a dice every frame for every led, so the chance must be really small.
@@ -128,6 +122,8 @@ class ElectricSparks : public AbstractEffect
     {
       memset(preValues, 0, NUM_STRIPS * LEDS_PER_STRIP);
       memset(newValues, 0, NUM_STRIPS * LEDS_PER_STRIP);
+
+      palette = blue_sparks_gp;
     }
 
     byte avg38(byte a, byte b, byte c)
@@ -139,6 +135,19 @@ class ElectricSparks : public AbstractEffect
     void randomize() override
     {
       sparkChance = random(MIN_CHANCE, MAX_CHANCE);
+
+      switch (random(3))
+      {
+        case 0:
+          palette = red_sparks_gp;
+          break;
+        case 1:
+          palette = green_sparks_gp;
+          break;
+        case 2:
+          palette = blue_sparks_gp;
+          break;
+      }
     }
 
     void precompute(milliseconds t) override
@@ -179,7 +188,7 @@ class ElectricSparks : public AbstractEffect
         }
       }
 
-      return ColorFromPalette(electric_spark_map, preValues[strip.idx][led.idx]);
+      return ColorFromPalette(palette, preValues[strip.idx][led.idx]);
     }
 
     void postprocess(milliseconds t) override
