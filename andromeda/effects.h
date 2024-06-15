@@ -239,6 +239,46 @@ class Glow : public AbstractEffect
     }
 };
 
+
+// Randomly light up a whole strip with a random color,
+// and then keep everything fading to black.
+// Looks a little bit like fireworks.
+class Fireworks: public AbstractEffect
+{
+  public:
+    // See ElectricSpark's comments, same logic
+    unsigned long DICE_LIMIT = 10000;
+    byte MIN_CHANCE = 30;
+    byte MAX_CHANCE = 50;
+    byte sparkChance;
+
+    void randomize() override
+    {
+      sparkChance = random(MIN_CHANCE, MAX_CHANCE);
+    }
+
+    void precompute(milliseconds t) override
+    {
+      FOR_EACH_STRIP {
+        // Randomly fill the whole strip with a random color
+        if (random(DICE_LIMIT) < sparkChance)
+          paintStrip(iStrip, randomColor());
+      }
+    }
+
+    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    {
+      return STRIPS[strip.idx].buffer[led.idx];
+    }
+
+    void postprocess(milliseconds t) override
+    {
+      FOR_EACH_STRIP {
+        fadeToBlackBy(STRIPS[iStrip].buffer, LEDS_PER_STRIP, 5);
+      }
+    }
+};
+
 // I don't think this will ever show, but why not
 class ErrorEffect : public AbstractEffect
 {
@@ -261,7 +301,7 @@ AbstractEffect* getRandomEffect() {
   // For the moment, KISS will do.
   // TODO: array of template functions because I can.
 
-  byte EFFECTS_COUNT = 4;
+  byte EFFECTS_COUNT = 5;
   byte selection = random(EFFECTS_COUNT);
 
   switch (selection)
@@ -274,6 +314,8 @@ AbstractEffect* getRandomEffect() {
       return new ElectricSparks();
     case 3:
       return new Glow();
+    case 4:
+      return new Fireworks();
     default:
       return new ErrorEffect();
   }
