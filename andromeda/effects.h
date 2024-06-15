@@ -112,11 +112,10 @@ class ElectricSparks : public AbstractEffect
     byte MAX_CHANCE = 3;
     byte sparkChance;
 
-    // Chance that the spark is bigger than usual.
-    // These are out of 100 (they control the size of the spark, not the frequency)
-    // and rolled sequentially (sparks have a chance to be big, big sparks have a chance to be bigger)
-    byte BIG_SPARK_CHANCE = 15;
-    byte REALLY_BIG_SPARK_CHANCE = 10;
+    // Chance that a spark becomes bigger, rolled out of 100.
+    // If the roll is successful, the width is doubled and then rolled again until it fails.
+    // Potentially going up to the full strip in rare cases.
+    byte bigSparkChance = 25;
 
     ElectricSparks()
     {
@@ -177,18 +176,17 @@ class ElectricSparks : public AbstractEffect
       // Random injection of new spikes
       if (random(DICE_LIMIT) < sparkChance)
       {
-        newValues[strip.idx][led.idx] = 255;
+        byte width = 1;
 
-        if (random(100) < BIG_SPARK_CHANCE)
+        // Keep rolling for a chance to increase the spark's size
+        while (random(100) < bigSparkChance)
+          width *= 2;
+
+        // Now light up the pixel and its neighbours up to the defined width
+        for (byte w = 0; w < width; w++)
         {
-          newValues[strip.idx][LI(led.idx + 1)] = 255;
-          newValues[strip.idx][LI(led.idx - 1)] = 255;
-
-          if (random(100) < REALLY_BIG_SPARK_CHANCE)
-          {
-            newValues[strip.idx][LI(led.idx + 2)] = 255;
-            newValues[strip.idx][LI(led.idx - 2)] = 255;
-          }
+          newValues[strip.idx][LI(led.idx + w)] = 255;
+          newValues[strip.idx][LI(led.idx - w)] = 255;
         }
       }
 
