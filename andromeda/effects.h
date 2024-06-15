@@ -288,6 +288,31 @@ class Fireworks: public AbstractEffect
     }
 };
 
+
+// A whole-mirror moodlight where the color is chosen
+// as perlin noise applied to H and S of HSV space
+class PerlinColorMoodlight : public AbstractEffect
+{
+  public:
+    byte colorValue;
+    byte saturationValue;
+    byte scale = 20;
+    CRGB color;
+
+    void precompute(milliseconds t) override
+    {
+      byte x = t / scale;
+      colorValue = inoise8(x);
+      saturationValue = inoise8(x);
+      color = CHSV(colorValue, saturationValue, 255);
+    }
+
+    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    {
+      return color;
+    }
+};
+
 // I don't think this will ever show, but why not
 class ErrorEffect : public AbstractEffect
 {
@@ -310,7 +335,7 @@ AbstractEffect* getRandomEffect() {
   // For the moment, KISS will do.
   // TODO: array of template functions because I can.
 
-  byte EFFECTS_COUNT = 5;
+  byte EFFECTS_COUNT = 6;
   byte selection = random(EFFECTS_COUNT);
 
   switch (selection)
@@ -325,6 +350,8 @@ AbstractEffect* getRandomEffect() {
       return new Glow();
     case 4:
       return new Fireworks();
+    case 5:
+      return new PerlinColorMoodlight();
     default:
       return new ErrorEffect();
   }
