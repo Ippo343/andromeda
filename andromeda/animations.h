@@ -64,6 +64,22 @@ class RotateRGBW : public AbstractAnimation
     }
 };
 
+
+class SequentialIgnition : public AbstractAnimation
+{
+  public:
+    void run() override
+    {
+      paint(CRGB::Black);
+
+      FOR_EACH_STRIP {
+        paintStrip(iStrip, randomColor());
+        FastLED.show();
+        delay(200);
+      }
+    }
+};
+
 // I don't think this will ever show, but why not
 class ErrorAnimation : public AbstractAnimation
 {
@@ -91,7 +107,7 @@ AbstractAnimation* getRandomAnimation() {
   // For the moment, KISS will do.
   // TODO: array of template functions because I can.
 
-  byte ANIMATIONS_COUNT = 2;
+  byte ANIMATIONS_COUNT = 3;
   byte selection = random(ANIMATIONS_COUNT);
 
   switch (selection)
@@ -100,6 +116,8 @@ AbstractAnimation* getRandomAnimation() {
       return new SweepRGBW();
     case 1:
       return new RotateRGBW();
+    case 2:
+      return new SequentialIgnition();
     default:
       return new ErrorAnimation();
   }
