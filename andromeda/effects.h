@@ -135,8 +135,9 @@ class ElectricSparks : public AbstractEffect
     void randomize() override
     {
       sparkChance = random(MIN_CHANCE, MAX_CHANCE);
+      byte selection = random(4);
 
-      switch (random(3))
+      switch(selection)
       {
         case 0:
           palette = red_sparks_gp;
@@ -146,6 +147,9 @@ class ElectricSparks : public AbstractEffect
           break;
         case 2:
           palette = blue_sparks_gp;
+          break;
+        case 3:
+          palette = purple_sparks_gp;
           break;
       }
     }

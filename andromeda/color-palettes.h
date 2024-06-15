@@ -24,4 +24,11 @@ DEFINE_GRADIENT_PALETTE (blue_sparks_gp) {
   255, 255, 255, 255  // white
 };
 
+DEFINE_GRADIENT_PALETTE (purple_sparks_gp) {
+    0,  50,   0,  50, // dark
+   25, 255,   0, 255, // full
+   50, 255, 100, 255, // bright
+  255, 255, 255, 255  // white
+};
+
 #endif
