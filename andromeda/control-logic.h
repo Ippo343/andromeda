@@ -37,7 +37,10 @@ void runRandomAnimation()
     delay(200);
 
     if (!forcedAnimation)
+    {
       delete animation;
+      forcedAnimation = NULL;
+    }
 }
 
 // Pick a new random effect, unless one is forced.
@@ -57,7 +60,10 @@ void handleTransition()
     runRandomAnimation();
 
     if (!forcedEffect)
+    {
       delete effect;
+      effect = NULL;
+    }
 
     setEffect();
     setNextTransition();
