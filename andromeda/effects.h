@@ -113,8 +113,8 @@ class ElectricSparks : public AbstractEffect
 
     ElectricSparks()
     {
-      memset(preValues, 0, NUM_STRIPS * LEDS_PER_STRIP);
-      memset(newValues, 0, NUM_STRIPS * LEDS_PER_STRIP);
+      memset8(preValues, 0, NUM_STRIPS * LEDS_PER_STRIP);
+      memset8(newValues, 0, NUM_STRIPS * LEDS_PER_STRIP);
 
       palette = blue_sparks_gp;
     }
@@ -194,7 +194,7 @@ class ElectricSparks : public AbstractEffect
       }
 
       // Copy the current buffer so that the next frame can diffuse it
-      memcpy(preValues, newValues, NUM_STRIPS * LEDS_PER_STRIP);
+      memcpy8(preValues, newValues, NUM_STRIPS * LEDS_PER_STRIP);
     }
 };
 
