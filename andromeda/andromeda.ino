@@ -1,0 +1,25 @@
+#include "control-logic.h"
+
+void setup() {
+
+  Serial.begin(115200);
+
+  initializeGeometry();
+  seedRNGs();
+
+  runRandomAnimation();
+  setEffect();
+  setNextTransition();
+}
+
+void loop() {
+
+  unsigned long t = millis();
+  update(t);
+
+#ifdef PERF
+  unsigned long end = millis();
+  float fps = 1000.0 / (float)(end - t);
+  Serial.println(fps);
+#endif
+}
