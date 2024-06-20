@@ -203,7 +203,7 @@ class ElectricSparks : public AbstractEffect
 class Glow : public AbstractEffect
 {
   public:
-    RandParam<milliseconds, 5000, 20000> cycleTime;
+    RandParam<milliseconds, 10000, 30000> cycleTime;
     RandParam<byte, 0, 255> hueCentre;
     RandParam<byte, 5, 25> hueAmplitude;
     CRGB color;
