@@ -210,16 +210,8 @@ class Glow : public AbstractEffect
 
     void precompute(milliseconds t) override
     {
-      // cubicwave8 just maps (0,255)->(0,255)
-      // The following code first scales the current time into the input range,
-      // then scales the output into the (-A,A) range
-      milliseconds ct = t % cycleTime;
-      byte scaledct = map(ct, 0, cycleTime, 0, 255); // cubicwave8 expects an input 0 to 255
-      byte rawWave = cubicwave8(scaledct);
-      byte scaledWave = map(rawWave, 0, 255, -hueAmplitude, hueAmplitude);
-
+      long scaledWave = scaledCubicWave8(t, cycleTime, -hueAmplitude, hueAmplitude);
       byte hue = (hueCentre + scaledWave) % 255;
-
       color = CHSV(hue, 255, 255);
     }
 

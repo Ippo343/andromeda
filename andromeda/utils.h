@@ -39,4 +39,17 @@ class RandParam
     inline operator T() const { return value; }
 };
 
+
+// FastLED's cubicwave8 just maps (0,255)->(0,255)
+// The following code first scales the current time into the input range,
+// then scales the output into the (-A,A) range
+long scaledCubicWave8(milliseconds t, milliseconds period, long minV, long maxV)
+{
+  milliseconds ct = t % period;
+  byte scaledct = map(ct, 0, period, 0, 255);
+  byte rawWave = cubicwave8(scaledct);
+  long scaledWave = map(rawWave, 0, 255, minV, maxV);
+  return scaledWave;
+}
+
 #endif
