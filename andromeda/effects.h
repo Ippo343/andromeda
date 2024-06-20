@@ -44,19 +44,13 @@ class LoopingPoint : public AbstractEffect
 {
   public:
     MoodLight moodlights[NUM_STRIPS];
-
-    const milliseconds MIN_STEP = 25;
-    const milliseconds MAX_STEP = 50;
-    milliseconds step;
-
+    RandParam<milliseconds, 25, 50> step;
     byte idxOn;
 
     CRGB color[NUM_STRIPS];
 
     void randomize() override
     {
-      step = random(MIN_STEP, MAX_STEP);
-
       FOR_EACH_STRIP {
         moodlights[iStrip].randomize();
       }
@@ -108,14 +102,14 @@ class ElectricSparks : public AbstractEffect
     // These are values that I like experimentally, I cannot justify them.
     // TODO: better way to define the frequency
     unsigned short DICE_LIMIT = 10000;
-    byte MIN_CHANCE = 1;
-    byte MAX_CHANCE = 3;
-    byte sparkChance;
+    RandParam<byte, 1, 3> sparkChance;
 
     // Chance that a spark becomes bigger, rolled out of 100.
     // If the roll is successful, the width is doubled and then rolled again until it fails.
     // Potentially going up to the full strip in rare cases.
-    byte bigSparkChance = 25;
+    RandParam<byte, 10, 30> bigSparkChance;
+
+    RandParam<byte, 0, 3> paletteSelection;
 
     ElectricSparks()
     {
@@ -133,10 +127,7 @@ class ElectricSparks : public AbstractEffect
 
     void randomize() override
     {
-      sparkChance = random(MIN_CHANCE, MAX_CHANCE);
-      byte selection = random(4);
-
-      switch(selection)
+      switch(paletteSelection)
       {
         case 0:
           palette = red_sparks_gp;
@@ -212,10 +203,7 @@ class ElectricSparks : public AbstractEffect
 class Glow : public AbstractEffect
 {
   public:
-    // TODO: randomize
-    byte MIN_BPM = 6;
-    byte MAX_BPM = 15;
-    byte bpm;
+    RandParam<byte, 6, 15> bpm;
 
     byte MIN_BRIGHTNESS = 50;
     byte MAX_BRIGHTNESS = 255;
@@ -229,8 +217,6 @@ class Glow : public AbstractEffect
       moodlight.MIN_BPM = 1;
       moodlight.MAX_BPM = 3;
       moodlight.randomize();
-
-      bpm = random(MIN_BPM, MAX_BPM);
     }
 
     void precompute(milliseconds t) override
@@ -259,14 +245,7 @@ class Fireworks: public AbstractEffect
   public:
     // See ElectricSpark's comments, same logic
     unsigned long DICE_LIMIT = 10000;
-    byte MIN_CHANCE = 30;
-    byte MAX_CHANCE = 50;
-    byte sparkChance;
-
-    void randomize() override
-    {
-      sparkChance = random(MIN_CHANCE, MAX_CHANCE);
-    }
+    RandParam<byte, 30, 50> sparkChance;
 
     void precompute(milliseconds t) override
     {

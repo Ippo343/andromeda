@@ -25,4 +25,18 @@ void seedRNGs()
   random16_add_entropy(analogRead(65536));
 }
 
+
+// Since I want so many randomized parameters,
+// might as well overengineer a solution so I don't have to write it every time.
+// This picks a random T value when instantiated between min and max (inclusive)
+template<typename T, T min, T max>
+class RandParam
+{
+  protected:
+    T value;
+  public:
+    RandParam() { value = random(min, max + 1); }   // including the max
+    inline operator T() const { return value; }
+};
+
 #endif
