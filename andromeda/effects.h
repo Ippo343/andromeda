@@ -199,40 +199,33 @@ class ElectricSparks : public AbstractEffect
 };
 
 
-// Whole mirror moodlight with pulsating brightness
+// Whole mirror moodlight pulsating around a central hue
 class Glow : public AbstractEffect
 {
   public:
-    RandParam<byte, 6, 15> bpm;
-
-    byte MIN_BRIGHTNESS = 50;
-    byte MAX_BRIGHTNESS = 255;
-
+    RandParam<milliseconds, 5000, 20000> cycleTime;
+    RandParam<byte, 0, 255> hueCentre;
+    RandParam<byte, 5, 25> hueAmplitude;
     CRGB color;
-    MoodLight moodlight;
-
-    void randomize() override
-    {
-      // Use a very very slow moodlight
-      moodlight.MIN_BPM = 1;
-      moodlight.MAX_BPM = 3;
-      moodlight.randomize();
-    }
 
     void precompute(milliseconds t) override
     {
-      color = moodlight.evaluate(0, t);
+      // cubicwave8 just maps (0,255)->(0,255)
+      // The following code first scales the current time into the input range,
+      // then scales the output into the (-A,A) range
+      milliseconds ct = t % cycleTime;
+      byte scaledct = map(ct, 0, cycleTime, 0, 255); // cubicwave8 expects an input 0 to 255
+      byte rawWave = cubicwave8(scaledct);
+      byte scaledWave = map(rawWave, 0, 255, -hueAmplitude, hueAmplitude);
+
+      byte hue = (hueCentre + scaledWave) % 255;
+
+      color = CHSV(hue, 255, 255);
     }
 
     CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
     {
       return color;
-    }
-
-    void postprocess(milliseconds t) override
-    {
-      byte brightness = beatsin8(bpm, MIN_BRIGHTNESS, MAX_BRIGHTNESS);
-      FastLED.setBrightness(brightness);
     }
 };
 
