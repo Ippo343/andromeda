@@ -22,7 +22,7 @@ void seedRNGs()
   // doing an analog read from it returns noise for the RNG
   randomSeed(analogRead(0));
   random16_set_seed(random(65536));
-  random16_add_entropy(analogRead(65536));
+  random16_add_entropy(random(65536));
 }
 
 
