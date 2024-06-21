@@ -222,6 +222,18 @@ class Glow : public AbstractEffect
 };
 
 
+class Test2D : public AbstractEffect
+{
+  public:
+    CRGBPalette16 palette = HeatColors_p;
+
+    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    {
+      byte value = map(led.cartesian.y, -SCREEN_HALF_SIZE, SCREEN_HALF_SIZE, 0, 255);
+      return ColorFromPalette(palette, value);
+    }
+};
+
 // Randomly light up a whole strip with a random color,
 // and then keep everything fading to black.
 // Looks a little bit like fireworks.
