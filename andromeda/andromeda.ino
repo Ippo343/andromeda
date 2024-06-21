@@ -1,5 +1,7 @@
 #include "control-logic.h"
 
+#define PERF
+
 void setup() {
 
   Serial.begin(115200);

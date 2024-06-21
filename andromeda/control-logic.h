@@ -11,7 +11,7 @@
 // Set either of these to force the controller to use it
 // Useful when developing a new effect or animation
 AbstractAnimation* forcedAnimation = NULL;
-AbstractEffect*    forcedEffect = new Test2D();
+AbstractEffect*    forcedEffect = NULL;
 
 AbstractAnimation* animation;
 AbstractEffect*    effect;

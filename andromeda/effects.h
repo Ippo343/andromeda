@@ -222,14 +222,15 @@ class Glow : public AbstractEffect
 };
 
 
-class Test2D : public AbstractEffect
+class VerticalPaletteWave : public AbstractEffect
 {
   public:
     CRGBPalette16 palette = HeatColors_p;
+    byte bpm = 10;
 
     CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
     {
-      byte value = map(led.cartesian.y, -SCREEN_HALF_SIZE, SCREEN_HALF_SIZE, 0, 255);
+      byte value = beatsin8(bpm, 0, 255, 0, -led.cartesian.y / 3);
       return ColorFromPalette(palette, value);
     }
 };
@@ -313,7 +314,7 @@ AbstractEffect* getRandomEffect() {
   // For the moment, KISS will do.
   // TODO: array of template functions because I can.
 
-  byte EFFECTS_COUNT = 6;
+  byte EFFECTS_COUNT = 7;
   byte selection = random(EFFECTS_COUNT);
 
   switch (selection)
@@ -330,6 +331,8 @@ AbstractEffect* getRandomEffect() {
       return new Fireworks();
     case 5:
       return new PerlinColorMoodlight();
+    case 6:
+      return new VerticalPaletteWave();
     default:
       return new ErrorEffect();
   }
