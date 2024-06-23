@@ -109,7 +109,7 @@ AbstractAnimation* getRandomAnimation() {
   static byte previousSelection = 255;
 
   byte selection;
-  if (forcedSelection > 0)
+  if (forcedSelection >= 0)
     selection = forcedSelection;
   else do
     selection = random(ANIMATIONS_COUNT);
