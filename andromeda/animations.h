@@ -37,6 +37,35 @@ class SweepStrips : public AbstractAnimation
 };
 
 
+// Pretty much the same as SweepStrips, but using all the loops instead
+class SweepLoops : public AbstractAnimation
+{
+  public:
+
+    RandParam<byte, 50, 100> timeStep;
+
+    void run() override {
+      CRGB colors[3];
+      threeRandomColors(&colors[0], &colors[1], &colors[2]);
+
+      paint(CRGB::Black);
+      for (byte c = 0; c < 3; c++)
+        colorSweep(colors[c]);
+      colorSweep(CRGB::White);
+      colorSweep(CRGB::Black);
+    }
+
+    void colorSweep(CRGB color)
+    {
+        FOR_EACH_STRIP {
+          paintStrip(iStrip, color);
+          FastLED.show();
+          delay(timeStep);
+        }
+    }
+};
+
+
 // Alternates Y shapes around the mirror showing all colors
 // TODO: improve name of this
 class RotateRGBW : public AbstractAnimation
@@ -105,7 +134,7 @@ class ErrorAnimation : public AbstractAnimation
 
 AbstractAnimation* getRandomAnimation() {
 
-  byte ANIMATIONS_COUNT = 3;
+  byte ANIMATIONS_COUNT = 4;
 
   // Set this to the index of the animation you want to force while testing
   short forcedSelection = -1;
@@ -129,6 +158,8 @@ AbstractAnimation* getRandomAnimation() {
       return new RotateRGBW();
     case 2:
       return new SequentialIgnition();
+    case 3:
+      return new SweepLoops();
     default:
       return new ErrorAnimation();
   }
