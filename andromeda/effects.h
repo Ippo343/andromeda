@@ -311,8 +311,19 @@ AbstractEffect* getRandomEffect() {
 
   byte EFFECTS_COUNT = 7;
 
+  // Set this to the index of the effect you want to force while testing
   short forcedSelection = -1;
-  byte selection = forcedSelection > 0 ? forcedSelection : random(EFFECTS_COUNT);
+
+  static byte previousSelection = 255;
+
+  byte selection;
+  if (forcedSelection > 0)
+    selection = forcedSelection;
+  else do
+    selection = random(EFFECTS_COUNT);
+  while (selection == previousSelection);
+
+  previousSelection = selection;
 
   AbstractEffect* retval;
   switch (selection)

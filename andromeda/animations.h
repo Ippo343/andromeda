@@ -103,8 +103,19 @@ AbstractAnimation* getRandomAnimation() {
 
   byte ANIMATIONS_COUNT = 3;
 
+  // Set this to the index of the animation you want to force while testing
   short forcedSelection = -1;
-  byte selection = forcedSelection > 0 ? forcedSelection : random(ANIMATIONS_COUNT);
+
+  static byte previousSelection = 255;
+
+  byte selection;
+  if (forcedSelection > 0)
+    selection = forcedSelection;
+  else do
+    selection = random(ANIMATIONS_COUNT);
+  while (selection == previousSelection);
+
+  previousSelection = selection;
 
   switch (selection)
   {
