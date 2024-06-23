@@ -35,8 +35,9 @@ class RandParam
   protected:
     T value;
   public:
-    RandParam() { value = random(min, max + 1); }   // including the max
+    RandParam() { randomize(); }   // including the max
     inline operator T() const { return value; }
+    void randomize() { value = random(min, max + 1); }
 };
 
 

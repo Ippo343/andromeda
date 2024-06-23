@@ -222,15 +222,34 @@ class Glow : public AbstractEffect
 };
 
 
-class VerticalPaletteWave : public AbstractEffect
+class PaletteWave : public AbstractEffect
 {
   public:
     CRGBPalette16 palette = HeatColors_p;
-    byte bpm = 10;
+    RandParam<byte, 8, 12> bpm;
+    RandParam<char, -3, 3> mx;
+    RandParam<char, -3, 3> my;
+    byte scale = 3;
+
+    PaletteWave()
+    {
+      // If both coefficients are 0 then all the LEDs take the same color,
+      // prevent that case by rerolling
+      while (mx == 0 && my == 0)
+      {
+        mx.randomize();
+        my.randomize();
+      }
+
+      // Compensate for the magnitude of the (mx, my) vector
+      // since the coordinates are effectively scaled by it.
+      scale *= sqrt(mx * mx + my * my);
+    }
 
     CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
     {
-      byte value = beatsin8(bpm, 0, 255, 0, -led.cartesian.y / 3);
+      int v = (mx * led.cartesian.x + my * led.cartesian.y) / scale;
+      byte value = beatsin8(bpm, 0, 255, 0, v);
       return ColorFromPalette(palette, value);
     }
 };
@@ -347,7 +366,7 @@ AbstractEffect* getRandomEffect() {
       retval = new PerlinColorMoodlight();
       break;
     case 6:
-      retval = new VerticalPaletteWave();
+      retval = new PaletteWave();
       break;
     default:
       retval = new ErrorEffect();
