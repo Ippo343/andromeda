@@ -225,11 +225,12 @@ class Glow : public AbstractEffect
 class PaletteWave : public AbstractEffect
 {
   public:
-    CRGBPalette16 palette = HeatColors_p;
-    RandParam<byte, 8, 12> bpm;
+    CRGBPalette16 palette;
+    RandParam<byte, 5, 10> bpm;
     RandParam<char, -3, 3> mx;
     RandParam<char, -3, 3> my;
-    byte scale = 3;
+    RandParam<byte, 2, 5> baseScale;
+    byte scale;
 
     PaletteWave()
     {
@@ -243,7 +244,12 @@ class PaletteWave : public AbstractEffect
 
       // Compensate for the magnitude of the (mx, my) vector
       // since the coordinates are effectively scaled by it.
-      scale *= sqrt(mx * mx + my * my);
+      scale = baseScale * sqrt(mx * mx + my * my);
+    }
+
+    void randomize() override
+    {
+      palette = randomPredefinedPalette();
     }
 
     CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
