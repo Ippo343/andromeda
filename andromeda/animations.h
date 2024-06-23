@@ -101,14 +101,10 @@ class ErrorAnimation : public AbstractAnimation
 
 AbstractAnimation* getRandomAnimation() {
 
-  // You cannot have an array of types on this thing.
-  // I have a prototype where I had an array of template functions
-  // that would instantiate each effect, but unsurprisingly it crashes.
-  // For the moment, KISS will do.
-  // TODO: array of template functions because I can.
-
   byte ANIMATIONS_COUNT = 3;
-  byte selection = random(ANIMATIONS_COUNT);
+
+  short forcedSelection = -1;
+  byte selection = forcedSelection > 0 ? forcedSelection : random(ANIMATIONS_COUNT);
 
   switch (selection)
   {

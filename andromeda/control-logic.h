@@ -8,17 +8,12 @@
 #include "effects.h"
 #include "animations.h"
 
-// Set either of these to force the controller to use it
-// Useful when developing a new effect or animation
-AbstractAnimation* forcedAnimation = NULL;
-AbstractEffect*    forcedEffect = NULL;
-
 AbstractAnimation* animation;
 AbstractEffect*    effect;
 
 milliseconds MIN_EFFECT_DURATION = 10000;
 milliseconds MAX_EFFECT_DURATION = 30000;
-milliseconds nextTransition;
+milliseconds nextTransition = 0;
 
 void setNextTransition()
 {
@@ -26,30 +21,18 @@ void setNextTransition()
 }
 
 // Pick a new random animation, play it, and deallocate it
-// (unless it's forced, in which case it's always run and kept)
 void runRandomAnimation()
 {
-  if (!forcedAnimation)
-      animation = getRandomAnimation();
+    animation = getRandomAnimation();
 
     animation->run();
     animation->cleanup();
     delay(200);
 
-    if (!forcedAnimation)
-    {
-      delete animation;
-      forcedAnimation = NULL;
-    }
+    delete animation;
+    animation = NULL;
 }
 
-// Pick a new random effect, unless one is forced.
-// The effect is always randomized, even if forced
-void setEffect()
-{
-  effect = forcedEffect ? forcedEffect : getRandomEffect();
-  effect->randomize();
-}
 
 // When the transition time is reached:
 // - play an animation
@@ -58,20 +41,15 @@ void setEffect()
 void handleTransition()
 {
     runRandomAnimation();
-
-    if (!forcedEffect)
-    {
+    if (effect)
       delete effect;
-      effect = NULL;
-    }
-
-    setEffect();
+    effect = getRandomEffect();
     setNextTransition();
 }
 
 void update(milliseconds t)
 {
-  if (t > nextTransition)
+  if (t >= nextTransition)
     handleTransition();
 
   effect->precompute(t);

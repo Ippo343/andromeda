@@ -306,36 +306,45 @@ class ErrorEffect : public AbstractEffect
 };
 
 
+// Picks a new random effect and randomizes it
 AbstractEffect* getRandomEffect() {
 
-  // You cannot have an array of types on this thing.
-  // I have a prototype where I had an array of template functions
-  // that would instantiate each effect, but unsurprisingly it crashes.
-  // For the moment, KISS will do.
-  // TODO: array of template functions because I can.
-
   byte EFFECTS_COUNT = 7;
-  byte selection = random(EFFECTS_COUNT);
 
+  short forcedSelection = -1;
+  byte selection = forcedSelection > 0 ? forcedSelection : random(EFFECTS_COUNT);
+
+  AbstractEffect* retval;
   switch (selection)
   {
     case 0:
-      return new IndividualStripMoodlight();
+      retval = new IndividualStripMoodlight();
+      break;
     case 1:
-      return new LoopingPoint();
+      retval = new LoopingPoint();
+      break;
     case 2:
-      return new ElectricSparks();
+      retval = new ElectricSparks();
+      break;
     case 3:
-      return new Glow();
+      retval = new Glow();
+      break;
     case 4:
-      return new Fireworks();
+      retval = new Fireworks();
+      break;
     case 5:
-      return new PerlinColorMoodlight();
+      retval = new PerlinColorMoodlight();
+      break;
     case 6:
-      return new VerticalPaletteWave();
+      retval = new VerticalPaletteWave();
+      break;
     default:
-      return new ErrorEffect();
+      retval = new ErrorEffect();
+      break;
   }
+
+  retval->randomize();
+  return retval;
 }
 
 #endif
