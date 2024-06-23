@@ -113,6 +113,39 @@ class SequentialIgnition : public AbstractAnimation
     }
 };
 
+
+// Swipes a random color from left to right and then fades it out
+// TODO: swipe in random directions
+class Swipe : public AbstractAnimation
+{
+  public:
+    void run() override
+    {
+      paint(CRGB::Black);
+      CRGB color = randomColor();
+
+      // Even without any delay, scrolling the whole screen size takes a long time
+      // (which I am a bit suspicious of to be honest, but I guess calling it 520 times is a bit much).
+      // It looks smoother if you increase in steps of 2 or 3
+      RandParam<short, 2, 3> step;
+
+      // It goes to (step * SCREEN_HALF_SIZE) so that the fading trail has time to fully fade out
+      for (short x = -SCREEN_HALF_SIZE; x <= (step * SCREEN_HALF_SIZE); x += step)
+      {
+        FOR_EACH_STRIP {
+          FOR_EACH_LED {
+            short lx = STRIPS[iStrip].leds[iLed].cartesian.x;
+            if (lx >= (x - step) && lx <= x)
+              STRIPS[iStrip].buffer[iLed] = color;
+          }
+          fadeToBlackBy(STRIPS[iStrip].buffer, LEDS_PER_STRIP, step);
+        }
+        FastLED.show();
+      }
+    }
+};
+
+
 // I don't think this will ever show, but why not
 class ErrorAnimation : public AbstractAnimation
 {
@@ -134,7 +167,7 @@ class ErrorAnimation : public AbstractAnimation
 
 AbstractAnimation* getRandomAnimation() {
 
-  byte ANIMATIONS_COUNT = 4;
+  byte ANIMATIONS_COUNT = 5;
 
   // Set this to the index of the animation you want to force while testing
   short forcedSelection = -1;
@@ -160,6 +193,8 @@ AbstractAnimation* getRandomAnimation() {
       return new SequentialIgnition();
     case 3:
       return new SweepLoops();
+    case 4:
+      return new Swipe();
     default:
       return new ErrorAnimation();
   }
