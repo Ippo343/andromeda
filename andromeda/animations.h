@@ -5,17 +5,21 @@
 #include "animation-base.h"
 #include "effects-utils.h"
 
-// Sweeps all the strips with RGBW (and then black) sequentially
-class SweepRGBW : public AbstractAnimation
+// Sweeps all the strips with random colors,
+// then white and then black sequentially
+class SweepStrips : public AbstractAnimation
 {
   public:
 
-    byte timeStep = 7;
+    RandParam<byte, 10, 30> timeStep;
 
     void run() override {
-      colorSweep(CRGB::Red);
-      colorSweep(CRGB::Green);
-      colorSweep(CRGB::Blue);
+      CRGB colors[3];
+      threeRandomColors(&colors[0], &colors[1], &colors[2]);
+
+      paint(CRGB::Black);
+      for (byte c = 0; c < 3; c++)
+        colorSweep(colors[c]);
       colorSweep(CRGB::White);
       colorSweep(CRGB::Black);
     }
@@ -120,7 +124,7 @@ AbstractAnimation* getRandomAnimation() {
   switch (selection)
   {
     case 0:
-      return new SweepRGBW();
+      return new SweepStrips();
     case 1:
       return new RotateRGBW();
     case 2:
