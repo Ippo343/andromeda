@@ -95,7 +95,7 @@ class ElectricSparks : public AbstractEffect
     byte preValues[NUM_STRIPS][LEDS_PER_STRIP];
     byte newValues[NUM_STRIPS][LEDS_PER_STRIP];
 
-    CRGBPalette16 palette;
+    CRGBPalette256 palette;
 
     // This is tricky to figure out if not by trial and error.
     // We roll a dice every frame for every led, so the chance must be really small.
@@ -115,8 +115,6 @@ class ElectricSparks : public AbstractEffect
     {
       memset8(preValues, 0, NUM_STRIPS * LEDS_PER_STRIP);
       memset8(newValues, 0, NUM_STRIPS * LEDS_PER_STRIP);
-
-      palette = blue_sparks_gp;
     }
 
     byte avg38(byte a, byte b, byte c)
@@ -127,21 +125,27 @@ class ElectricSparks : public AbstractEffect
 
     void randomize() override
     {
+      CRGBPalette16 palette16;
+
       switch(paletteSelection)
       {
         case 0:
-          palette = red_sparks_gp;
+          palette16 = red_sparks_gp;
           break;
         case 1:
-          palette = green_sparks_gp;
+          palette16 = green_sparks_gp;
           break;
         case 2:
-          palette = blue_sparks_gp;
+          palette16 = blue_sparks_gp;
           break;
         case 3:
-          palette = purple_sparks_gp;
+          palette16 = purple_sparks_gp;
           break;
       }
+
+      // Upscale the palette so no interpolation is needed while running.
+      // gives a completely imperceptible performace boost.
+      UpscalePalette(palette16, palette);
     }
 
     void precompute(milliseconds t) override
@@ -225,7 +229,7 @@ class Glow : public AbstractEffect
 class PaletteWave : public AbstractEffect
 {
   public:
-    CRGBPalette16 palette;
+    CRGBPalette256 palette;
     RandParam<byte, 5, 10> bpm;
     RandParam<char, -3, 3> mx;
     RandParam<char, -3, 3> my;
@@ -249,7 +253,8 @@ class PaletteWave : public AbstractEffect
 
     void randomize() override
     {
-      palette = randomPredefinedPalette();
+      CRGBPalette16 palette16 = randomPredefinedPalette();
+      UpscalePalette(palette16, palette);
     }
 
     CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
