@@ -31,16 +31,35 @@ base_height_mm = 592
 # estimated using the dimensions of the base
 mm_per_px = base_height_mm / base_height_px
 
-header = "const PROGMEM coords relative_led_coordinates[NUM_STRIPS][LEDS_PER_STRIP] = {"
+cartesian_header = "const PROGMEM CartesianCoordinates relative_led_coordinates[NUM_STRIPS][LEDS_PER_STRIP] = {"
+polar_header = "const PROGMEM PolarCoordinates polar_led_coordinates[NUM_STRIPS][LEDS_PER_STRIP] = {"
 footer = "};"
 
 
-def fmt_coord(v):
+def fmt_coord_cartesian(v):
     return f"{{ {int(v[0]):>4}, {int(v[1]):>4} }}"
 
 
-def fmt_strip(coords):
-    return "  { " + ", ".join(map(fmt_coord, coords)) + " },"
+def fmt_coord_polar(v):
+    return f"{{ {v[0]:>4}, {v[1]:>5} }}"
+
+
+def fmt_strip_cartesian(coords):
+    return "  { " + ", ".join(map(fmt_coord_cartesian, coords)) + " },"
+
+
+def fmt_strip_polar(coords):
+    return "  { " + ", ".join(map(fmt_coord_polar, coords)) + " },"
+
+
+def cartesian_to_polar(coordinates):
+    x, y = coordinates
+    r = round(np.sqrt(x**2 + y**2))
+    theta = np.arctan2(y, x)
+    theta = np.degrees(theta)
+    theta *= 100    # measured in centi-degrees so we can use ints in the controller
+    theta = round(theta) % (360 * 100)
+    return r, round(theta)
 
 
 def interpolate_strip(strip_center_px, first_led_px, last_led_px):
@@ -142,12 +161,12 @@ def main():
     max_led_x = -math.inf
     max_led_y = -math.inf
 
-    print(header)
+    print(cartesian_header)
     for strip_data in zip(centres_px, firsts_px, lasts_px):
-        coordinates = list(interpolate_strip(*strip_data))
+        cartesian_coordinates = list(interpolate_strip(*strip_data))
 
-        xs = [c[0] for c in coordinates]
-        ys = [c[1] for c in coordinates]
+        xs = [c[0] for c in cartesian_coordinates]
+        ys = [c[1] for c in cartesian_coordinates]
 
         # Update screen's bounding box
         min_led_x = min(min_led_x, min(xs))
@@ -155,8 +174,15 @@ def main():
         max_led_x = max(max_led_x, max(xs))
         max_led_y = max(max_led_y, max(ys))
 
-        print(fmt_strip(coordinates))
+        print(fmt_strip_cartesian(cartesian_coordinates))
+    print(footer)
 
+    print()
+    print(polar_header)
+    for strip_data in zip(centres_px, firsts_px, lasts_px):
+        cartesian_coordinates = list(interpolate_strip(*strip_data))
+        polar_coordinates = list(map(cartesian_to_polar, cartesian_coordinates))
+        print(fmt_strip_polar(polar_coordinates))
     print(footer)
 
     print()
