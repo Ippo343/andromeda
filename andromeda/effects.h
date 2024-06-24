@@ -229,7 +229,7 @@ class PaletteWave : public AbstractEffect
     RandParam<byte, 5, 10> bpm;
     RandParam<char, -3, 3> mx;
     RandParam<char, -3, 3> my;
-    RandParam<byte, 2, 5> baseScale;
+    RandParam<byte, 2, 8> baseScale;
     byte scale;
 
     PaletteWave()
