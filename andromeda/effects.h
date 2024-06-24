@@ -265,6 +265,30 @@ class PaletteWave : public AbstractEffect
     }
 };
 
+
+// Just like the PaletteWave effect, but in polar coordinates
+class PolarPaletteWave : public AbstractEffect
+{
+  public:
+    CRGBPalette256 palette;
+    RandParam<byte, 5, 10> bpm;
+    RandParam<unsigned short, 16, 32> scale;
+    RandParam<byte, 0, 1> flip;
+
+    void randomize() override
+    {
+      CRGBPalette16 palette16 = randomPredefinedPalette();
+      UpscalePalette(palette16, palette);
+    }
+
+    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    {
+      short v = (flip ? -1 : 1) * led.polar.radius / scale;
+      byte value = beatsin8(bpm, 0, 255, 0, v);
+      return ColorFromPalette(palette, value);
+    }
+};
+
 // Randomly light up a whole strip with a random color,
 // and then keep everything fading to black.
 // Looks a little bit like fireworks.
@@ -322,6 +346,101 @@ class PerlinColorMoodlight : public AbstractEffect
     }
 };
 
+
+// Rotating beam of light
+class Lighthouse : public AbstractEffect
+{
+  public:
+    unsigned short angle;
+    unsigned short minAngle;
+    unsigned short maxAngle;
+    CRGB color;
+
+    RandParam<byte, 10, 20> bpm;
+    RandParam<unsigned short, 800, 3000> aperture;
+
+    void randomize() override
+    {
+      color = randomColor();
+    }
+
+    void precompute(milliseconds t) override
+    {
+      unsigned short v = beat16(bpm);
+      angle = map(v, 0, 65535, 0, 36000);
+
+      minAngle = angle - aperture;
+      maxAngle = angle + aperture;
+    }
+
+    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    {
+      if (led.polar.cdegrees >= minAngle && led.polar.cdegrees <= maxAngle)
+        return color;
+      else
+        return CRGB::Black;
+    }
+};
+
+
+class PolarSwipe : public AbstractEffect
+{
+  public:
+    unsigned short radius;
+    unsigned short minRadius;
+    unsigned short maxRadius;
+    CRGB color;
+    RandParam<byte, 0, 1> flip;
+
+    RandParam<byte, 30, 40> bpm;
+    const byte aperture = 15;
+
+    void randomize() override
+    {
+      color = randomColor();
+    }
+
+    void precompute(milliseconds t) override
+    {
+      unsigned short v = beat16(bpm);
+
+      unsigned short min = 130;
+      unsigned short max = SCREEN_HALF_SIZE + 130;
+
+      if (flip)
+        radius = map(v, 0, 65535, max, min);
+      else
+        radius = map(v, 0, 65535, min, max);
+
+      if (radius > SCREEN_HALF_SIZE)
+        color = randomColor();
+
+      minRadius = radius - aperture;
+      maxRadius = radius + aperture;
+    }
+
+    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    {
+      if (strip.idx == 0)
+      {
+        return CRGB::Black;
+      }
+
+      if (led.polar.radius >= minRadius && led.polar.radius <= maxRadius)
+        return color;
+      else
+        return strip.buffer[led.idx];
+    }
+
+    void postprocess(milliseconds t) override
+    {
+      FOR_EACH_STRIP {
+        fadeToBlackBy(STRIPS[iStrip].buffer, LEDS_PER_STRIP, 30);
+      }
+    }
+};
+
+
 // I don't think this will ever show, but why not
 class ErrorEffect : public AbstractEffect
 {
@@ -339,7 +458,7 @@ class ErrorEffect : public AbstractEffect
 // Picks a new random effect and randomizes it
 AbstractEffect* getRandomEffect() {
 
-  byte EFFECTS_COUNT = 7;
+  byte EFFECTS_COUNT = 10;
 
   // Set this to the index of the effect you want to force while testing
   short forcedSelection = -1;
@@ -378,6 +497,15 @@ AbstractEffect* getRandomEffect() {
       break;
     case 6:
       retval = new PaletteWave();
+      break;
+    case 7:
+      retval = new Lighthouse();
+      break;
+    case 8:
+      retval = new PolarPaletteWave();
+      break;
+    case 9:
+      retval = new PolarSwipe();
       break;
     default:
       retval = new ErrorEffect();
