@@ -1,15 +1,11 @@
 #include "control-logic.h"
 
+#define PERF
+
 void setup() {
-
   Serial.begin(115200);
-
   initializeGeometry();
   seedRNGs();
-
-  runRandomAnimation();
-  setEffect();
-  setNextTransition();
 }
 
 void loop() {

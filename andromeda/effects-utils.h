@@ -28,4 +28,52 @@ CRGB randomColor()
   return CHSV(random8(), 255, 255);
 }
 
+// Picks three random colors, equispaced around the HSV wheel
+void threeRandomColors(CRGB* A, CRGB* B, CRGB*C)
+{
+  const short hueStep = 255 / 3;
+  short a = random8();
+  short b = (a + hueStep) % 255;
+  short c = (b + hueStep) % 255;
+
+  *A = CHSV(a, 255, 255);
+  *B = CHSV(b, 255, 255);
+  *C = CHSV(c, 255, 255);
+}
+
+
+CRGBPalette16 randomPredefinedPalette()
+{
+  CRGBPalette16 retval;
+  switch (random(8))
+  {
+    case 0:
+      retval = CloudColors_p;
+      break;
+    case 1:
+      retval = LavaColors_p;
+      break;
+    case 2:
+      retval = OceanColors_p;
+      break;
+    case 3:
+      retval = ForestColors_p;
+      break;
+    case 4:
+      retval = RainbowColors_p;
+      break;
+    case 5:
+      retval = RainbowStripeColors_p;
+      break;
+    case 6:
+      retval = PartyColors_p;
+      break;
+    case 7:
+      retval = HeatColors_p;
+      break;
+  }
+
+  return retval;
+}
+
 #endif

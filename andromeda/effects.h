@@ -44,19 +44,13 @@ class LoopingPoint : public AbstractEffect
 {
   public:
     MoodLight moodlights[NUM_STRIPS];
-
-    const milliseconds MIN_STEP = 25;
-    const milliseconds MAX_STEP = 50;
-    milliseconds step;
-
+    RandParam<milliseconds, 25, 50> step;
     byte idxOn;
 
     CRGB color[NUM_STRIPS];
 
     void randomize() override
     {
-      step = random(MIN_STEP, MAX_STEP);
-
       FOR_EACH_STRIP {
         moodlights[iStrip].randomize();
       }
@@ -101,28 +95,26 @@ class ElectricSparks : public AbstractEffect
     byte preValues[NUM_STRIPS][LEDS_PER_STRIP];
     byte newValues[NUM_STRIPS][LEDS_PER_STRIP];
 
-    CRGBPalette16 palette;
+    CRGBPalette256 palette;
 
     // This is tricky to figure out if not by trial and error.
     // We roll a dice every frame for every led, so the chance must be really small.
     // These are values that I like experimentally, I cannot justify them.
     // TODO: better way to define the frequency
     unsigned short DICE_LIMIT = 10000;
-    byte MIN_CHANCE = 1;
-    byte MAX_CHANCE = 3;
-    byte sparkChance;
+    RandParam<byte, 1, 3> sparkChance;
 
     // Chance that a spark becomes bigger, rolled out of 100.
     // If the roll is successful, the width is doubled and then rolled again until it fails.
     // Potentially going up to the full strip in rare cases.
-    byte bigSparkChance = 25;
+    RandParam<byte, 10, 30> bigSparkChance;
+
+    RandParam<byte, 0, 3> paletteSelection;
 
     ElectricSparks()
     {
-      memset(preValues, 0, NUM_STRIPS * LEDS_PER_STRIP);
-      memset(newValues, 0, NUM_STRIPS * LEDS_PER_STRIP);
-
-      palette = blue_sparks_gp;
+      memset8(preValues, 0, NUM_STRIPS * LEDS_PER_STRIP);
+      memset8(newValues, 0, NUM_STRIPS * LEDS_PER_STRIP);
     }
 
     byte avg38(byte a, byte b, byte c)
@@ -133,24 +125,27 @@ class ElectricSparks : public AbstractEffect
 
     void randomize() override
     {
-      sparkChance = random(MIN_CHANCE, MAX_CHANCE);
-      byte selection = random(4);
+      CRGBPalette16 palette16;
 
-      switch(selection)
+      switch(paletteSelection)
       {
         case 0:
-          palette = red_sparks_gp;
+          palette16 = red_sparks_gp;
           break;
         case 1:
-          palette = green_sparks_gp;
+          palette16 = green_sparks_gp;
           break;
         case 2:
-          palette = blue_sparks_gp;
+          palette16 = blue_sparks_gp;
           break;
         case 3:
-          palette = purple_sparks_gp;
+          palette16 = purple_sparks_gp;
           break;
       }
+
+      // Upscale the palette so no interpolation is needed while running.
+      // gives a completely imperceptible performace boost.
+      UpscalePalette(palette16, palette);
     }
 
     void precompute(milliseconds t) override
@@ -203,53 +198,96 @@ class ElectricSparks : public AbstractEffect
       }
 
       // Copy the current buffer so that the next frame can diffuse it
-      memcpy(preValues, newValues, NUM_STRIPS * LEDS_PER_STRIP);
+      memcpy8(preValues, newValues, NUM_STRIPS * LEDS_PER_STRIP);
     }
 };
 
 
-// Whole mirror moodlight with pulsating brightness
+// Whole mirror moodlight pulsating around a central hue
 class Glow : public AbstractEffect
 {
   public:
-    // TODO: randomize
-    byte MIN_BPM = 6;
-    byte MAX_BPM = 15;
-    byte bpm;
-
-    byte MIN_BRIGHTNESS = 50;
-    byte MAX_BRIGHTNESS = 255;
-
+    RandParam<milliseconds, 10000, 30000> cycleTime;
+    RandParam<byte, 0, 255> hueCentre;
+    RandParam<byte, 5, 25> hueAmplitude;
     CRGB color;
-    MoodLight moodlight;
-
-    void randomize() override
-    {
-      // Use a very very slow moodlight
-      moodlight.MIN_BPM = 1;
-      moodlight.MAX_BPM = 3;
-      moodlight.randomize();
-
-      bpm = random(MIN_BPM, MAX_BPM);
-    }
 
     void precompute(milliseconds t) override
     {
-      color = moodlight.evaluate(0, t);
+      long scaledWave = scaledCubicWave8(t, cycleTime, -hueAmplitude, hueAmplitude);
+      byte hue = (hueCentre + scaledWave) % 255;
+      color = CHSV(hue, 255, 255);
     }
 
     CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
     {
       return color;
     }
+};
 
-    void postprocess(milliseconds t) override
+
+class PaletteWave : public AbstractEffect
+{
+  public:
+    CRGBPalette256 palette;
+    RandParam<byte, 5, 10> bpm;
+    RandParam<char, -3, 3> mx;
+    RandParam<char, -3, 3> my;
+    RandParam<byte, 2, 8> baseScale;
+    byte scale;
+
+    PaletteWave()
     {
-      byte brightness = beatsin8(bpm, MIN_BRIGHTNESS, MAX_BRIGHTNESS);
-      FastLED.setBrightness(brightness);
+      // If both coefficients are 0 then all the LEDs take the same color,
+      // prevent that case by rerolling
+      while (mx == 0 && my == 0)
+      {
+        mx.randomize();
+        my.randomize();
+      }
+
+      // Compensate for the magnitude of the (mx, my) vector
+      // since the coordinates are effectively scaled by it.
+      scale = baseScale * sqrt(mx * mx + my * my);
+    }
+
+    void randomize() override
+    {
+      CRGBPalette16 palette16 = randomPredefinedPalette();
+      UpscalePalette(palette16, palette);
+    }
+
+    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    {
+      int v = (mx * led.cartesian.x + my * led.cartesian.y) / scale;
+      byte value = beatsin8(bpm, 0, 255, 0, v);
+      return ColorFromPalette(palette, value);
     }
 };
 
+
+// Just like the PaletteWave effect, but in polar coordinates
+class PolarPaletteWave : public AbstractEffect
+{
+  public:
+    CRGBPalette256 palette;
+    RandParam<byte, 5, 10> bpm;
+    RandParam<unsigned short, 16, 32> scale;
+    RandParam<byte, 0, 1> flip;
+
+    void randomize() override
+    {
+      CRGBPalette16 palette16 = randomPredefinedPalette();
+      UpscalePalette(palette16, palette);
+    }
+
+    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    {
+      short v = (flip ? -1 : 1) * led.polar.radius / scale;
+      byte value = beatsin8(bpm, 0, 255, 0, v);
+      return ColorFromPalette(palette, value);
+    }
+};
 
 // Randomly light up a whole strip with a random color,
 // and then keep everything fading to black.
@@ -259,14 +297,7 @@ class Fireworks: public AbstractEffect
   public:
     // See ElectricSpark's comments, same logic
     unsigned long DICE_LIMIT = 10000;
-    byte MIN_CHANCE = 30;
-    byte MAX_CHANCE = 50;
-    byte sparkChance;
-
-    void randomize() override
-    {
-      sparkChance = random(MIN_CHANCE, MAX_CHANCE);
-    }
+    RandParam<byte, 30, 50> sparkChance;
 
     void precompute(milliseconds t) override
     {
@@ -315,6 +346,101 @@ class PerlinColorMoodlight : public AbstractEffect
     }
 };
 
+
+// Rotating beam of light
+class Lighthouse : public AbstractEffect
+{
+  public:
+    unsigned short angle;
+    unsigned short minAngle;
+    unsigned short maxAngle;
+    CRGB color;
+
+    RandParam<byte, 10, 20> bpm;
+    RandParam<unsigned short, 800, 3000> aperture;
+
+    void randomize() override
+    {
+      color = randomColor();
+    }
+
+    void precompute(milliseconds t) override
+    {
+      unsigned short v = beat16(bpm);
+      angle = map(v, 0, 65535, 0, 36000);
+
+      minAngle = angle - aperture;
+      maxAngle = angle + aperture;
+    }
+
+    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    {
+      if (led.polar.cdegrees >= minAngle && led.polar.cdegrees <= maxAngle)
+        return color;
+      else
+        return CRGB::Black;
+    }
+};
+
+
+class PolarSwipe : public AbstractEffect
+{
+  public:
+    unsigned short radius;
+    unsigned short minRadius;
+    unsigned short maxRadius;
+    CRGB color;
+    RandParam<byte, 0, 1> flip;
+
+    RandParam<byte, 30, 40> bpm;
+    const byte aperture = 15;
+
+    void randomize() override
+    {
+      color = randomColor();
+    }
+
+    void precompute(milliseconds t) override
+    {
+      unsigned short v = beat16(bpm);
+
+      unsigned short min = 130;
+      unsigned short max = SCREEN_HALF_SIZE + 130;
+
+      if (flip)
+        radius = map(v, 0, 65535, max, min);
+      else
+        radius = map(v, 0, 65535, min, max);
+
+      if (radius > SCREEN_HALF_SIZE)
+        color = randomColor();
+
+      minRadius = radius - aperture;
+      maxRadius = radius + aperture;
+    }
+
+    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    {
+      if (strip.idx == 0)
+      {
+        return CRGB::Black;
+      }
+
+      if (led.polar.radius >= minRadius && led.polar.radius <= maxRadius)
+        return color;
+      else
+        return strip.buffer[led.idx];
+    }
+
+    void postprocess(milliseconds t) override
+    {
+      FOR_EACH_STRIP {
+        fadeToBlackBy(STRIPS[iStrip].buffer, LEDS_PER_STRIP, 30);
+      }
+    }
+};
+
+
 // I don't think this will ever show, but why not
 class ErrorEffect : public AbstractEffect
 {
@@ -329,34 +455,65 @@ class ErrorEffect : public AbstractEffect
 };
 
 
+// Picks a new random effect and randomizes it
 AbstractEffect* getRandomEffect() {
 
-  // You cannot have an array of types on this thing.
-  // I have a prototype where I had an array of template functions
-  // that would instantiate each effect, but unsurprisingly it crashes.
-  // For the moment, KISS will do.
-  // TODO: array of template functions because I can.
+  byte EFFECTS_COUNT = 10;
 
-  byte EFFECTS_COUNT = 6;
-  byte selection = random(EFFECTS_COUNT);
+  // Set this to the index of the effect you want to force while testing
+  short forcedSelection = -1;
 
+  static byte previousSelection = 255;
+
+  byte selection;
+  if (forcedSelection >= 0)
+    selection = forcedSelection;
+  else do
+    selection = random(EFFECTS_COUNT);
+  while (selection == previousSelection);
+
+  previousSelection = selection;
+
+  AbstractEffect* retval;
   switch (selection)
   {
     case 0:
-      return new IndividualStripMoodlight();
+      retval = new IndividualStripMoodlight();
+      break;
     case 1:
-      return new LoopingPoint();
+      retval = new LoopingPoint();
+      break;
     case 2:
-      return new ElectricSparks();
+      retval = new ElectricSparks();
+      break;
     case 3:
-      return new Glow();
+      retval = new Glow();
+      break;
     case 4:
-      return new Fireworks();
+      retval = new Fireworks();
+      break;
     case 5:
-      return new PerlinColorMoodlight();
+      retval = new PerlinColorMoodlight();
+      break;
+    case 6:
+      retval = new PaletteWave();
+      break;
+    case 7:
+      retval = new Lighthouse();
+      break;
+    case 8:
+      retval = new PolarPaletteWave();
+      break;
+    case 9:
+      retval = new PolarSwipe();
+      break;
     default:
-      return new ErrorEffect();
+      retval = new ErrorEffect();
+      break;
   }
+
+  retval->randomize();
+  return retval;
 }
 
 #endif
