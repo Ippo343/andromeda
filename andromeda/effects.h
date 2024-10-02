@@ -17,13 +17,6 @@ class IndividualStripMoodlight : public AbstractEffect
     MoodLight moodlights[NUM_STRIPS];
     CRGB colors[NUM_STRIPS];
 
-    void randomize() override
-    {
-      FOR_EACH_STRIP {
-        moodlights[iStrip].randomize();
-      }
-    }
-
     void precompute(milliseconds t) override
     {
       FOR_EACH_STRIP {
@@ -48,13 +41,6 @@ class LoopingPoint : public AbstractEffect
     byte idxOn;
 
     CRGB color[NUM_STRIPS];
-
-    void randomize() override
-    {
-      FOR_EACH_STRIP {
-        moodlights[iStrip].randomize();
-      }
-    }
 
     void precompute(milliseconds t) override
     {
@@ -354,31 +340,43 @@ class Lighthouse : public AbstractEffect
     unsigned short angle;
     unsigned short minAngle;
     unsigned short maxAngle;
+    MoodLight moodlight;
     CRGB color;
 
     RandParam<byte, 10, 20> bpm;
     RandParam<unsigned short, 800, 3000> aperture;
 
-    void randomize() override
-    {
-      color = randomColor();
-    }
-
     void precompute(milliseconds t) override
     {
+      color = moodlight.evaluate(0, t);
+
       unsigned short v = beat16(bpm);
       angle = map(v, 0, 65535, 0, 36000);
 
-      minAngle = angle - aperture;
-      maxAngle = angle + aperture;
+      minAngle = (angle - aperture) % FULL_CIRCLE;
+      maxAngle = (angle + aperture) % FULL_CIRCLE;
     }
 
     CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
     {
-      if (led.polar.cdegrees >= minAngle && led.polar.cdegrees <= maxAngle)
+      bool on;
+
+      if (minAngle > maxAngle)
+        on = (led.polar.cdegrees >= minAngle || led.polar.cdegrees <= maxAngle);
+      else
+        on = (led.polar.cdegrees >= minAngle && led.polar.cdegrees <= maxAngle);
+
+      if (on)
         return color;
       else
-        return CRGB::Black;
+        return strip.buffer[led.idx];
+    }
+
+    void postprocess(milliseconds t) override
+    {
+      FOR_EACH_STRIP {
+        fadeToBlackBy(STRIPS[iStrip].buffer, LEDS_PER_STRIP, 5);
+      }
     }
 };
 

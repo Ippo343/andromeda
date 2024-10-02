@@ -20,6 +20,11 @@ class MoodLight
     byte MIN_BPM = 6;
     byte MAX_BPM = 30;
 
+  MoodLight()
+  {
+    randomize();
+  }
+
   void randomize()
   {
     bpmR = random8(MIN_BPM, MAX_BPM);

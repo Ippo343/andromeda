@@ -11,8 +11,8 @@
 AbstractAnimation* animation;
 AbstractEffect*    effect;
 
-milliseconds MIN_EFFECT_DURATION = 10000;
-milliseconds MAX_EFFECT_DURATION = 30000;
+milliseconds MIN_EFFECT_DURATION =  60000;
+milliseconds MAX_EFFECT_DURATION = 240000;
 milliseconds nextTransition = 0;
 
 void setNextTransition()

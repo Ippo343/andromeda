@@ -23,6 +23,7 @@
 
 const byte LEDS_PER_STRIP = 23;
 const byte NUM_STRIPS = 7;
+const unsigned short FULL_CIRCLE = 360 * 100;
 
 struct CartesianCoordinates
 {
