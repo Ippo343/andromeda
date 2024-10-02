@@ -17,13 +17,6 @@ class IndividualStripMoodlight : public AbstractEffect
     MoodLight moodlights[NUM_STRIPS];
     CRGB colors[NUM_STRIPS];
 
-    void randomize() override
-    {
-      FOR_EACH_STRIP {
-        moodlights[iStrip].randomize();
-      }
-    }
-
     void precompute(milliseconds t) override
     {
       FOR_EACH_STRIP {
@@ -48,13 +41,6 @@ class LoopingPoint : public AbstractEffect
     byte idxOn;
 
     CRGB color[NUM_STRIPS];
-
-    void randomize() override
-    {
-      FOR_EACH_STRIP {
-        moodlights[iStrip].randomize();
-      }
-    }
 
     void precompute(milliseconds t) override
     {
