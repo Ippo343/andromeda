@@ -32,7 +32,7 @@ class MoodLight
     bpmB = random8(MIN_BPM, MAX_BPM);
   }
 
-  CRGB evaluate(int led, milliseconds t)
+  CRGB evaluate()
   {
     // NOTE: this actually ignores the t argument
     // because computing sin(t) has horrible performance

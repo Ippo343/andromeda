@@ -20,7 +20,7 @@ class IndividualStripMoodlight : public AbstractEffect
     void precompute(milliseconds t) override
     {
       FOR_EACH_STRIP {
-        colors[iStrip] = moodlights[iStrip].evaluate(0, t);
+        colors[iStrip] = moodlights[iStrip].evaluate();
       }
     }
 
@@ -45,7 +45,7 @@ class LoopingPoint : public AbstractEffect
     void precompute(milliseconds t) override
     {
       FOR_EACH_STRIP {
-        color[iStrip] = moodlights[iStrip].evaluate(0, t);
+        color[iStrip] = moodlights[iStrip].evaluate();
       }
 
       // Pick an LED to turn on, rotating along the strip
@@ -348,7 +348,7 @@ class Lighthouse : public AbstractEffect
 
     void precompute(milliseconds t) override
     {
-      color = moodlight.evaluate(0, t);
+      color = moodlight.evaluate();
 
       unsigned short v = beat16(bpm);
       angle = map(v, 0, 65535, 0, 36000);
