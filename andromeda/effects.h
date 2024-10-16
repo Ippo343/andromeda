@@ -37,7 +37,7 @@ class LoopingPoint : public AbstractEffect
 {
   public:
     MoodLight moodlights[NUM_STRIPS];
-    RandParam<milliseconds, 25, 50> step;
+    RandParam<milliseconds, 40, 70> step;
     byte idxOn;
 
     CRGB color[NUM_STRIPS];
@@ -193,7 +193,7 @@ class ElectricSparks : public AbstractEffect
 class Glow : public AbstractEffect
 {
   public:
-    RandParam<milliseconds, 10000, 30000> cycleTime;
+    RandParam<milliseconds, (2 MINUTES), (4 MINUTES)> cycleTime;
     RandParam<byte, 0, 255> hueCentre;
     RandParam<byte, 5, 25> hueAmplitude;
     CRGB color;
@@ -216,10 +216,10 @@ class PaletteWave : public AbstractEffect
 {
   public:
     CRGBPalette256 palette;
-    RandParam<byte, 5, 10> bpm;
+    RandParam<byte, 1, 5> bpm;
     RandParam<char, -3, 3> mx;
     RandParam<char, -3, 3> my;
-    RandParam<byte, 2, 8> baseScale;
+    RandParam<byte, 1, 5> baseScale;
     byte scale;
 
     PaletteWave()
@@ -257,8 +257,8 @@ class PolarPaletteWave : public AbstractEffect
 {
   public:
     CRGBPalette256 palette;
-    RandParam<byte, 5, 10> bpm;
-    RandParam<unsigned short, 16, 32> scale;
+    RandParam<byte, 1, 5> bpm;
+    RandParam<unsigned short, 1, 10> scale;
     RandParam<byte, 0, 1> flip;
 
     void randomize() override
@@ -343,8 +343,8 @@ class Lighthouse : public AbstractEffect
     MoodLight moodlight;
     CRGB color;
 
-    RandParam<byte, 10, 20> bpm;
-    RandParam<unsigned short, 800, 3000> aperture;
+    RandParam<byte, 3, 10> bpm;
+    RandParam<unsigned short, 1200, 4500> aperture;
 
     void precompute(milliseconds t) override
     {
@@ -390,8 +390,8 @@ class PolarSwipe : public AbstractEffect
     CRGB color;
     RandParam<byte, 0, 1> flip;
 
-    RandParam<byte, 30, 40> bpm;
-    const byte aperture = 15;
+    RandParam<byte, 6, 20> bpm;
+    RandParam<byte, 5, 30> aperture;
 
     void randomize() override
     {

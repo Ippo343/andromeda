@@ -14,8 +14,8 @@ AbstractEffect*    effect;
 // These parameters control how long an effect lasts and how quickly it fades in and out
 milliseconds FADE_IN_DURATION  = 2500;
 milliseconds FADE_OUT_DURATION = 5000;
-milliseconds MIN_EFFECT_DURATION = 1 * (60*1000);
-milliseconds MAX_EFFECT_DURATION = 5 * (60*1000);
+milliseconds MIN_EFFECT_DURATION = 1 MINUTES;
+milliseconds MAX_EFFECT_DURATION = 5 MINUTES;
 
 // These contain the actual timestamps to plan the fade in/out and the transition to the next effect
 milliseconds effectStart = 0;       // time when the current effect started
