@@ -66,38 +66,6 @@ class SweepLoops : public AbstractAnimation
 };
 
 
-// Alternates Y shapes around the mirror showing all colors
-// TODO: improve name of this
-class RotateRGBW : public AbstractAnimation
-{
-  public:
-    void run() override
-    {
-      paint(CRGB::Black);
-      paintStrip(0, CRGB::Red);
-      paintStrip(1, CRGB::Red);
-      FastLED.show();
-      delay(500);
-
-      paint(CRGB::Black);
-      paintStrip(0, CRGB::Green);
-      paintStrip(3, CRGB::Green);
-      FastLED.show();
-      delay(500);
-
-      paint(CRGB::Black);
-      paintStrip(0, CRGB::Blue);
-      paintStrip(5, CRGB::Blue);
-      FastLED.show();
-      delay(500);
-
-      paint(CRGB::White);
-      FastLED.show();
-      delay(500);
-    }
-};
-
-
 class SequentialIgnition : public AbstractAnimation
 {
   public:
@@ -178,7 +146,7 @@ class ErrorAnimation : public AbstractAnimation
 
 AbstractAnimation* getRandomAnimation() {
 
-  byte ANIMATIONS_COUNT = 5;
+  byte ANIMATIONS_COUNT = 4;
 
   // Set this to the index of the animation you want to force while testing
   short forcedSelection = -1;
@@ -199,12 +167,10 @@ AbstractAnimation* getRandomAnimation() {
     case 0:
       return new SweepStrips();
     case 1:
-      return new RotateRGBW();
-    case 2:
       return new SequentialIgnition();
-    case 3:
+    case 2:
       return new SweepLoops();
-    case 4:
+    case 3:
       return new Swipe();
     default:
       return new ErrorAnimation();
