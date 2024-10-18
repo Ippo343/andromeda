@@ -10,26 +10,22 @@
 class MoodLight
 {
   public:
-    // Period of each channel's wave
-    // (in beats per minutes since that's what FastLED uses)
-    byte bpmR;
-    byte bpmG;
-    byte bpmB;
 
     // Min period and period range
-    byte MIN_BPM = 6;
-    byte MAX_BPM = 30;
+    static const byte MIN_BPM = 3;
+    static const byte MAX_BPM = 20;
 
-  MoodLight()
-  {
-    randomize();
-  }
+    // Period of each channel's wave
+    // (in beats per minutes since that's what FastLED uses)
+    RandParam<byte, MIN_BPM, MAX_BPM> bpmR;
+    RandParam<byte, MIN_BPM, MAX_BPM> bpmG;
+    RandParam<byte, MIN_BPM, MAX_BPM> bpmB;
 
   void randomize()
   {
-    bpmR = random8(MIN_BPM, MAX_BPM);
-    bpmG = random8(MIN_BPM, MAX_BPM);
-    bpmB = random8(MIN_BPM, MAX_BPM);
+    bpmR.randomize();
+    bpmG.randomize();
+    bpmB.randomize();
   }
 
   CRGB evaluate()
