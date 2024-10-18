@@ -66,7 +66,8 @@ class SweepLoops : public AbstractAnimation
 };
 
 
-class SequentialIgnition : public AbstractAnimation
+// Fade in each strip with a random color
+class SequentialFadeIn : public AbstractAnimation
 {
   public:
     void run() override
@@ -74,9 +75,7 @@ class SequentialIgnition : public AbstractAnimation
       paint(CRGB::Black);
 
       FOR_EACH_STRIP {
-        paintStrip(iStrip, randomColor());
-        FastLED.show();
-        delay(200);
+        fadeInStrip(iStrip, randomColor(), 200);
       }
     }
 };
@@ -167,7 +166,7 @@ AbstractAnimation* getRandomAnimation() {
     case 0:
       return new SweepStrips();
     case 1:
-      return new SequentialIgnition();
+      return new SequentialFadeIn();
     case 2:
       return new SweepLoops();
     case 3:

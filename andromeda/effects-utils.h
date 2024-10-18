@@ -20,10 +20,53 @@ void paintStrip(byte idx, CRGB color)
   fill_solid(STRIPS[idx].buffer, LEDS_PER_STRIP, color);
 }
 
+
+// Fade in a strip with the given color over the given duration
+void fadeInStrip(byte idx, CHSV color, milliseconds duration)
+{
+  paintStrip(idx, CRGB::Black);
+  FastLED.show();
+
+  milliseconds start = millis();
+  milliseconds dt = 0;
+  do
+  {
+    dt = millis() - start;
+    byte v = constrain(map(dt, 0, duration, 0, color.v), 0, 255);
+    CHSV c = CHSV(color.h, color.s, v);
+    paintStrip(idx, c);
+    FastLED.show();
+  }
+  while (dt < duration);
+}
+
+
+// Fade in all strips together to the given color in the given duration
+void fadeInAllStrips(CHSV color, milliseconds duration)
+{
+  paint(CRGB::Black);
+  FastLED.show();
+
+  milliseconds start = millis();
+  milliseconds dt = 0;
+  do
+  {
+    dt = millis() - start;
+    byte v = map(dt, 0, duration, 0, color.v);
+    CHSV c = CHSV(color.h, color.s, v);
+    FOR_EACH_STRIP {
+      paintStrip(iStrip, c);
+    }
+    FastLED.show();
+  }
+  while (dt < duration);
+}
+
+
 // TIL this is the professional approach to generating a random color.
 // If you just generate a random RGB triplet the intensity will be all over the place,
 // while HSV lets you generate random colors with the same intensity. Cool!
-CRGB randomColor()
+CHSV randomColor()
 {
   return CHSV(random8(), 255, 255);
 }
