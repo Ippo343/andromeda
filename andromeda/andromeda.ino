@@ -5,6 +5,7 @@
 void setup() {
   Serial.begin(115200);
   initializeGeometry();
+  FastLED.setCorrection(TypicalLEDStrip);
   seedRNGs();
 }
 
