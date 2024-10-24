@@ -7,7 +7,8 @@
 #define byte          uint8_t
 #define milliseconds  unsigned long
 
-#define MINUTES       * 60 * 1000
+#define SECONDS       * 1000
+#define MINUTES       * 60 SECONDS
 
 // I hate typing
 #define FOR_EACH_STRIP  for (byte iStrip = 0; iStrip < NUM_STRIPS; iStrip++)

@@ -37,7 +37,7 @@ class LoopingPoint : public AbstractEffect
 {
   public:
     MoodLight moodlights[NUM_STRIPS];
-    RandParam<milliseconds, 40, 70> step;
+    RandParam<milliseconds, 30, 60> step;
     byte idxOn;
 
     CRGB color[NUM_STRIPS];
@@ -87,13 +87,13 @@ class ElectricSparks : public AbstractEffect
     // We roll a dice every frame for every led, so the chance must be really small.
     // These are values that I like experimentally, I cannot justify them.
     // TODO: better way to define the frequency
-    unsigned short DICE_LIMIT = 10000;
-    RandParam<byte, 1, 3> sparkChance;
+    unsigned int DICE_LIMIT = 100000;
+    RandParam<byte, 5, 40> sparkChance;
 
     // Chance that a spark becomes bigger, rolled out of 100.
     // If the roll is successful, the width is doubled and then rolled again until it fails.
     // Potentially going up to the full strip in rare cases.
-    RandParam<byte, 10, 30> bigSparkChance;
+    RandParam<byte, 10, 40> bigSparkChance;
 
     RandParam<byte, 0, 3> paletteSelection;
 
@@ -193,7 +193,7 @@ class ElectricSparks : public AbstractEffect
 class Glow : public AbstractEffect
 {
   public:
-    RandParam<milliseconds, (2 MINUTES), (4 MINUTES)> cycleTime;
+    RandParam<milliseconds, (1 MINUTES), (2 MINUTES)> cycleTime;
     RandParam<byte, 0, 255> hueCentre;
     RandParam<byte, 5, 25> hueAmplitude;
     CRGB color;
@@ -216,7 +216,7 @@ class PaletteWave : public AbstractEffect
 {
   public:
     CRGBPalette256 palette;
-    RandParam<byte, 1, 5> bpm;
+    RandParam<byte, 2, 10> bpm;
     RandParam<char, -3, 3> mx;
     RandParam<char, -3, 3> my;
     RandParam<byte, 1, 5> baseScale;
@@ -257,8 +257,8 @@ class PolarPaletteWave : public AbstractEffect
 {
   public:
     CRGBPalette256 palette;
-    RandParam<byte, 1, 5> bpm;
-    RandParam<unsigned short, 1, 10> scale;
+    RandParam<byte, 1, 10> bpm;
+    RandParam<unsigned short, 1, 20> scale;
     RandParam<byte, 0, 1> flip;
 
     void randomize() override
@@ -274,6 +274,7 @@ class PolarPaletteWave : public AbstractEffect
       return ColorFromPalette(palette, value);
     }
 };
+
 
 // Randomly light up a whole strip with a random color,
 // and then keep everything fading to black.
@@ -336,6 +337,8 @@ class Lighthouse : public AbstractEffect
     {
       bool on;
 
+      // Correctly handle the final part of the rotation,
+      // where maxAngle has already rolled over the zero line but minAngle hasn't
       if (minAngle > maxAngle)
         on = (led.polar.cdegrees >= minAngle || led.polar.cdegrees <= maxAngle);
       else
