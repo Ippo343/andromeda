@@ -284,13 +284,16 @@ class Fireworks: public AbstractEffect
   public:
     // See ElectricSpark's comments, same logic
     unsigned long DICE_LIMIT = 10000;
-    RandParam<byte, 30, 50> sparkChance;
+    RandParam<byte, 30, 70> sparkChance;
+    RandParam<unsigned short, 1, 10> bigSparkChance;
 
     void precompute(milliseconds t) override
     {
+      bool bigSpark = (random(DICE_LIMIT) < bigSparkChance);
+
       FOR_EACH_STRIP {
         // Randomly fill the whole strip with a random color
-        if (random(DICE_LIMIT) < sparkChance)
+        if (bigSpark || random(DICE_LIMIT) < sparkChance)
           paintStrip(iStrip, randomColor());
       }
     }
