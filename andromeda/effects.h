@@ -439,6 +439,26 @@ class PolarSwipe : public AbstractEffect
 };
 
 
+// Just a simple moodlight, but with three waves radiating to/from the center
+class PolarMoodlight : public AbstractEffect
+{
+  public:
+    // minBpm, maxBpm, minScale, maxScale
+    RandSine<1, 15> red;
+    RandSine<1, 15> green;
+    RandSine<1, 15> blue;
+
+    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    {
+      byte R = red.evaluate(led.polar.radius);
+      byte G = green.evaluate(led.polar.radius);
+      byte B = blue.evaluate(led.polar.radius);
+
+      return CRGB(R, G, B);
+    }
+};
+
+
 // I don't think this will ever show, but why not
 class ErrorEffect : public AbstractEffect
 {
@@ -456,7 +476,7 @@ class ErrorEffect : public AbstractEffect
 // Picks a new random effect and randomizes it
 AbstractEffect* getRandomEffect() {
 
-  byte EFFECTS_COUNT = 10;
+  byte EFFECTS_COUNT = 11;
 
   // Set this to the index of the effect you want to force while testing
   short forcedSelection = -1;
@@ -504,6 +524,9 @@ AbstractEffect* getRandomEffect() {
       break;
     case 9:
       retval = new PolarSwipe();
+      break;
+    case 10:
+      retval = new PolarMoodlight();
       break;
     default:
       retval = new ErrorEffect();

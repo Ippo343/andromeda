@@ -39,7 +39,42 @@ class RandParam
   public:
     RandParam() { randomize(); }   // including the max
     inline operator T() const { return value; }
-    void randomize() { value = random(min, max + 1); }
+    virtual void randomize() { value = random(min, max + 1); }
+};
+
+
+// Specialized random parameter that can only be -1 or 1, but not 0.
+// This is useful as a randomly chosen sign for math operations, e.g:
+//    (-1|1) * (led.x)
+// This is used in the conveniently homophone class, RandSine
+class RandSign : public RandParam<char, -1, 1>
+{
+  public:
+    void randomize() override {
+      while (!value)
+        value = random(-1, 2);
+    }
+};
+
+
+// Represents a sine wave with randomly chosen bpm and direction
+template<byte minBpm, byte maxBpm>
+class RandSine
+{
+  protected:
+    RandParam<byte, minBpm, maxBpm> bpm;
+    RandSign sign;
+
+  public:
+    RandSine() { randomize(); }
+
+    void randomize()
+    {
+      bpm.randomize();
+      sign.randomize();
+    }
+
+    byte evaluate(long x) { return beatsin8(bpm, 0, 255, 0, sign * x); }
 };
 
 
