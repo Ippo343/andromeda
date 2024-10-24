@@ -308,31 +308,6 @@ class Fireworks: public AbstractEffect
 };
 
 
-// A whole-mirror moodlight where the color is chosen
-// as perlin noise applied to H and S of HSV space
-class PerlinColorMoodlight : public AbstractEffect
-{
-  public:
-    byte colorValue;
-    byte saturationValue;
-    byte scale = 20;
-    CRGB color;
-
-    void precompute(milliseconds t) override
-    {
-      byte x = t / scale;
-      colorValue = inoise8(x);
-      saturationValue = inoise8(x);
-      color = CHSV(colorValue, saturationValue, 255);
-    }
-
-    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
-    {
-      return color;
-    }
-};
-
-
 // Rotating beam of light
 class Lighthouse : public AbstractEffect
 {
@@ -476,7 +451,7 @@ class ErrorEffect : public AbstractEffect
 // Picks a new random effect and randomizes it
 AbstractEffect* getRandomEffect() {
 
-  byte EFFECTS_COUNT = 11;
+  byte EFFECTS_COUNT = 10;
 
   // Set this to the index of the effect you want to force while testing
   short forcedSelection = -1;
@@ -511,21 +486,18 @@ AbstractEffect* getRandomEffect() {
       retval = new Fireworks();
       break;
     case 5:
-      retval = new PerlinColorMoodlight();
-      break;
-    case 6:
       retval = new PaletteWave();
       break;
-    case 7:
+    case 6:
       retval = new Lighthouse();
       break;
-    case 8:
+    case 7:
       retval = new PolarPaletteWave();
       break;
-    case 9:
+    case 8:
       retval = new PolarSwipe();
       break;
-    case 10:
+    case 9:
       retval = new PolarMoodlight();
       break;
     default:
