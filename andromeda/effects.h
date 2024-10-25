@@ -258,7 +258,7 @@ class PolarPaletteWave : public AbstractEffect
   public:
     CRGBPalette256 palette;
     RandParam<byte, 1, 10> bpm;
-    RandParam<unsigned short, 1, 20> scale;
+    RandParam<unsigned short, 1, 5> scale;
     RandSign flip;
 
     void randomize() override
