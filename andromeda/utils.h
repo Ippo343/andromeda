@@ -1,6 +1,8 @@
 #ifndef ANDROMEDA_UTILS_H
 #define ANDROMEDA_UTILS_H
 
+# include <stdint.h> // uint32_t
+
 // The adopter module for general utilities,
 // like typedefs that I like and small functions reused everywhere
 
@@ -98,6 +100,20 @@ long scaledCubicWave8(milliseconds t, milliseconds period, long minV, long maxV)
   byte rawWave = cubicwave8(scaledct);
   long scaledWave = map(rawWave, 0, 255, minV, maxV);
   return scaledWave;
+}
+
+
+// Fast inverse square root algorithm
+// Credit: https://en.wikipedia.org/wiki/Fast_inverse_square_root
+float Q_rsqrt(float number)
+{
+  union {
+    float    f;
+    uint32_t i;
+  } conv = { .f = number };
+  conv.i  = 0x5f3759df - (conv.i >> 1);
+  conv.f *= 1.5F - (number * 0.5F * conv.f * conv.f);
+  return conv.f;
 }
 
 #endif

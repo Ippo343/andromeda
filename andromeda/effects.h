@@ -465,6 +465,96 @@ class PolarMoodlight : public AbstractEffect
 };
 
 
+// Misnomer as it's not actually solving the 3 body problem... yet.
+// Right now it only has 3 emitters moving independently via sine waves.
+// The color of each LED is decided based on the distance from each emitter.
+// It also has a single-channel mode where there is a single emitter
+// hooked up to a moodlight source.
+class RGBodyProblem : public AbstractEffect
+{
+  public:
+
+    // If this is false, use only the Red emitter
+    RandBool rgbMode;
+
+    // Independent sine generators for each emitter's (x,y) coordinates
+    // TODO: make this even more chaotic
+    RandSine<1, 20> sxR;
+    RandSine<1, 20> syR;
+    RandSine<1, 20> sxG;
+    RandSine<1, 20> syG;
+    RandSine<1, 20> sxB;
+    RandSine<1, 20> syB;
+
+    // Location of the 3 emitters
+    CartesianCoordinates R;
+    CartesianCoordinates G;
+    CartesianCoordinates B;
+
+    MoodLight moodlight;
+
+    // This factor control the final brightness of each channel.
+    // 255 is obviously the maximum brightness: but then you need to multiply but some factor
+    // because otherwise (255 / d^2) is always very very dim.
+    // I found 5000 by trial and error and it looks good.
+    const float brightnessFactor = 255 * 5000;  // * (1 / distance^2)
+
+    // Helper to scale the result of a sine wave to the screen size
+    short scale(byte v)
+    {
+      return map(v, 0, 255, -SCREEN_HALF_SIZE, SCREEN_HALF_SIZE);
+    }
+
+    void precompute(milliseconds t) override
+    {
+      R.x = scale(sxR.evaluate(0));
+      R.y = scale(syR.evaluate(0));
+
+      // In single channel mode only the R emitter is used,
+      // no need to update the other 2
+      if (rgbMode)
+      {
+        G.x = scale(sxG.evaluate(0));
+        G.y = scale(syG.evaluate(0));
+
+        B.x = scale(sxB.evaluate(0));
+        B.y = scale(syB.evaluate(0));
+      }
+    }
+
+    byte component(Led led, CartesianCoordinates e)
+    {
+      short dx = ( led.cartesian.x - e.x );
+      short dy = ( led.cartesian.y - e.y );
+
+      // This is the famouse fast inverse square root and boy is it fast.
+      // With one single channel, doing everything in floating point with the standard library
+      // was tanking the framerate below 40. With the fast algorithm, it runs 3 channels at 75 fps!
+      float invdist = Q_rsqrt(dx*dx + dy*dy);
+      byte v = (byte)constrain(brightnessFactor * invdist * invdist, 0, 255);
+
+      // Original formula with just the inverse of the distance.
+      // Physically correct, but it looks kinda dull.
+      // (1/d^2) looks cooler.
+      // byte v = (byte)constrain(255 * 30 * invdist , 0, 255);
+
+      return v;
+    }
+
+    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    {
+      if (rgbMode)
+        return CRGB(component(led, R), component(led, G), component(led, B));
+      else
+      {
+        CRGB rawColor = moodlight.evaluate();
+        byte v = component(led, R);
+        return CRGB(scale8(rawColor.r, v), scale8(rawColor.g, v), scale8(rawColor.b, v));
+      }
+    }
+};
+
+
 // I don't think this will ever show, but why not
 class ErrorEffect : public AbstractEffect
 {
@@ -482,7 +572,7 @@ class ErrorEffect : public AbstractEffect
 // Picks a new random effect and randomizes it
 AbstractEffect* getRandomEffect() {
 
-  byte EFFECTS_COUNT = 10;
+  byte EFFECTS_COUNT = 11;
 
   // Set this to the index of the effect you want to force while testing
   short forcedSelection = -1;
@@ -530,6 +620,9 @@ AbstractEffect* getRandomEffect() {
       break;
     case 9:
       retval = new PolarMoodlight();
+      break;
+    case 10:
+      retval = new RGBodyProblem();
       break;
     default:
       retval = new ErrorEffect();
