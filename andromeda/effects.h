@@ -259,7 +259,7 @@ class PolarPaletteWave : public AbstractEffect
     CRGBPalette256 palette;
     RandParam<byte, 1, 10> bpm;
     RandParam<unsigned short, 1, 20> scale;
-    RandParam<byte, 0, 1> flip;
+    RandSign flip;
 
     void randomize() override
     {
@@ -269,7 +269,7 @@ class PolarPaletteWave : public AbstractEffect
 
     CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
     {
-      short v = (flip ? -1 : 1) * led.polar.radius / scale;
+      short v = flip * led.polar.radius / scale;
       byte value = beatsin8(bpm, 0, 255, 0, v);
       return ColorFromPalette(palette, value);
     }

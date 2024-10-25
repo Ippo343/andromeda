@@ -97,8 +97,8 @@ class Swipe : public AbstractAnimation
       RandParam<short, 2, 3> step;
 
       // Choose the orientation and the direction of the swipe
-      RandParam<byte, 0, 1> horizontal;
-      RandParam<byte, 0, 1> reverse;
+      RandBool horizontal;
+      RandBool reverse;
 
       // It goes to (step * SCREEN_HALF_SIZE) so that the fading trail has time to fully fade out
       for (short v = -SCREEN_HALF_SIZE; v <= (step * SCREEN_HALF_SIZE); v += step)
