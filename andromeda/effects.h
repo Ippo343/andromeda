@@ -362,17 +362,32 @@ class Lighthouse : public AbstractEffect
 };
 
 
+// Keeps swiping and fading a color through the radius
 class PolarSwipe : public AbstractEffect
 {
   public:
-    unsigned short radius;
-    unsigned short minRadius;
-    unsigned short maxRadius;
-    CRGB color;
-    RandParam<byte, 0, 1> flip;
 
-    RandParam<byte, 6, 20> bpm;
-    RandParam<byte, 5, 30> aperture;
+    RandBool flip;
+    RandParam<byte, 10, 40> bpm;
+    RandParam<byte, 20, 80> aperture;
+
+    // Minimum and maximum radii for the swipe.
+    // It needs to start from aperture / 2 so that the minimum of the band is at 0,
+    // and it needs to finish at the edge of the screen + aperture for the same reason.
+    //
+    // And then finally you need a 1mm buffer: we need to push the band completely outside
+    // of the screen, because when that is out the color is chosen randomly.
+    // But without this buffer, the LEDs at the very edge of the structure are technically
+    // just inside the band, and so they get a new random color for a few consecutive frames
+    // causing an annoying color flicker at the edge.
+    //
+    unsigned short scanMin = aperture / 2;
+    unsigned short scanMax = SCREEN_HALF_SIZE + (aperture + 1);
+
+    unsigned short radius;
+    unsigned short bandMin;
+    unsigned short bandMax;
+    CRGB color;
 
     void randomize() override
     {
@@ -383,29 +398,26 @@ class PolarSwipe : public AbstractEffect
     {
       unsigned short v = beat16(bpm);
 
-      unsigned short min = 130;
-      unsigned short max = SCREEN_HALF_SIZE + 130;
-
       if (flip)
-        radius = map(v, 0, 65535, max, min);
+        radius = map(v, 0, 65535, scanMax, scanMin);
       else
-        radius = map(v, 0, 65535, min, max);
+        radius = map(v, 0, 65535, scanMin, scanMax);
 
-      if (radius > SCREEN_HALF_SIZE)
+      if (radius > SCREEN_HALF_SIZE + aperture)
         color = randomColor();
 
-      minRadius = radius - aperture;
-      maxRadius = radius + aperture;
+      bandMin = radius - aperture;
+      bandMax = radius + aperture;
     }
 
     CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
     {
+      // The central strip is excluded because honestly it just looks weird,
+      // it adds a sort of sudden "pop" that looks ugly
       if (strip.idx == 0)
-      {
         return CRGB::Black;
-      }
 
-      if (led.polar.radius >= minRadius && led.polar.radius <= maxRadius)
+      if (led.polar.radius >= bandMin && led.polar.radius <= bandMax)
         return color;
       else
         return strip.buffer[led.idx];
@@ -414,7 +426,7 @@ class PolarSwipe : public AbstractEffect
     void postprocess(milliseconds t) override
     {
       FOR_EACH_STRIP {
-        fadeToBlackBy(STRIPS[iStrip].buffer, LEDS_PER_STRIP, 30);
+        fadeToBlackBy(STRIPS[iStrip].buffer, LEDS_PER_STRIP, bpm);
       }
     }
 };

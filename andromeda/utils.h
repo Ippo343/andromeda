@@ -44,6 +44,15 @@ class RandParam
 };
 
 
+class RandBool : public RandParam<bool, 0, 1>
+{
+  public:
+    void randomize() override {
+      value = random(0, 2) > 0;
+    }
+};
+
+
 // Specialized random parameter that can only be -1 or 1, but not 0.
 // This is useful as a randomly chosen sign for math operations, e.g:
 //    (-1|1) * (led.x)
