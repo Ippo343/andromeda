@@ -312,40 +312,52 @@ class Fireworks: public AbstractEffect
 };
 
 
-// Rotating beam of light
+// Rotating beams of light
 class Lighthouse : public AbstractEffect
 {
   public:
+
+    RandParam<unsigned short, 6, 12> bpm;
+    RandParam<unsigned short, 1, 3> beams;
+    RandParam<unsigned short, 1500, 4500> baseAperture;
+    RandBool flip;
+
+    unsigned short aperture = baseAperture / beams;
+
     unsigned short angle;
     unsigned short minAngle;
     unsigned short maxAngle;
     MoodLight moodlight;
     CRGB color;
 
-    RandParam<byte, 3, 10> bpm;
-    RandParam<unsigned short, 1200, 4500> aperture;
+    unsigned short range = (FULL_CIRCLE / beams);
 
     void precompute(milliseconds t) override
     {
       color = moodlight.evaluate();
 
-      unsigned short v = beat16(bpm);
-      angle = map(v, 0, 65535, 0, 36000);
+      unsigned short v = beat16(bpm * beams);
 
-      minAngle = (angle - aperture) % FULL_CIRCLE;
-      maxAngle = (angle + aperture) % FULL_CIRCLE;
+      if (flip)
+        angle = map(v, 0, 65535, 0, range);
+      else
+        angle = map(v, 0, 65535, range, 0);
+
+      minAngle = (angle - aperture) % range;
+      maxAngle = (angle + aperture) % range;
     }
 
     CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
     {
       bool on;
+      unsigned short deg = led.polar.cdegrees % range;
 
       // Correctly handle the final part of the rotation,
       // where maxAngle has already rolled over the zero line but minAngle hasn't
       if (minAngle > maxAngle)
-        on = (led.polar.cdegrees >= minAngle || led.polar.cdegrees <= maxAngle);
+        on = (deg >= minAngle || deg <= maxAngle);
       else
-        on = (led.polar.cdegrees >= minAngle && led.polar.cdegrees <= maxAngle);
+        on = (deg >= minAngle && deg <= maxAngle);
 
       if (on)
         return color;
@@ -356,7 +368,7 @@ class Lighthouse : public AbstractEffect
     void postprocess(milliseconds t) override
     {
       FOR_EACH_STRIP {
-        fadeToBlackBy(STRIPS[iStrip].buffer, LEDS_PER_STRIP, 5);
+        fadeToBlackBy(STRIPS[iStrip].buffer, LEDS_PER_STRIP, 2 * bpm * beams);
       }
     }
 };
