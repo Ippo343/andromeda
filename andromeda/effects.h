@@ -416,7 +416,7 @@ class PolarSwipe : public AbstractEffect
       else
         radius = map(v, 0, 65535, scanMin, scanMax);
 
-      if (radius > SCREEN_HALF_SIZE + aperture)
+      if (radius >= SCREEN_HALF_SIZE + aperture)
         color = randomColor();
 
       bandMin = radius - aperture;
