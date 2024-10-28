@@ -189,20 +189,21 @@ class ElectricSparks : public AbstractEffect
 };
 
 
-// Whole mirror moodlight pulsating around a central hue
-class Glow : public AbstractEffect
+// Whole mirror moodlight pulsating around a central saturation
+class SaturationGlow : public AbstractEffect
 {
   public:
-    RandParam<milliseconds, (1 MINUTES), (2 MINUTES)> cycleTime;
-    RandParam<byte, 0, 255> hueCentre;
-    RandParam<byte, 5, 25> hueAmplitude;
+    RandParam<milliseconds, (1 MINUTES), (4 MINUTES)> cycleTime;
+    RandParam<byte, 0, 255> hue;
+    RandParam<byte, 128, 220> saturationCenter;         // skewed towards high saturation because colors are pretty
+    byte saturationAmplitude = 255 - saturationCenter;
     CRGB color;
 
     void precompute(milliseconds t) override
     {
-      long scaledWave = scaledCubicWave8(t, cycleTime, -hueAmplitude, hueAmplitude);
-      byte hue = (hueCentre + scaledWave) % 255;
-      color = CHSV(hue, 255, 255);
+      long scaledWave = scaledCubicWave8(t, cycleTime, -saturationAmplitude, saturationAmplitude);
+      byte sat = constrain(saturationCenter + scaledWave, 0, 255);
+      color = CHSV(hue, sat, 255);
     }
 
     CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
@@ -600,7 +601,7 @@ AbstractEffect* getRandomEffect() {
       retval = new ElectricSparks();
       break;
     case 3:
-      retval = new Glow();
+      retval = new SaturationGlow();
       break;
     case 4:
       retval = new Fireworks();
