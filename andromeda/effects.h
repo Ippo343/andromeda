@@ -8,6 +8,7 @@
 #include "effects-utils.h"
 #include "color-palettes.h"
 
+
 // Use each individual led strip as an independent moodlight.
 // All leds in the same strip have the same color,
 // but each strip fluctuates independently
@@ -218,25 +219,7 @@ class PaletteWave : public AbstractEffect
   public:
     CRGBPalette256 palette;
     RandParam<byte, 2, 10> bpm;
-    RandParam<char, -3, 3> mx;
-    RandParam<char, -3, 3> my;
-    RandParam<byte, 1, 5> baseScale;
-    byte scale;
-
-    PaletteWave()
-    {
-      // If both coefficients are 0 then all the LEDs take the same color,
-      // prevent that case by rerolling
-      while (mx == 0 && my == 0)
-      {
-        mx.randomize();
-        my.randomize();
-      }
-
-      // Compensate for the magnitude of the (mx, my) vector
-      // since the coordinates are effectively scaled by it.
-      scale = baseScale * sqrt(mx * mx + my * my);
-    }
+    RandParam<byte, 1, 5> scale;
 
     void randomize() override
     {
@@ -246,7 +229,7 @@ class PaletteWave : public AbstractEffect
 
     CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
     {
-      int v = (mx * led.cartesian.x + my * led.cartesian.y) / scale;
+      int v = (led.cartesian.x + led.cartesian.y) / (int)scale;
       byte value = beatsin8(bpm, 0, 255, 0, v);
       return ColorFromPalette(palette, value);
     }

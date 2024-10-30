@@ -93,13 +93,19 @@ void runRandomAnimation()
 // - play an animation
 // - pick a new effect
 // - pick the next transition time
+// - and also sprinkle random rotation transforms here and there
 void handleTransition()
 {
-    runRandomAnimation();
-    if (effect)
-      delete effect;
-    effect = getRandomEffect();
-    setNextTransition();
+  applyRandomRotation();
+  runRandomAnimation();
+
+  if (effect)
+    delete effect;
+
+  applyRandomRotation();
+  effect = getRandomEffect();
+
+  setNextTransition();
 }
 
 void update(milliseconds t)

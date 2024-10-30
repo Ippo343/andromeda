@@ -19,11 +19,13 @@
 //
 
 #include <FastLED.h>
+#include <math.h>
 #include "utils.h"
 
 const byte LEDS_PER_STRIP = 23;
 const byte NUM_STRIPS = 7;
 const unsigned short FULL_CIRCLE = 360 * 100;
+
 
 struct CartesianCoordinates
 {
@@ -37,15 +39,18 @@ struct PolarCoordinates
   unsigned short cdegrees;
 };
 
+
 // Represents the geometric information for a single LED
-// For the moment it only stores its index in the strip,
-// but in the future it will be extended to include its coordinates.
 struct Led
 {
   public:
-    byte idx;
-    CartesianCoordinates cartesian;
-    PolarCoordinates polar;
+    byte idx;                             // index in the strip that contains it
+
+    CartesianCoordinates realCartesian;   // physical location of the LED relative to the centre. Will not change during execution.
+    PolarCoordinates realPolar;           // physical location (polar coordinates). Will not change.
+
+    CartesianCoordinates cartesian;       // transformed coordinates. Will change with every FX change.
+    PolarCoordinates polar;               // transformed polar coordinates. Will change with every FX change.
 };
 
 
@@ -127,12 +132,49 @@ void initializeGeometry() {
 
   FOR_EACH_STRIP {
     FOR_EACH_LED {
+      STRIPS[iStrip].leds[iLed].realCartesian = relative_led_coordinates[iStrip][iLed];
       STRIPS[iStrip].leds[iLed].cartesian = relative_led_coordinates[iStrip][iLed];
       STRIPS[iStrip].leds[iLed].polar = polar_led_coordinates[iStrip][iLed];
     }
   }
 
   Serial.println("Initialized geometry");
+}
+
+
+// Pick a random rotation angle,
+// then apply a rotation matrix to all the LEDs
+void applyRandomRotation()
+{
+  // Pick a random angle for the rotation
+  float theta = (random(0, 1000) / 1000.0) * 2 * PI;
+
+  // Same angle, in centidegrees (to transform the polar coordinates)
+  int tcDeg = (int)(theta * (100 * 180.0 / PI));
+
+  float cosT = cos(theta);
+  float sinT = sin(theta);
+
+  FOR_EACH_STRIP {
+    FOR_EACH_LED {
+
+      // Real physical coordinates of the LED
+      CartesianCoordinates r = STRIPS[iStrip].leds[iLed].realCartesian;
+
+      // This is actually the INVERSE rotation matrix.
+      // Picture the Swipe animation doing a horizontal swipe of the LEDs.
+      // Picture picking a 90° rotation counterclockwise: the swipe must now be vertical.
+      // This means the swipe will be drawn moving towards the topmost LED.
+      // To do that, the topmost LED must "coincide" with the rightmost position on the structure,
+      // which means we have to apply the inverse rotation to the temporary coordinates.
+      // It's poorly explained but it makes sense in my head.
+
+      STRIPS[iStrip].leds[iLed].cartesian.x = (short)(  r.x * cosT + r.y * sinT);
+      STRIPS[iStrip].leds[iLed].cartesian.y = (short)(- r.x * sinT + r.y * cosT);
+
+      STRIPS[iStrip].leds[iLed].polar.cdegrees = ((int)STRIPS[iStrip].leds[iLed].polar.cdegrees - tcDeg) % FULL_CIRCLE;
+    }
+  }
 }
 
 #endif

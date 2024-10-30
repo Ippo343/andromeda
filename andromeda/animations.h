@@ -82,7 +82,6 @@ class SequentialFadeIn : public AbstractAnimation
 
 
 // Swipes a random color from left to right and then fades it out
-// TODO: swipe in diagonals
 class Swipe : public AbstractAnimation
 {
   public:
@@ -96,28 +95,19 @@ class Swipe : public AbstractAnimation
       // It looks smoother if you increase in steps of 2 or 3
       RandParam<short, 2, 3> step;
 
-      // Choose the orientation and the direction of the swipe
-      RandBool horizontal;
-      RandBool reverse;
-
       // It goes to (step * SCREEN_HALF_SIZE) so that the fading trail has time to fully fade out
       for (short v = -SCREEN_HALF_SIZE; v <= (step * SCREEN_HALF_SIZE); v += step)
       {
         FOR_EACH_STRIP {
           FOR_EACH_LED {
-
-            short lv = horizontal ? STRIPS[iStrip].leds[iLed].cartesian.x
-                                  : STRIPS[iStrip].leds[iLed].cartesian.y ;
-
-            if (reverse)
-              lv *= -1;
-
+            short lv = STRIPS[iStrip].leds[iLed].cartesian.x;
             if (lv >= (v - step) && lv <= v)
               STRIPS[iStrip].buffer[iLed] = color;
-
           }
+
           fadeToBlackBy(STRIPS[iStrip].buffer, LEDS_PER_STRIP, step);
         }
+
         FastLED.show();
       }
     }
