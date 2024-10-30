@@ -174,7 +174,8 @@ void applyRandomRotation()
       STRIPS[iStrip].leds[iLed].cartesian.x = (short)(  r.x * cosT + r.y * sinT);
       STRIPS[iStrip].leds[iLed].cartesian.y = (short)(- r.x * sinT + r.y * cosT);
 
-      STRIPS[iStrip].leds[iLed].polar.cdegrees = ((int)STRIPS[iStrip].leds[iLed].polar.cdegrees - tcDeg) % FULL_CIRCLE;
+      // TODO: this is bugged, causes weird artifacts in Lighthouse that I cannot figure out
+      //STRIPS[iStrip].leds[iLed].polar.cdegrees = ((int)STRIPS[iStrip].leds[iLed].polar.cdegrees - tcDeg) % FULL_CIRCLE;
     }
   }
 }
