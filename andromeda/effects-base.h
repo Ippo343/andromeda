@@ -22,7 +22,7 @@ class AbstractEffect
     virtual void precompute(milliseconds t) { return ; }
 
     // Evaluates the effect on each led
-    virtual CRGB evaluate(LedStrip strip, Led led, milliseconds t);
+    virtual CRGB evaluate(LedStrip* strip, Led* led, milliseconds t);
 
     // Called when all the led's have been evaluated
     // to allow postprocess effects like blurring and fading
@@ -36,7 +36,7 @@ class AbstractEffect
     {
       FOR_EACH_STRIP {
         FOR_EACH_LED {
-          strips[iStrip].buffer[iLed] = this->evaluate(strips[iStrip], strips[iStrip].leds[iLed], t);
+          strips[iStrip].buffer[iLed] = this->evaluate(&strips[iStrip], &strips[iStrip].leds[iLed], t);
         }
       }
     }

@@ -27,21 +27,23 @@ const byte NUM_STRIPS = 7;
 const unsigned short FULL_CIRCLE = 360 * 100;
 
 
-struct CartesianCoordinates
+class CartesianCoordinates
 {
-  short x;
-  short y;
+  public:
+    short x;
+    short y;
 };
 
-struct PolarCoordinates
+class PolarCoordinates
 {
-  unsigned short radius;
-  unsigned short cdegrees;
+  public:
+    unsigned short radius;
+    unsigned short cdegrees;
 };
 
 
 // Represents the geometric information for a single LED
-struct Led
+class Led
 {
   public:
     byte idx;                             // index in the strip that contains it

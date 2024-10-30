@@ -25,9 +25,9 @@ class IndividualStripMoodlight : public AbstractEffect
       }
     }
 
-    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
     {
-      return colors[strip.idx];
+      return colors[strip->idx];
     }
 };
 
@@ -53,14 +53,14 @@ class LoopingPoint : public AbstractEffect
       idxOn = (int)(t / step) % (LEDS_PER_STRIP);
     }
 
-    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
     {
       // If this is the led to turn on, apply the color;
       // otherwise, leave it unchanged.
       // They will be faded away in postprocessing
-      return led.idx == idxOn
-        ? color[strip.idx]
-        : strip.buffer[led.idx];
+      return led->idx == idxOn
+        ? color[strip->idx]
+        : strip->buffer[led->idx];
     }
 
     void postprocess(milliseconds t) override
@@ -153,7 +153,7 @@ class ElectricSparks : public AbstractEffect
       }
     }
 
-    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
     {
       // Random injection of new spikes
       if (random(DICE_LIMIT) < sparkChance)
@@ -167,12 +167,12 @@ class ElectricSparks : public AbstractEffect
         // Now light up the pixel and its neighbours up to the defined width
         for (byte w = 0; w < width; w++)
         {
-          newValues[strip.idx][LI(led.idx + w)] = 255;
-          newValues[strip.idx][LI(led.idx - w)] = 255;
+          newValues[strip->idx][LI(led->idx + w)] = 255;
+          newValues[strip->idx][LI(led->idx - w)] = 255;
         }
       }
 
-      return ColorFromPalette(palette, preValues[strip.idx][led.idx]);
+      return ColorFromPalette(palette, preValues[strip->idx][led->idx]);
     }
 
     void postprocess(milliseconds t) override
@@ -207,7 +207,7 @@ class SaturationGlow : public AbstractEffect
       color = CHSV(hue, sat, 255);
     }
 
-    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
     {
       return color;
     }
@@ -227,9 +227,9 @@ class PaletteWave : public AbstractEffect
       UpscalePalette(palette16, palette);
     }
 
-    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
     {
-      int v = (led.cartesian.x + led.cartesian.y) / (int)scale;
+      int v = (led->cartesian.x + led->cartesian.y) / (int)scale;
       byte value = beatsin8(bpm, 0, 255, 0, v);
       return ColorFromPalette(palette, value);
     }
@@ -251,9 +251,9 @@ class PolarPaletteWave : public AbstractEffect
       UpscalePalette(palette16, palette);
     }
 
-    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
     {
-      short v = flip * led.polar.radius / scale;
+      short v = flip * led->polar.radius / scale;
       byte value = beatsin8(bpm, 0, 255, 0, v);
       return ColorFromPalette(palette, value);
     }
@@ -282,9 +282,9 @@ class Fireworks: public AbstractEffect
       }
     }
 
-    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
     {
-      return STRIPS[strip.idx].buffer[led.idx];
+      return STRIPS[strip->idx].buffer[led->idx];
     }
 
     void postprocess(milliseconds t) override
@@ -331,10 +331,10 @@ class Lighthouse : public AbstractEffect
       maxAngle = (angle + aperture) % range;
     }
 
-    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
     {
       bool on;
-      unsigned short deg = led.polar.cdegrees % range;
+      unsigned short deg = led->polar.cdegrees % range;
 
       // Correctly handle the final part of the rotation,
       // where maxAngle has already rolled over the zero line but minAngle hasn't
@@ -346,7 +346,7 @@ class Lighthouse : public AbstractEffect
       if (on)
         return color;
       else
-        return strip.buffer[led.idx];
+        return strip->buffer[led->idx];
     }
 
     void postprocess(milliseconds t) override
@@ -406,17 +406,17 @@ class PolarSwipe : public AbstractEffect
       bandMax = radius + aperture;
     }
 
-    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
     {
       // The central strip is excluded because honestly it just looks weird,
       // it adds a sort of sudden "pop" that looks ugly
-      if (strip.idx == 0)
+      if (strip->idx == 0)
         return CRGB::Black;
 
-      if (led.polar.radius >= bandMin && led.polar.radius <= bandMax)
+      if (led->polar.radius >= bandMin && led->polar.radius <= bandMax)
         return color;
       else
-        return strip.buffer[led.idx];
+        return strip->buffer[led->idx];
     }
 
     void postprocess(milliseconds t) override
@@ -437,11 +437,11 @@ class PolarMoodlight : public AbstractEffect
     RandSine<1, 15> green;
     RandSine<1, 15> blue;
 
-    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
     {
-      byte R = red.evaluate(led.polar.radius);
-      byte G = green.evaluate(led.polar.radius);
-      byte B = blue.evaluate(led.polar.radius);
+      byte R = red.evaluate(led->polar.radius);
+      byte G = green.evaluate(led->polar.radius);
+      byte B = blue.evaluate(led->polar.radius);
 
       return CRGB(R, G, B);
     }
@@ -505,10 +505,10 @@ class RGBodyProblem : public AbstractEffect
       }
     }
 
-    byte component(Led led, CartesianCoordinates e)
+    byte component(Led* led, CartesianCoordinates e)
     {
-      short dx = ( led.cartesian.x - e.x );
-      short dy = ( led.cartesian.y - e.y );
+      short dx = ( led->cartesian.x - e.x );
+      short dy = ( led->cartesian.y - e.y );
 
       // This is the famouse fast inverse square root and boy is it fast.
       // With one single channel, doing everything in floating point with the standard library
@@ -524,7 +524,7 @@ class RGBodyProblem : public AbstractEffect
       return v;
     }
 
-    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
     {
       if (rgbMode)
         return CRGB(component(led, R), component(led, G), component(led, B));
@@ -542,9 +542,9 @@ class RGBodyProblem : public AbstractEffect
 class ErrorEffect : public AbstractEffect
 {
   public:
-    CRGB evaluate(LedStrip strip, Led led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
     {
-      if (strip.idx == 0)
+      if (strip->idx == 0)
         return CRGB::Red;
       else
         return CRGB::Black;
