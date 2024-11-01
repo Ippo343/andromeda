@@ -2,9 +2,11 @@
 #define CONTROL_LOGIC_H
 
 #include <FastLED.h>
+
 #include "utils.h"
 #include "geometry.h"
 #include "moodlight.h"
+#include "control-hints.h"
 #include "effects.h"
 #include "animations.h"
 
@@ -69,6 +71,9 @@ void runRandomAnimation()
 {
     animation = getRandomAnimation();
 
+    if (animation->controlHints & ControlHints::ROTATE_SPACE)
+        applyRandomRotation();
+
     // First fade everything out to black and add a small delay
     // to create some separation from the effect
     FastLED.setBrightness(0);
@@ -96,14 +101,15 @@ void runRandomAnimation()
 // - and also sprinkle random rotation transforms here and there
 void handleTransition()
 {
-  applyRandomRotation();
   runRandomAnimation();
 
   if (effect)
     delete effect;
 
-  applyRandomRotation();
   effect = getRandomEffect();
+
+  if (effect->controlHints & ControlHints::ROTATE_SPACE)
+    applyRandomRotation();
 
   setNextTransition();
 }

@@ -3,6 +3,7 @@
 
 #include "utils.h"
 #include "geometry.h"
+#include "control-hints.h"
 
 // Abstract base class for all animations.
 // Animations are not really effects, they are meant to be small programs
@@ -12,6 +13,8 @@
 class AbstractAnimation
 {
   public:
+
+    control_hints_t controlHints = ControlHints::NONE;
 
     virtual ~AbstractAnimation() { }
 

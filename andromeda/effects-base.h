@@ -5,6 +5,7 @@
 
 #include "utils.h"
 #include "geometry.h"
+#include "control-hints.h"
 
 // Abstract base class for all effects.
 // Each effect must define a way to compute the color for a specific led at time t.
@@ -14,6 +15,8 @@
 class AbstractEffect
 {
   public:
+
+    control_hints_t controlHints = ControlHints::NONE;
 
     virtual ~AbstractEffect() { }
 

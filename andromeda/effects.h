@@ -221,6 +221,11 @@ class PaletteWave : public AbstractEffect
     RandParam<byte, 2, 10> bpm;
     RandParam<byte, 1, 5> scale;
 
+    PaletteWave()
+    {
+      controlHints |= ControlHints::ROTATE_SPACE;
+    }
+
     void randomize() override
     {
       CRGBPalette16 palette16 = randomPredefinedPalette();
@@ -475,6 +480,11 @@ class RGBodyProblem : public AbstractEffect
     CartesianCoordinates B;
 
     MoodLight moodlight;
+
+    RGBodyProblem()
+    {
+      controlHints = ControlHints::ROTATE_SPACE;
+    }
 
     // This factor control the final brightness of each channel.
     // 255 is obviously the maximum brightness: but then you need to multiply but some factor

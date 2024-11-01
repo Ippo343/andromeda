@@ -85,6 +85,12 @@ class SequentialFadeIn : public AbstractAnimation
 class Swipe : public AbstractAnimation
 {
   public:
+
+    Swipe()
+    {
+      controlHints |= ControlHints::ROTATE_SPACE;
+    }
+
     void run() override
     {
       paint(CRGB::Black);
