@@ -57,11 +57,11 @@ class SweepLoops : public AbstractAnimation
 
     void colorSweep(CRGB color)
     {
-        FOR_EACH_STRIP {
-          paintStrip(iStrip, color);
-          FastLED.show();
-          delay(timeStep);
-        }
+      FOR_EACH_STRIP {
+        paintStrip(iStrip, color);
+        FastLED.show();
+        delay(timeStep);
+      }
     }
 };
 
@@ -70,13 +70,28 @@ class SweepLoops : public AbstractAnimation
 class SequentialFadeIn : public AbstractAnimation
 {
   public:
+
+    RandParam<milliseconds, 150, 500> fadeIn;
+    milliseconds fadeOut = 2 * fadeIn;
+
     void run() override
     {
       paint(CRGB::Black);
 
       FOR_EACH_STRIP {
-        fadeInStrip(iStrip, randomColor(), 200);
+        fadeInStrip(iStrip, randomColor(), fadeIn);
       }
+
+      milliseconds start = millis();
+      milliseconds dt;
+      do
+      {
+        dt = millis() - start;
+        byte b = constrain(map(dt, 0, fadeOut, 255, 0), 0, 255);
+        FastLED.setBrightness(b);
+        FastLED.show();
+      }
+      while (dt < fadeOut);
     }
 };
 

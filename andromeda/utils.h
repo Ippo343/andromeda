@@ -1,10 +1,10 @@
 #ifndef ANDROMEDA_UTILS_H
 #define ANDROMEDA_UTILS_H
 
-# include <stdint.h> // uint32_t
-
 // The adopter module for general utilities,
 // like typedefs that I like and small functions reused everywhere
+
+#include <stdint.h> // uint32_t
 
 #define byte          uint8_t
 #define milliseconds  unsigned long
@@ -20,6 +20,7 @@
 // simplifying code that needs to access consecutive LEDs.
 // Basically python's array[-1] but for C
 #define LI(idx) ( (idx) % LEDS_PER_STRIP )
+
 
 void seedRNGs()
 {
