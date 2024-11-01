@@ -72,7 +72,9 @@ void runRandomAnimation()
     animation = getRandomAnimation();
 
     if (animation->controlHints & ControlHints::ROTATE_SPACE)
-        applyRandomRotation();
+      applyGlobalRandomRotation();
+    else
+      resetGlobalTransform();
 
     // First fade everything out to black and add a small delay
     // to create some separation from the effect
@@ -109,7 +111,9 @@ void handleTransition()
   effect = getRandomEffect();
 
   if (effect->controlHints & ControlHints::ROTATE_SPACE)
-    applyRandomRotation();
+    applyGlobalRandomRotation();
+  else
+    resetGlobalTransform();
 
   setNextTransition();
 }

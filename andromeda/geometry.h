@@ -146,7 +146,7 @@ void initializeGeometry() {
 
 // Pick a random rotation angle,
 // then apply a rotation matrix to all the LEDs
-void applyRandomRotation()
+void applyGlobalRandomRotation()
 {
   // Pick a random angle for the rotation
   float theta = (random(0, 1000) / 1000.0) * 2 * PI;
@@ -176,6 +176,18 @@ void applyRandomRotation()
 
       // TODO: this is bugged, causes weird artifacts in Lighthouse that I cannot figure out
       //STRIPS[iStrip].leds[iLed].polar.cdegrees = ((int)STRIPS[iStrip].leds[iLed].polar.cdegrees - tcDeg) % FULL_CIRCLE;
+    }
+  }
+}
+
+// Undoes any global coordinate transform by resetting the effective coordinates
+// to the original untransformed coordinates
+void resetGlobalTransform()
+{
+  FOR_EACH_STRIP {
+    FOR_EACH_LED {
+      STRIPS[iStrip].leds[iLed].cartesian = STRIPS[iStrip].leds[iLed].realCartesian;
+      STRIPS[iStrip].leds[iLed].polar     = STRIPS[iStrip].leds[iLed].realPolar;
     }
   }
 }
