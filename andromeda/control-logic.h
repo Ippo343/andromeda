@@ -10,7 +10,8 @@
 #include "effects.h"
 #include "animations.h"
 
-AbstractAnimation* animation;
+
+// The effect that is currently running
 AbstractEffect*    effect;
 
 // These parameters control how long an effect lasts and how quickly it fades in and out
@@ -69,7 +70,7 @@ byte getBrightness(milliseconds t)
 // Pick a new random animation, play it, and deallocate it
 void runRandomAnimation()
 {
-    animation = getRandomAnimation();
+    AbstractAnimation* animation = getRandomAnimation();
 
     if (animation->controlHints & ControlHints::ROTATE_SPACE)
       applyGlobalRandomRotation();
