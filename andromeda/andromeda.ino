@@ -1,9 +1,13 @@
 #include "control-logic.h"
 
-#define PERF
+//#define PERF
 
 void setup() {
+
   Serial.begin(115200);
+  while(!Serial && !Serial.available()) {}
+  Log.begin(LOG_LEVEL_VERBOSE, &Serial, true);
+
   initializeGeometry();
   FastLED.setCorrection(TypicalLEDStrip);
   seedRNGs();

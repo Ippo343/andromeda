@@ -14,6 +14,8 @@ class AbstractAnimation
 {
   public:
 
+    virtual const char* GetName();
+
     control_hints_t controlHints = ControlHints::NONE;
 
     virtual ~AbstractAnimation() { }

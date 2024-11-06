@@ -10,6 +10,7 @@
 class SweepStrips : public AbstractAnimation
 {
   public:
+    virtual const char* GetName() { return "SweepStrips"; }
 
     RandParam<byte, 10, 30> timeStep;
 
@@ -41,6 +42,7 @@ class SweepStrips : public AbstractAnimation
 class SweepLoops : public AbstractAnimation
 {
   public:
+    virtual const char* GetName() { return "SweepLoops"; }
 
     RandParam<byte, 50, 100> timeStep;
 
@@ -70,6 +72,7 @@ class SweepLoops : public AbstractAnimation
 class SequentialFadeIn : public AbstractAnimation
 {
   public:
+    virtual const char* GetName() { return "SequentialFadeIn"; }
 
     RandParam<milliseconds, 150, 500> fadeIn;
     milliseconds fadeOut = 2 * fadeIn;
@@ -100,6 +103,7 @@ class SequentialFadeIn : public AbstractAnimation
 class Swipe : public AbstractAnimation
 {
   public:
+    virtual const char* GetName() { return "Swipe"; }
 
     Swipe()
     {
@@ -139,6 +143,8 @@ class Swipe : public AbstractAnimation
 class ErrorAnimation : public AbstractAnimation
 {
   public:
+    virtual const char* GetName() { return "ErrorAnimation"; }
+
     void run() override
     {
       for (byte i = 0; i < 3; i++)

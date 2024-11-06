@@ -15,6 +15,8 @@
 class IndividualStripMoodlight : public AbstractEffect
 {
   public:
+    virtual const char* GetName() { return "IndividualStripMoodlight"; }
+
     MoodLight moodlights[NUM_STRIPS];
     CRGB colors[NUM_STRIPS];
 
@@ -37,6 +39,8 @@ class IndividualStripMoodlight : public AbstractEffect
 class LoopingPoint : public AbstractEffect
 {
   public:
+    virtual const char* GetName() { return "LoopingPoint"; }
+
     MoodLight moodlights[NUM_STRIPS];
     RandParam<milliseconds, 30, 60> step;
     byte idxOn;
@@ -77,6 +81,8 @@ class LoopingPoint : public AbstractEffect
 class ElectricSparks : public AbstractEffect
 {
   public:
+    virtual const char* GetName() { return "ElectricSparks"; }
+
     // Palette values for each LED
     // Needs double buffering to correctly compute the averaging of neighbouring pixels
     byte preValues[NUM_STRIPS][LEDS_PER_STRIP];
@@ -194,6 +200,8 @@ class ElectricSparks : public AbstractEffect
 class SaturationGlow : public AbstractEffect
 {
   public:
+    virtual const char* GetName() { return "SaturationGlow"; }
+
     RandParam<milliseconds, (1 MINUTES), (4 MINUTES)> cycleTime;
     RandParam<byte, 0, 255> hue;
     RandParam<byte, 128, 220> saturationCenter;         // skewed towards high saturation because colors are pretty
@@ -217,6 +225,8 @@ class SaturationGlow : public AbstractEffect
 class PaletteWave : public AbstractEffect
 {
   public:
+    virtual const char* GetName() { return "PaletteWave"; }
+
     CRGBPalette256 palette;
     RandParam<byte, 2, 10> bpm;
     RandParam<byte, 1, 5> scale;
@@ -245,6 +255,8 @@ class PaletteWave : public AbstractEffect
 class PolarPaletteWave : public AbstractEffect
 {
   public:
+    virtual const char* GetName() { return "PolarPaletteWave"; }
+
     CRGBPalette256 palette;
     RandParam<byte, 1, 10> bpm;
     RandParam<unsigned short, 1, 5> scale;
@@ -271,6 +283,8 @@ class PolarPaletteWave : public AbstractEffect
 class Fireworks: public AbstractEffect
 {
   public:
+    virtual const char* GetName() { return "Fireworks"; }
+
     // See ElectricSpark's comments, same logic
     unsigned long DICE_LIMIT = 10000;
     RandParam<byte, 30, 70> sparkChance;
@@ -305,6 +319,7 @@ class Fireworks: public AbstractEffect
 class Lighthouse : public AbstractEffect
 {
   public:
+    virtual const char* GetName() { return "Lighthouse"; }
 
     RandParam<unsigned short, 6, 12> bpm;
     RandParam<unsigned short, 1, 3> beams;
@@ -367,6 +382,7 @@ class Lighthouse : public AbstractEffect
 class PolarSwipe : public AbstractEffect
 {
   public:
+    virtual const char* GetName() { return "PolarSwipe"; }
 
     RandBool flip;
     RandParam<byte, 10, 40> bpm;
@@ -437,6 +453,8 @@ class PolarSwipe : public AbstractEffect
 class PolarMoodlight : public AbstractEffect
 {
   public:
+    virtual const char* GetName() { return "PolarMoodlight"; }
+
     // minBpm, maxBpm, minScale, maxScale
     RandSine<1, 15> red;
     RandSine<1, 15> green;
@@ -461,6 +479,7 @@ class PolarMoodlight : public AbstractEffect
 class RGBodyProblem : public AbstractEffect
 {
   public:
+    virtual const char* GetName() { return "RGBodyProblem"; }
 
     // If this is false, use only the Red emitter
     RandBool rgbMode;
@@ -552,6 +571,8 @@ class RGBodyProblem : public AbstractEffect
 class ErrorEffect : public AbstractEffect
 {
   public:
+    virtual const char* GetName() { return "ErrorEffect"; }
+
     CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
     {
       if (strip->idx == 0)

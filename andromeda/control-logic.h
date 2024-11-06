@@ -1,6 +1,7 @@
 #ifndef CONTROL_LOGIC_H
 #define CONTROL_LOGIC_H
 
+#include <ArduinoLog.h>
 #include <FastLED.h>
 
 #include "utils.h"
@@ -34,6 +35,8 @@ void setNextTransition()
   fadeInEnd = effectStart + FADE_IN_DURATION;
   fadeOutStart = fadeInEnd + random(MIN_EFFECT_DURATION, MAX_EFFECT_DURATION);
   nextTransition = fadeOutStart + FADE_OUT_DURATION;
+
+  Log.noticeln("Next transition in %d ms", nextTransition);
 }
 
 // Return the master brightness to fade the effects in and out
@@ -72,6 +75,8 @@ void runRandomAnimation()
 {
     AbstractAnimation* animation = getRandomAnimation();
 
+    Log.noticeln("Picked new animation: %s", animation->GetName());
+
     if (animation->controlHints & ControlHints::ROTATE_SPACE)
       applyGlobalRandomRotation();
     else
@@ -104,12 +109,15 @@ void runRandomAnimation()
 // - and also sprinkle random rotation transforms here and there
 void handleTransition()
 {
+  Log.noticeln("Handling transition");
+
   runRandomAnimation();
 
   if (effect)
     delete effect;
 
   effect = getRandomEffect();
+  Log.noticeln("Picked new effect: %s", effect->GetName());
 
   if (effect->controlHints & ControlHints::ROTATE_SPACE)
     applyGlobalRandomRotation();

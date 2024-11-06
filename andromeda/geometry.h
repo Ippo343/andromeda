@@ -48,8 +48,8 @@ class Led
   public:
     byte idx;                             // index in the strip that contains it
 
-    CartesianCoordinates realCartesian;   // physical location of the LED relative to the centre. Will not change during execution.
-    PolarCoordinates realPolar;           // physical location (polar coordinates). Will not change.
+    CartesianCoordinates fixedCartesian;  // physical location of the LED relative to the centre. Will not change during execution.
+    PolarCoordinates fixedPolar;          // physical location (polar coordinates). Will not change.
 
     CartesianCoordinates cartesian;       // transformed coordinates. Will change with every FX change.
     PolarCoordinates polar;               // transformed polar coordinates. Will change with every FX change.
@@ -88,7 +88,7 @@ LedStrip STRIPS[NUM_STRIPS];
 
 // Coordinates of each LED, in millimeters, relative to the center of the structure.
 // See the python helper in led-coordinates/ to see where these come from
-const PROGMEM CartesianCoordinates relative_led_coordinates[NUM_STRIPS][LEDS_PER_STRIP] = {
+const PROGMEM CartesianCoordinates cartesian_led_coordinates[NUM_STRIPS][LEDS_PER_STRIP] = {
   { {   -7,   65 }, {   11,   64 }, {   27,   59 }, {   42,   49 }, {   54,   37 }, {   61,   21 }, {   65,    4 }, {   63,  -13 }, {   58,  -30 }, {   48,  -44 }, {   34,  -55 }, {   18,  -62 }, {    1,  -65 }, {  -16,  -63 }, {  -32,  -56 }, {  -46,  -46 }, {  -57,  -32 }, {  -63,  -16 }, {  -65,    2 }, {  -62,   19 }, {  -55,   35 }, {  -44,   48 }, {  -30,   58 } },
   { {   14,  135 }, {   -2,  133 }, {  -19,  136 }, {  -34,  143 }, {  -47,  154 }, {  -56,  168 }, {  -62,  184 }, {  -63,  201 }, {  -59,  217 }, {  -52,  232 }, {  -40,  244 }, {  -26,  253 }, {  -10,  258 }, {    7,  259 }, {   23,  255 }, {   38,  247 }, {   50,  235 }, {   58,  220 }, {   63,  204 }, {   62,  187 }, {   58,  171 }, {   49,  157 }, {   37,  145 } },
   { {  121,   55 }, {  112,   70 }, {  107,   86 }, {  106,  102 }, {  109,  119 }, {  117,  134 }, {  129,  146 }, {  143,  155 }, {  159,  160 }, {  176,  161 }, {  193,  156 }, {  207,  148 }, {  219,  136 }, {  228,  122 }, {  232,  105 }, {  232,   88 }, {  227,   72 }, {  219,   58 }, {  206,   46 }, {  191,   38 }, {  175,   34 }, {  158,   35 }, {  142,   40 } },
@@ -134,13 +134,15 @@ void initializeGeometry() {
 
   FOR_EACH_STRIP {
     FOR_EACH_LED {
-      STRIPS[iStrip].leds[iLed].realCartesian = relative_led_coordinates[iStrip][iLed];
-      STRIPS[iStrip].leds[iLed].cartesian = relative_led_coordinates[iStrip][iLed];
-      STRIPS[iStrip].leds[iLed].polar = polar_led_coordinates[iStrip][iLed];
+      STRIPS[iStrip].leds[iLed].fixedCartesian = cartesian_led_coordinates[iStrip][iLed];
+      STRIPS[iStrip].leds[iLed].fixedPolar     = polar_led_coordinates[iStrip][iLed];
+
+      STRIPS[iStrip].leds[iLed].cartesian = cartesian_led_coordinates[iStrip][iLed];
+      STRIPS[iStrip].leds[iLed].polar     = polar_led_coordinates[iStrip][iLed];
     }
   }
 
-  Serial.println("Initialized geometry");
+  Log.noticeln("Initialized geometry");
 }
 
 
@@ -154,6 +156,8 @@ void applyGlobalRandomRotation()
   // Same angle, in centidegrees (to transform the polar coordinates)
   int tcDeg = (int)(theta * (100 * 180.0 / PI));
 
+  Log.noticeln("Applying global rotation: %d", (tcDeg / 100));
+
   float cosT = cos(theta);
   float sinT = sin(theta);
 
@@ -161,7 +165,7 @@ void applyGlobalRandomRotation()
     FOR_EACH_LED {
 
       // Real physical coordinates of the LED
-      CartesianCoordinates r = STRIPS[iStrip].leds[iLed].realCartesian;
+      CartesianCoordinates r = STRIPS[iStrip].leds[iLed].fixedCartesian;
 
       // This is actually the INVERSE rotation matrix.
       // Picture the Swipe animation doing a horizontal swipe of the LEDs.
@@ -184,10 +188,11 @@ void applyGlobalRandomRotation()
 // to the original untransformed coordinates
 void resetGlobalTransform()
 {
+  Log.noticeln("Resetting global transform");
   FOR_EACH_STRIP {
     FOR_EACH_LED {
-      STRIPS[iStrip].leds[iLed].cartesian = STRIPS[iStrip].leds[iLed].realCartesian;
-      STRIPS[iStrip].leds[iLed].polar     = STRIPS[iStrip].leds[iLed].realPolar;
+      STRIPS[iStrip].leds[iLed].cartesian = STRIPS[iStrip].leds[iLed].fixedCartesian;
+      STRIPS[iStrip].leds[iLed].polar     = STRIPS[iStrip].leds[iLed].fixedPolar;
     }
   }
 }
