@@ -1,6 +1,7 @@
 #include "control-logic.h"
+#include "perf-monitor.h"
 
-//#define PERF
+PerformanceMonitor perf = PerformanceMonitor();
 
 void setup() {
 
@@ -17,10 +18,9 @@ void loop() {
 
   unsigned long t = millis();
   update(t);
+  perf.tick();
 
-#ifdef PERF
-  unsigned long end = millis();
-  float fps = 1000.0 / (float)(end - t);
-  Serial.println(fps);
-#endif
+  EVERY_N_MILLISECONDS(5000) {
+    perf.stat();
+  }
 }
