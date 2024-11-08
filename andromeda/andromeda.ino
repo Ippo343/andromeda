@@ -1,7 +1,9 @@
 #include "control-logic.h"
 #include "perf-monitor.h"
+#include "comms.h"
 
 PerformanceMonitor perf = PerformanceMonitor();
+Comms comms = Comms();
 
 void setup() {
 
@@ -12,6 +14,8 @@ void setup() {
   initializeGeometry();
   FastLED.setCorrection(TypicalLEDStrip);
   seedRNGs();
+
+  comms.setup();
 }
 
 void loop() {
@@ -19,6 +23,10 @@ void loop() {
   unsigned long t = millis();
   update(t);
   perf.tick();
+
+  EVERY_N_MILLISECONDS(1000) {
+    comms.loop();
+  }
 
   EVERY_N_MILLISECONDS(5000) {
     perf.stat();
