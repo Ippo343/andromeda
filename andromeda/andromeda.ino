@@ -16,7 +16,11 @@ void setup() {
   FastLED.setCorrection(TypicalLEDStrip);
   seedRNGs();
 
-  comms.setup();
+  if (!comms.setup())
+  {
+    ErrorAnimation error;
+    error.run();
+  }
 }
 
 void loop() {

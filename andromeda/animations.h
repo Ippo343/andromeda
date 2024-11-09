@@ -147,14 +147,18 @@ class ErrorAnimation : public AbstractAnimation
 
     void run() override
     {
+      milliseconds flashDuration = 250;
+      paint(CRGB::Black);
+
       for (byte i = 0; i < 3; i++)
       {
-        paint(CRGB::Red);
+        paintStrip(0, CRGB::Red);
         FastLED.show();
-        delay(500);
-        paint(CRGB::Black);
+        delay(flashDuration);
+
+        paintStrip(0, CRGB::Black);
         FastLED.show();
-        delay(500);
+        delay(flashDuration);
       }
     }
 };
