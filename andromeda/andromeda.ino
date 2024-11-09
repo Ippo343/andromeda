@@ -1,9 +1,10 @@
-#include "control-logic.h"
+#include "mission-control.h"
 #include "perf-monitor.h"
 #include "comms.h"
 
-PerformanceMonitor perf = PerformanceMonitor();
-Comms comms = Comms();
+MissionControl     mc    = MissionControl();
+PerformanceMonitor perf  = PerformanceMonitor();
+Comms              comms = Comms(mc);
 
 void setup() {
 
@@ -21,7 +22,7 @@ void setup() {
 void loop() {
 
   unsigned long t = millis();
-  update(t);
+  mc.update(t);
   perf.tick();
 
   EVERY_N_MILLISECONDS(1000) {

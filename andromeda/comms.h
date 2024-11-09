@@ -6,20 +6,25 @@
 
 #include "WiFiS3.h"
 #include "utils.h"
-#include "control-logic.h"
+#include "mission-control.h"
 #include "secrets.h"
 
 class Comms
 {
   private:
     const byte port = 80;
-
     int status = WL_IDLE_STATUS;
     WiFiServer server;
 
+    MissionControl& mc;
+
   public:
 
-    Comms() : server(port) { }
+    Comms(MissionControl& missionControl) :
+      server(port),
+      mc(missionControl)
+    {
+    }
 
     bool setup()
     {
@@ -92,7 +97,7 @@ class Comms
 
           if (currentLine.endsWith("GET /N"))
           {
-            handleTransition();
+            mc.handleTransition();
           }
         }
       }
