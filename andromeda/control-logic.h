@@ -67,7 +67,7 @@ byte getBrightness(milliseconds t)
     brightness = map(dt, 0, FADE_OUT_DURATION, 255, 0);
   }
 
-  return constrain(brightness, 0, 255);
+  return dim8_raw(constrain(brightness, 0, 255));
 }
 
 // Pick a new random animation, play it, and deallocate it
