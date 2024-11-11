@@ -97,14 +97,14 @@ class ElectricSparks : public AbstractEffect
     // These are values that I like experimentally, I cannot justify them.
     // TODO: better way to define the frequency
     unsigned int DICE_LIMIT = 100000;
-    RandParam<byte, 5, 40> sparkChance;
+    RandParam<byte, 1, 25> sparkChance;
 
     // Chance that a spark becomes bigger, rolled out of 100.
     // If the roll is successful, the width is doubled and then rolled again until it fails.
     // Potentially going up to the full strip in rare cases.
     RandParam<byte, 10, 40> bigSparkChance;
 
-    RandParam<byte, 0, 3> paletteSelection;
+    RandParam<byte, 0, 4> paletteSelection;
 
     ElectricSparks()
     {
@@ -135,6 +135,9 @@ class ElectricSparks : public AbstractEffect
           break;
         case 3:
           palette16 = purple_sparks_gp;
+          break;
+        case 4:
+          palette16 = HeatColors_p;
           break;
       }
 
