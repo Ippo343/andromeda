@@ -16,7 +16,7 @@ class SweepStrips : public AbstractAnimation
 
     void run() override {
       CRGB colors[3];
-      threeRandomColors(&colors[0], &colors[1], &colors[2]);
+      randomComplementaryColors(&colors[0], &colors[1], &colors[2]);
 
       paint(CRGB::Black);
       for (byte c = 0; c < 3; c++)
@@ -48,7 +48,7 @@ class SweepLoops : public AbstractAnimation
 
     void run() override {
       CRGB colors[3];
-      threeRandomColors(&colors[0], &colors[1], &colors[2]);
+      randomComplementaryColors(&colors[0], &colors[1], &colors[2]);
 
       paint(CRGB::Black);
       for (byte c = 0; c < 3; c++)

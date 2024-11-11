@@ -71,8 +71,9 @@ CHSV randomColor()
   return CHSV(random8(), 255, 255);
 }
 
+
 // Picks three random colors, equispaced around the HSV wheel
-void threeRandomColors(CRGB* A, CRGB* B, CRGB*C)
+void randomComplementaryColors(CRGB* A, CRGB* B, CRGB*C)
 {
   const short hueStep = 255 / 3;
   short a = random8();
@@ -82,6 +83,17 @@ void threeRandomColors(CRGB* A, CRGB* B, CRGB*C)
   *A = CHSV(a, 255, 255);
   *B = CHSV(b, 255, 255);
   *C = CHSV(c, 255, 255);
+}
+
+// Picks three random colors, equispaced around the HSV wheel
+void randomComplementaryColors(CRGB* A, CRGB* B)
+{
+  const short hueStep = 255 / 2;
+  short a = random8();
+  short b = (a + hueStep) % 255;
+
+  *A = CHSV(a, 255, 255);
+  *B = CHSV(b, 255, 255);
 }
 
 

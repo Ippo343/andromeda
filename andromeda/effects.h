@@ -1,7 +1,9 @@
 #ifndef EFFECTS_H
 #define EFFECTS_H
 
+#include <vector>
 #include <FastLED.h>
+
 #include "geometry.h"
 #include "utils.h"
 #include "effects-base.h"
@@ -481,28 +483,40 @@ class RGBodyProblem : public AbstractEffect
   public:
     virtual const char* GetName() { return "RGBodyProblem"; }
 
-    // If this is false, use only the Red emitter
-    RandBool rgbMode;
+    RandParam<byte, 1, 3> emittersCount;
+    RandBool fixedColors;
 
-    // Independent sine generators for each emitter's (x,y) coordinates
-    // TODO: make this even more chaotic
-    RandSine<1, 20> sxR;
-    RandSine<1, 20> syR;
-    RandSine<1, 20> sxG;
-    RandSine<1, 20> syG;
-    RandSine<1, 20> sxB;
-    RandSine<1, 20> syB;
-
-    // Location of the 3 emitters
-    CartesianCoordinates R;
-    CartesianCoordinates G;
-    CartesianCoordinates B;
+    std::vector<CartesianCoordinates> locations;
+    std::vector<RandSine<1, 20>> sx;
+    std::vector<RandSine<1, 20>> sy;
+    std::vector<CRGB> colors;
 
     MoodLight moodlight;
 
-    RGBodyProblem()
+    RGBodyProblem() :
+      locations(emittersCount),
+      colors(emittersCount),
+      sx(emittersCount),
+      sy(emittersCount)
     {
       controlHints = ControlHints::ROTATE_SPACE;
+
+      for (byte i; i < emittersCount; i++)
+      {
+        locations[i] = CartesianCoordinates();
+        sx[i] = RandSine<1, 20>();
+        sy[i] = RandSine<1, 20>();
+      }
+
+      // If there's only one emitter, use a moodligh
+      if (emittersCount == 2)
+      {
+        randomComplementaryColors(&colors[0], &colors[1]);
+      }
+      else if (emittersCount == 3)
+      {
+        randomComplementaryColors(&colors[0], &colors[1], &colors[2]);
+      }
     }
 
     // This factor control the final brightness of each channel.
@@ -519,18 +533,10 @@ class RGBodyProblem : public AbstractEffect
 
     void precompute(milliseconds t) override
     {
-      R.x = scale(sxR.evaluate(0));
-      R.y = scale(syR.evaluate(0));
-
-      // In single channel mode only the R emitter is used,
-      // no need to update the other 2
-      if (rgbMode)
+      for (byte i = 0; i < emittersCount; i++)
       {
-        G.x = scale(sxG.evaluate(0));
-        G.y = scale(syG.evaluate(0));
-
-        B.x = scale(sxB.evaluate(0));
-        B.y = scale(syB.evaluate(0));
+        locations[i].x = scale(sx[i].evaluate(0));
+        locations[i].y = scale(sy[i].evaluate(0));
       }
     }
 
@@ -555,14 +561,24 @@ class RGBodyProblem : public AbstractEffect
 
     CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
     {
-      if (rgbMode)
-        return CRGB(component(led, R), component(led, G), component(led, B));
-      else
+      if (emittersCount == 1)
       {
         CRGB rawColor = moodlight.evaluate();
-        byte v = component(led, R);
-        return CRGB(scale8(rawColor.r, v), scale8(rawColor.g, v), scale8(rawColor.b, v));
+        byte v = component(led, locations[0]);
+        rawColor.nscale8(v);
+        return rawColor;
       }
+
+      CRGB finalColor = CRGB::Black;
+      for (byte i = 0; i < emittersCount; i++)
+      {
+        CRGB emitterColor = colors[i];
+        byte v = component(led, locations[i]);
+        emitterColor.nscale8(v);
+        finalColor += emitterColor;
+      }
+
+      return finalColor;
     }
 };
 
