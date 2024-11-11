@@ -139,7 +139,6 @@ class Swipe : public AbstractAnimation
 };
 
 
-// I don't think this will ever show, but why not
 class ErrorAnimation : public AbstractAnimation
 {
   public:
@@ -160,6 +159,33 @@ class ErrorAnimation : public AbstractAnimation
         FastLED.show();
         delay(flashDuration);
       }
+    }
+};
+
+class WiFiConnectingAnimation : public AbstractAnimation
+{
+  public:
+    virtual const char* GetName() { return "WiFiConnectingAnimation"; }
+
+    void run() override
+    {
+      paint(CRGB::Black);
+      paintStrip(0, CRGB::Blue);
+      FastLED.show();
+    }
+};
+
+class WiFiSuccessAnimation : public AbstractAnimation
+{
+  public:
+    virtual const char* GetName() { return "WiFiSuccessAnimation"; }
+
+    void run() override
+    {
+      paint(CRGB::Black);
+      paintStrip(0, CRGB::Green);
+      FastLED.show();
+      delay(250);
     }
 };
 

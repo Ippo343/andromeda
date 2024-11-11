@@ -16,7 +16,14 @@ void setup() {
   FastLED.setCorrection(TypicalLEDStrip);
   seedRNGs();
 
-  if (!comms.setup())
+  WiFiConnectingAnimation connecting;
+  connecting.run();
+  if (comms.setup())
+  {
+    WiFiSuccessAnimation success;
+    success.run();
+  }
+  else
   {
     ErrorAnimation error;
     error.run();
