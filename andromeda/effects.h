@@ -519,12 +519,6 @@ class RGBodyProblem : public AbstractEffect
       }
     }
 
-    // This factor control the final brightness of each channel.
-    // 255 is obviously the maximum brightness: but then you need to multiply but some factor
-    // because otherwise (255 / d^2) is always very very dim.
-    // I found 5000 by trial and error and it looks good.
-    const float brightnessFactor = 255 * 5000;  // * (1 / distance^2)
-
     // Helper to scale the result of a sine wave to the screen size
     short scale(byte v)
     {
@@ -540,31 +534,12 @@ class RGBodyProblem : public AbstractEffect
       }
     }
 
-    byte component(Led* led, CartesianCoordinates e)
-    {
-      short dx = ( led->cartesian.x - e.x );
-      short dy = ( led->cartesian.y - e.y );
-
-      // This is the famouse fast inverse square root and boy is it fast.
-      // With one single channel, doing everything in floating point with the standard library
-      // was tanking the framerate below 40. With the fast algorithm, it runs 3 channels at 75 fps!
-      float invdist = Q_rsqrt(dx*dx + dy*dy);
-      byte v = (byte)constrain(brightnessFactor * invdist * invdist, 0, 255);
-
-      // Original formula with just the inverse of the distance.
-      // Physically correct, but it looks kinda dull.
-      // (1/d^2) looks cooler.
-      // byte v = (byte)constrain(255 * 30 * invdist , 0, 255);
-
-      return v;
-    }
-
     CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
     {
       if (emittersCount == 1)
       {
         CRGB rawColor = moodlight.evaluate();
-        byte v = component(led, locations[0]);
+        byte v = brightnessFromEmitter(led, locations[0]);
         rawColor.nscale8(v);
         return rawColor;
       }
@@ -573,7 +548,7 @@ class RGBodyProblem : public AbstractEffect
       for (byte i = 0; i < emittersCount; i++)
       {
         CRGB emitterColor = colors[i];
-        byte v = component(led, locations[i]);
+        byte v = brightnessFromEmitter(led, locations[i]);
         emitterColor.nscale8(v);
         finalColor += emitterColor;
       }
