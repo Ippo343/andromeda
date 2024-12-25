@@ -256,32 +256,6 @@ class PaletteWave : public AbstractEffect
 };
 
 
-// Just like the PaletteWave effect, but in polar coordinates
-class PolarPaletteWave : public AbstractEffect
-{
-  public:
-    virtual const char* GetName() { return "PolarPaletteWave"; }
-
-    CRGBPalette256 palette;
-    RandParam<byte, 3, 6> bpm;
-    RandParam<unsigned short, 3, 6> scale;
-    RandSign flip;
-
-    void randomize() override
-    {
-      CRGBPalette16 palette16 = randomPredefinedPalette();
-      UpscalePalette(palette16, palette);
-    }
-
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
-    {
-      short v = flip * led->polar.radius / scale;
-      byte value = beatsin8(bpm, 0, 255, 0, v);
-      return ColorFromPalette(palette, value);
-    }
-};
-
-
 // Randomly light up a whole strip with a random color,
 // and then keep everything fading to black.
 // Looks a little bit like fireworks.
@@ -580,7 +554,7 @@ class ErrorEffect : public AbstractEffect
 // Picks a new random effect and randomizes it
 AbstractEffect* getRandomEffect() {
 
-  byte EFFECTS_COUNT = 11;
+  byte EFFECTS_COUNT = 10;
 
   // Set this to the index of the effect you want to force while testing
   short forcedSelection = -1;
@@ -621,15 +595,12 @@ AbstractEffect* getRandomEffect() {
       retval = new Lighthouse();
       break;
     case 7:
-      retval = new PolarPaletteWave();
-      break;
-    case 8:
       retval = new PolarSwipe();
       break;
-    case 9:
+    case 8:
       retval = new PolarMoodlight();
       break;
-    case 10:
+    case 9:
       retval = new RGBodyProblem();
       break;
     default:
