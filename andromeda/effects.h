@@ -263,8 +263,8 @@ class PolarPaletteWave : public AbstractEffect
     virtual const char* GetName() { return "PolarPaletteWave"; }
 
     CRGBPalette256 palette;
-    RandParam<byte, 1, 10> bpm;
-    RandParam<unsigned short, 1, 5> scale;
+    RandParam<byte, 3, 6> bpm;
+    RandParam<unsigned short, 3, 6> scale;
     RandSign flip;
 
     void randomize() override
