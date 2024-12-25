@@ -295,64 +295,44 @@ class Fireworks: public AbstractEffect
 
 
 // Rotating beams of light
-class Lighthouse : public AbstractEffect
+class NinjaStar : public AbstractEffect
 {
   public:
-    virtual const char* GetName() { return "Lighthouse"; }
+    virtual const char* GetName() { return "NinjaStar"; }
 
-    RandParam<unsigned short, 6, 12> bpm;
-    RandParam<unsigned short, 1, 3> beams;
-    RandParam<unsigned short, 1500, 4500> baseAperture;
-    RandBool flip;
+    RandParam<milliseconds, 5000, 5000> duration;
+    RandParam<unsigned short, 6, 6> beams;
+    RandSign flip;
 
-    unsigned short aperture = baseAperture / beams;
-
-    unsigned short angle;
-    unsigned short minAngle;
-    unsigned short maxAngle;
-    MoodLight moodlight;
-    CRGB color;
-
-    unsigned short range = (FULL_CIRCLE / beams);
+    MoodLight inner;
+    MoodLight outer;
+    CRGB innerColor;
+    CRGB outerColor;
+    byte offset;
 
     void precompute(milliseconds t) override
     {
-      color = moodlight.evaluate();
-
-      unsigned short v = beat16(bpm * beams);
-
-      if (flip)
-        angle = map(v, 0, 65535, 0, range);
-      else
-        angle = map(v, 0, 65535, range, 0);
-
-      minAngle = (angle - aperture) % range;
-      maxAngle = (angle + aperture) % range;
+      innerColor = inner.evaluate();
+      outerColor = outer.evaluate();
+      offset = map((flip * t) % duration, 0, duration, 0, 255);
     }
 
     CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
     {
-      bool on;
-      unsigned short deg = led->polar.cdegrees % range;
+      // TODO: great opportunity for an additional set of coordinates stored in the LED
+      // This would allow effects to precompute scaled LED coordinates
+      // Might have to be local to the effect in case of performance issues
+      byte theta = map((led->polar.cdegrees * beams) % FULL_CIRCLE, 0, FULL_CIRCLE, 0, 255);
 
-      // Correctly handle the final part of the rotation,
-      // where maxAngle has already rolled over the zero line but minAngle hasn't
-      if (minAngle > maxAngle)
-        on = (deg >= minAngle || deg <= maxAngle);
-      else
-        on = (deg >= minAngle && deg <= maxAngle);
+      // TODO: this is a great opportunity for a LUT
+      byte v = sin8(theta + offset);
+      for (byte i = 0; i < 4; i++)
+        v = scale8(v, v);
 
-      if (on)
-        return color;
-      else
-        return strip->buffer[led->idx];
-    }
+      unsigned short scaledRadius = map(led->polar.radius, 0, SCREEN_HALF_SIZE, 0, 255);
+      CRGB color = blend(innerColor, outerColor, scaledRadius);
 
-    void postprocess(milliseconds t) override
-    {
-      FOR_EACH_STRIP {
-        fadeToBlackBy(STRIPS[iStrip].buffer, LEDS_PER_STRIP, 2 * bpm * beams);
-      }
+      return color % v;
     }
 };
 
@@ -592,7 +572,7 @@ AbstractEffect* getRandomEffect() {
       retval = new PaletteWave();
       break;
     case 6:
-      retval = new Lighthouse();
+      retval = new NinjaStar();
       break;
     case 7:
       retval = new PolarSwipe();
