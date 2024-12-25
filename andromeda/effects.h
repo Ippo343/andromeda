@@ -102,7 +102,7 @@ class ElectricSparks : public AbstractEffect
     // Chance that a spark becomes bigger, rolled out of 100.
     // If the roll is successful, the width is doubled and then rolled again until it fails.
     // Potentially going up to the full strip in rare cases.
-    RandParam<byte, 10, 40> bigSparkChance;
+    RandParam<byte, 25, 50> bigSparkChance;
 
     RandParam<byte, 0, 4> paletteSelection;
 
