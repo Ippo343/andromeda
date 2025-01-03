@@ -345,7 +345,7 @@ class PolarSwipe : public AbstractEffect
 
     RandBool flip;
     RandParam<byte, 10, 40> bpm;
-    RandParam<byte, 20, 80> aperture;
+    RandParam<byte, 20, 80> bandWidth;
 
     // Minimum and maximum radii for the swipe.
     // It needs to start from aperture / 2 so that the minimum of the band is at 0,
@@ -357,12 +357,10 @@ class PolarSwipe : public AbstractEffect
     // just inside the band, and so they get a new random color for a few consecutive frames
     // causing an annoying color flicker at the edge.
     //
-    unsigned short scanMin = aperture / 2;
-    unsigned short scanMax = SCREEN_HALF_SIZE + (aperture + 1);
+    unsigned short scanMin = bandWidth / 2;
+    unsigned short scanMax = SCREEN_HALF_SIZE + (bandWidth + 1);
 
-    unsigned short radius;
-    unsigned short bandMin;
-    unsigned short bandMax;
+    unsigned short bandCenter;
     CRGB color;
 
     void randomize() override
@@ -375,15 +373,23 @@ class PolarSwipe : public AbstractEffect
       unsigned short v = beat16(bpm);
 
       if (flip)
-        radius = map(v, 0, 65535, scanMax, scanMin);
+        bandCenter = map(v, 0, 65535, scanMax, scanMin);
       else
-        radius = map(v, 0, 65535, scanMin, scanMax);
+        bandCenter = map(v, 0, 65535, scanMin, scanMax);
 
-      if (radius >= SCREEN_HALF_SIZE + aperture)
+      if (bandCenter >= SCREEN_HALF_SIZE + bandWidth)
         color = randomColor();
+    }
 
-      bandMin = radius - aperture;
-      bandMax = radius + aperture;
+    inline byte getBrightness(Led* led)
+    {
+      unsigned short R = led->polar.radius;
+      unsigned short D = abs(R - bandCenter);
+
+      if (D > bandWidth)
+        return 0;
+      else
+        return map(D, 0, bandWidth, 255, 0);
     }
 
     CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
@@ -393,17 +399,7 @@ class PolarSwipe : public AbstractEffect
       if (strip->idx == 0)
         return CRGB::Black;
 
-      if (led->polar.radius >= bandMin && led->polar.radius <= bandMax)
-        return color;
-      else
-        return strip->buffer[led->idx];
-    }
-
-    void postprocess(milliseconds t) override
-    {
-      FOR_EACH_STRIP {
-        fadeToBlackBy(STRIPS[iStrip].buffer, LEDS_PER_STRIP, bpm);
-      }
+      return color % getBrightness(led);
     }
 };
 
