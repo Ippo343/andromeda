@@ -207,22 +207,33 @@ class SaturationGlow : public AbstractEffect
   public:
     virtual const char* GetName() { return "SaturationGlow"; }
 
-    RandParam<milliseconds, (1 MINUTES), (4 MINUTES)> cycleTime;
     RandParam<byte, 0, 255> hue;
-    RandParam<byte, 128, 220> saturationCenter;         // skewed towards high saturation because colors are pretty
-    byte saturationAmplitude = 255 - saturationCenter;
-    CRGB color;
+    RandParam<byte, 100, 156> saturationCenter;         // skewed towards high saturation because colors are pretty
+    byte saturationAmplitude;
+
+    std::vector<RandParam<milliseconds, (1 MINUTES), (4 MINUTES)>> cycleTime;
+    std::vector<CRGB> color;
+
+    SaturationGlow() :
+      cycleTime(NUM_STRIPS),  // this SHOULD call the default constructor of RandParam, picking 7 random values. I think.
+      color(NUM_STRIPS)
+    {
+      saturationAmplitude = min(saturationCenter, (255 - saturationCenter));
+    }
 
     void precompute(milliseconds t) override
     {
-      long scaledWave = scaledCubicWave8(t, cycleTime, -saturationAmplitude, saturationAmplitude);
-      byte sat = constrain(saturationCenter + scaledWave, 0, 255);
-      color = CHSV(hue, sat, 255);
+      // TODO: maybe this should use a regular sine wave?
+      FOR_EACH_STRIP {
+        long scaledWave = scaledCubicWave8(t, cycleTime[iStrip], -saturationAmplitude, saturationAmplitude);
+        byte sat = constrain(saturationCenter + scaledWave, 0, 255);
+        color[iStrip] = CHSV(hue, sat, 255);
+      }
     }
 
     CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
     {
-      return color;
+      return color[strip->idx];
     }
 };
 
