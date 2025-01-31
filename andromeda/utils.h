@@ -117,4 +117,10 @@ float Q_rsqrt(float number)
   return conv.f;
 }
 
+
+long cmap(long x, long in_low, long in_high, long out_low, long out_high)
+{
+  return constrain(map(x, in_low, in_high, out_low, out_high), out_low, out_high);
+}
+
 #endif

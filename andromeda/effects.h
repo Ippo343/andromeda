@@ -46,6 +46,7 @@ class LoopingPoint : public AbstractEffect
     MoodLight moodlights[NUM_STRIPS];
     RandParam<milliseconds, 30, 60> step;
     byte idxOn;
+    byte v;
 
     CRGB color[NUM_STRIPS];
 
@@ -57,6 +58,8 @@ class LoopingPoint : public AbstractEffect
 
       // Pick an LED to turn on, rotating along the strip
       idxOn = (int)(t / step) % (LEDS_PER_STRIP);
+
+      v = cmap(t % step, 0, step, 0, 255);
     }
 
     CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
@@ -65,7 +68,7 @@ class LoopingPoint : public AbstractEffect
       // otherwise, leave it unchanged.
       // They will be faded away in postprocessing
       return led->idx == idxOn
-        ? color[strip->idx]
+        ? color[strip->idx] % v
         : strip->buffer[led->idx];
     }
 
