@@ -453,7 +453,7 @@ class RGBodyProblem : public AbstractEffect
     std::vector<CartesianCoordinates> locations;
     std::vector<RandSine<1, 20>> sx;
     std::vector<RandSine<1, 20>> sy;
-    std::vector<CRGB> colors;
+    std::vector<CHSV> colors;
 
     MoodLight moodlight;
 
@@ -472,15 +472,8 @@ class RGBodyProblem : public AbstractEffect
         sy[i] = RandSine<1, 20>();
       }
 
-      // If there's only one emitter, use a moodligh
-      if (emittersCount == 2)
-      {
-        randomComplementaryColors(&colors[0], &colors[1]);
-      }
-      else if (emittersCount == 3)
-      {
-        randomComplementaryColors(&colors[0], &colors[1], &colors[2]);
-      }
+      // If there's only one emitter, it will use a moodlight instead
+      colors = randomComplementaryColors(emittersCount);
     }
 
     // Helper to scale the result of a sine wave to the screen size

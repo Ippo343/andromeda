@@ -15,8 +15,7 @@ class SweepStrips : public AbstractAnimation
     RandParam<byte, 10, 30> timeStep;
 
     void run() override {
-      CRGB colors[3];
-      randomComplementaryColors(&colors[0], &colors[1], &colors[2]);
+      std::vector<CHSV> colors = randomComplementaryColors(3);
 
       paint(CRGB::Black);
       for (byte c = 0; c < 3; c++)
@@ -47,8 +46,7 @@ class SweepLoops : public AbstractAnimation
     RandParam<byte, 50, 100> timeStep;
 
     void run() override {
-      CRGB colors[3];
-      randomComplementaryColors(&colors[0], &colors[1], &colors[2]);
+      std::vector<CHSV> colors = randomComplementaryColors(3);
 
       paint(CRGB::Black);
       for (byte c = 0; c < 3; c++)
