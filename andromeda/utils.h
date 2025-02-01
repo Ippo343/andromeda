@@ -19,7 +19,7 @@
 // Looping Index macro: keeps the index always within the strip
 // simplifying code that needs to access consecutive LEDs.
 // Basically python's array[-1] but for C
-#define LI(idx) ( (idx) % LEDS_PER_STRIP )
+#define LI(idx) ( (idx + LEDS_PER_STRIP) % LEDS_PER_STRIP )
 
 
 void seedRNGs()

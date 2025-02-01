@@ -8,7 +8,6 @@
 #include "utils.h"
 #include "effects-base.h"
 #include "effects-utils.h"
-#include "color-palettes.h"
 
 
 // Use each individual led strip as an independent moodlight.
@@ -100,53 +99,46 @@ class ElectricSparks : public AbstractEffect
     // These are values that I like experimentally, I cannot justify them.
     // TODO: better way to define the frequency
     unsigned int DICE_LIMIT = 100000;
-    RandParam<byte, 1, 25> sparkChance;
+    RandParam<byte, 5, 20> sparkChance;
 
     // Chance that a spark becomes bigger, rolled out of 100.
     // If the roll is successful, the width is doubled and then rolled again until it fails.
     // Potentially going up to the full strip in rare cases.
-    RandParam<byte, 25, 50> bigSparkChance;
-
-    RandParam<byte, 0, 4> paletteSelection;
+    RandParam<byte, 40, 70> bigSparkChance;
 
     ElectricSparks()
     {
+      // Professional software engineering
       memset8(preValues, 0, NUM_STRIPS * LEDS_PER_STRIP);
       memset8(newValues, 0, NUM_STRIPS * LEDS_PER_STRIP);
     }
 
     byte avg38(byte a, byte b, byte c)
     {
-      int newV = a + b + c; // to avoid overflow
+      int newV = a + b + c;
       return newV / 3;
     }
 
     void randomize() override
     {
-      CRGBPalette16 palette16;
+      // Create a new random palette:
+      // - the first color at index 0 is random and fully saturated;
+      // - the last color is the complementary color of the base color;
+      // - the 1/3 color is the same as the base color, but half-saturated;
+      // - the 2/3 color is pure white/
+      // This logic was picked by trial and error and looks pretty nice.
 
-      switch(paletteSelection)
-      {
-        case 0:
-          palette16 = red_sparks_gp;
-          break;
-        case 1:
-          palette16 = green_sparks_gp;
-          break;
-        case 2:
-          palette16 = blue_sparks_gp;
-          break;
-        case 3:
-          palette16 = purple_sparks_gp;
-          break;
-        case 4:
-          palette16 = HeatColors_p;
-          break;
-      }
+      CHSV paletteTemp[16];
+      std::vector<CHSV> colors = randomComplementaryColors(2);
+
+      CHSV desat = colors[0]; desat.s = 128;
+      CHSV white = CHSV(0, 0, 255);
+
+      fill_gradient(paletteTemp, 16, colors[0], desat, white, colors[1]);
 
       // Upscale the palette so no interpolation is needed while running.
       // gives a completely imperceptible performace boost.
-      UpscalePalette(palette16, palette);
+      UpscalePalette(CRGBPalette16(paletteTemp), palette);
     }
 
     void precompute(milliseconds t) override
@@ -156,8 +148,7 @@ class ElectricSparks : public AbstractEffect
         // Value diffusion between neighbouring LEDs:
         // each LED becomes the average of its neighbours (poor man's heat conduction),
         // taking the value from the previous buffer so that the new buffer is computed correctly
-        // TODO: unsurprisingly it sucks. It dissipates way too fast.
-        // TODO: solve the heat conduction partial differential equation
+        // TODO: solve the heat conduction partial differential equation (LOL)
 
         for (byte iLed = 0; iLed < LEDS_PER_STRIP; iLed++)
           newValues[iStrip][iLed] = avg38(

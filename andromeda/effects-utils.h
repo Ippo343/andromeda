@@ -85,7 +85,7 @@ void randomComplementaryColors(CRGB* A, CRGB* B, CRGB*C)
   *C = CHSV(c, 255, 255);
 }
 
-// Picks three random colors, equispaced around the HSV wheel
+// Picks two random colors, equispaced around the HSV wheel
 void randomComplementaryColors(CRGB* A, CRGB* B)
 {
   const short hueStep = 255 / 2;
@@ -94,6 +94,23 @@ void randomComplementaryColors(CRGB* A, CRGB* B)
 
   *A = CHSV(a, 255, 255);
   *B = CHSV(b, 255, 255);
+}
+
+
+std::vector<CHSV> randomComplementaryColors(byte N)
+{
+  std::vector<CHSV> retval(N);
+
+  const byte hueStep = (byte)(255.0 / N);
+  short a = random8();
+
+  for (byte i = 0; i < N; i++)
+  {
+    byte h = (a + hueStep * i) % 255;
+    retval[i] = CHSV(h, 255, 255);
+  }
+
+  return retval;
 }
 
 
