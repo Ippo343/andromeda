@@ -210,7 +210,11 @@ class SaturationGlow : public AbstractEffect
   public:
     virtual const char* GetName() { return "SaturationGlow"; }
 
-    RandParam<byte, 0, 255> hue;
+    static const byte hueAmplitude = 10;
+    RandParam<byte, hueAmplitude, 255 - hueAmplitude> hueCenter;
+    RandParam<accum88, 1, 10> hueBpm88;
+    byte hue;
+
     RandParam<byte, 100, 156> saturationCenter;         // skewed towards high saturation because colors are pretty
     byte saturationAmplitude;
 
@@ -226,6 +230,8 @@ class SaturationGlow : public AbstractEffect
 
     void precompute(milliseconds t) override
     {
+      hue = beatsin88(hueBpm88, hueCenter - hueAmplitude, hueCenter + hueAmplitude, 255);
+
       // TODO: maybe this should use a regular sine wave?
       FOR_EACH_STRIP {
         long scaledWave = scaledCubicWave8(t, cycleTime[iStrip], -saturationAmplitude, saturationAmplitude);
