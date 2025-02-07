@@ -123,7 +123,7 @@ class ElectricSparks : public AbstractEffect
     {
       // Create a new random palette:
       // - the first color at index 0 is random and fully saturated;
-      // - the last color is the complementary color of the base color;
+      // - the last color is the complementary color of the base color, but partially desaturated
       // - the 1/3 color is the same as the base color, but half-saturated;
       // - the 2/3 color is pure white/
       // This logic was picked by trial and error and looks pretty nice.
@@ -133,6 +133,7 @@ class ElectricSparks : public AbstractEffect
 
       CHSV desat = colors[0]; desat.s = 128;
       CHSV white = CHSV(0, 0, 255);
+      colors[1].s = 128;
 
       fill_gradient(paletteTemp, 16, colors[0], desat, white, colors[1]);
 
