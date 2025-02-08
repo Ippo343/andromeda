@@ -128,18 +128,16 @@ class ElectricSparks : public AbstractEffect
       // - the 2/3 color is pure white/
       // This logic was picked by trial and error and looks pretty nice.
 
-      CHSV paletteTemp[16];
       std::vector<CHSV> colors = randomComplementaryColors(2);
-
       CHSV desat = colors[0]; desat.s = 128;
       CHSV white = CHSV(0, 0, 255);
       colors[1].s = 128;
 
-      fill_gradient(paletteTemp, 16, colors[0], desat, white, colors[1]);
+      CHSVPalette16 paletteTemp(colors[0], desat, white, colors[1]);
 
       // Upscale the palette so no interpolation is needed while running.
       // gives a completely imperceptible performace boost.
-      UpscalePalette(CRGBPalette16(paletteTemp), palette);
+      UpscalePalette(paletteTemp, palette);
     }
 
     void precompute(milliseconds t) override
