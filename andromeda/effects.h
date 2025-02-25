@@ -35,51 +35,6 @@ class IndividualStripMoodlight : public AbstractEffect
 };
 
 
-// One single led turned on per strip,
-// looping around it very fast
-class LoopingPoint : public AbstractEffect
-{
-  public:
-    virtual const char* GetName() { return "LoopingPoint"; }
-
-    MoodLight moodlights[NUM_STRIPS];
-    RandParam<milliseconds, 30, 60> step;
-    byte idxOn;
-    byte v;
-
-    CRGB color[NUM_STRIPS];
-
-    void precompute(milliseconds t) override
-    {
-      FOR_EACH_STRIP {
-        color[iStrip] = moodlights[iStrip].evaluate();
-      }
-
-      // Pick an LED to turn on, rotating along the strip
-      idxOn = (int)(t / step) % (LEDS_PER_STRIP);
-
-      v = cmap(t % step, 0, step, 0, 255);
-    }
-
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
-    {
-      // If this is the led to turn on, apply the color;
-      // otherwise, leave it unchanged.
-      // They will be faded away in postprocessing
-      return led->idx == idxOn
-        ? color[strip->idx] % v
-        : strip->buffer[led->idx];
-    }
-
-    void postprocess(milliseconds t) override
-    {
-      FOR_EACH_STRIP {
-        fadeToBlackBy(STRIPS[iStrip].buffer, LEDS_PER_STRIP, 25);
-      }
-    }
-};
-
-
 // Lights up the whole mirror blue, and randomly adds sparks of white
 // that die out very quickly diffusing to neighbouring leds
 class ElectricSparks : public AbstractEffect
@@ -272,44 +227,6 @@ class PaletteWave : public AbstractEffect
       int v = (led->cartesian.x + led->cartesian.y) / (int)scale;
       byte value = beatsin8(bpm, 0, 255, 0, v);
       return ColorFromPalette(palette, value);
-    }
-};
-
-
-// Randomly light up a whole strip with a random color,
-// and then keep everything fading to black.
-// Looks a little bit like fireworks.
-class Fireworks: public AbstractEffect
-{
-  public:
-    virtual const char* GetName() { return "Fireworks"; }
-
-    // See ElectricSpark's comments, same logic
-    unsigned long DICE_LIMIT = 10000;
-    RandParam<byte, 30, 70> sparkChance;
-    RandParam<unsigned short, 1, 10> bigSparkChance;
-
-    void precompute(milliseconds t) override
-    {
-      bool bigSpark = (random(DICE_LIMIT) < bigSparkChance);
-
-      FOR_EACH_STRIP {
-        // Randomly fill the whole strip with a random color
-        if (bigSpark || random(DICE_LIMIT) < sparkChance)
-          paintStrip(iStrip, randomColor());
-      }
-    }
-
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
-    {
-      return STRIPS[strip->idx].buffer[led->idx];
-    }
-
-    void postprocess(milliseconds t) override
-    {
-      FOR_EACH_STRIP {
-        fadeToBlackBy(STRIPS[iStrip].buffer, LEDS_PER_STRIP, 5);
-      }
     }
 };
 
@@ -543,7 +460,7 @@ class ErrorEffect : public AbstractEffect
 // Picks a new random effect and randomizes it
 AbstractEffect* getRandomEffect() {
 
-  byte EFFECTS_COUNT = 10;
+  byte EFFECTS_COUNT = 8;
 
   // Set this to the index of the effect you want to force while testing
   short forcedSelection = -1;
@@ -566,30 +483,24 @@ AbstractEffect* getRandomEffect() {
       retval = new IndividualStripMoodlight();
       break;
     case 1:
-      retval = new LoopingPoint();
-      break;
-    case 2:
       retval = new ElectricSparks();
       break;
-    case 3:
+    case 2:
       retval = new SaturationGlow();
       break;
-    case 4:
-      retval = new Fireworks();
-      break;
-    case 5:
+    case 3:
       retval = new PaletteWave();
       break;
-    case 6:
+    case 4:
       retval = new NinjaStar();
       break;
-    case 7:
+    case 5:
       retval = new PolarSwipe();
       break;
-    case 8:
+    case 6:
       retval = new PolarMoodlight();
       break;
-    case 9:
+    case 7:
       retval = new RGBodyProblem();
       break;
     default:
