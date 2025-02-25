@@ -99,6 +99,11 @@ class Comms
           {
             mc.handleTransition();
           }
+
+          if (currentLine.endsWith("GET /H"))
+          {
+            mc.holdEffect();
+          }
         }
       }
 
@@ -115,6 +120,7 @@ class Comms
 
       // TODO: way more controls (depends on polishing the control logic)
       client.print("<p style=\"font-size:7vw;\"><a href=\"/N\">Next</a><br></p>");
+      client.print("<p style=\"font-size:7vw;\"><a href=\"/H\">Hold</a><br></p>");
 
       // End the HTTP response
       client.println();

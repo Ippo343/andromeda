@@ -129,6 +129,18 @@ class MissionControl
       setNextTransition();
     }
 
+    void holdEffect()
+    {
+      // Set nextTransition to the maximum possible value,
+      // so that it's never reached and the current effect is held forever.
+      // You also need to set the timing of the fade ramps to hold the brightness at max.
+      // Note that using Next from the web UI resets the transition and restarts the cycle.
+      nextTransition = ~0UL;
+      fadeInEnd      =  0;
+      fadeOutStart   = ~0UL;
+      Log.noticeln("Holding current effect forever");
+    }
+
     void update(milliseconds t)
     {
       if (t >= nextTransition)
