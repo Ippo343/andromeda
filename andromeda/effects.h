@@ -200,7 +200,7 @@ class SaturationGlow : public AbstractEffect
   public:
     virtual const char* GetName() { return "SaturationGlow"; }
 
-    static const byte hueAmplitude = 10;
+    static const byte hueAmplitude = 30;
     RandParam<byte, hueAmplitude, 255 - hueAmplitude> hueCenter;
     RandParam<accum88, 1, 10> hueBpm88;
     byte hue;
