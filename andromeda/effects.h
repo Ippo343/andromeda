@@ -200,10 +200,18 @@ class SaturationGlow : public AbstractEffect
   public:
     virtual const char* GetName() { return "SaturationGlow"; }
 
+    // Either choose the hue using perlin noise (slow random walk)
+    // or with a slow sine wave centered around a value.
+    RandBool perlinHueMode;
+    byte hue;
+
+    // Used for the sinusoidal hue mode
     static const byte hueAmplitude = 30;
     RandParam<byte, hueAmplitude, 255 - hueAmplitude> hueCenter;
     RandParam<accum88, 1, 10> hueBpm88;
-    byte hue;
+
+    // Used for the perlin hue mode
+    RandParam<unsigned short, 1000, 3000> hueTimeScale;
 
     RandParam<byte, 100, 156> saturationCenter;         // skewed towards high saturation because colors are pretty
     byte saturationAmplitude;
@@ -220,9 +228,11 @@ class SaturationGlow : public AbstractEffect
 
     void precompute(milliseconds t) override
     {
-      hue = beatsin88(hueBpm88, hueCenter - hueAmplitude, hueCenter + hueAmplitude, 255);
+      if (perlinHueMode)
+        hue = inoise8(t / hueTimeScale);
+      else
+        hue = beatsin88(hueBpm88, hueCenter - hueAmplitude, hueCenter + hueAmplitude, 255);
 
-      // TODO: maybe this should use a regular sine wave?
       FOR_EACH_STRIP {
         long scaledWave = scaledCubicWave8(t, cycleTime[iStrip], -saturationAmplitude, saturationAmplitude);
         byte sat = constrain(saturationCenter + scaledWave, 0, 255);
