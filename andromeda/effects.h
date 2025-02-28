@@ -155,24 +155,17 @@ class SaturationGlow : public AbstractEffect
   public:
     virtual const char* GetName() { return "SaturationGlow"; }
 
-    // Either choose the hue using perlin noise (slow random walk)
-    // or with a slow sine wave centered around a value.
-    RandBool perlinHueMode;
-    byte hue;
-
-    // Used for the sinusoidal hue mode
-    static const byte hueAmplitude = 30;
-    RandParam<byte, hueAmplitude, 255 - hueAmplitude> hueCenter;
-    RandParam<accum88, 1, 10> hueBpm88;
-
-    // Used for the perlin hue mode
-    RandParam<unsigned short, 1000, 3000> hueTimeScale;
+    // Time scale factor for the perlin random noise
+    RandParam<unsigned short, 500, 5000> hueTimeScale;
 
     RandParam<byte, 100, 156> saturationCenter;         // skewed towards high saturation because colors are pretty
     byte saturationAmplitude;
 
+    // Each strip has a random cycle time
     std::vector<RandParam<milliseconds, (1 MINUTES), (4 MINUTES)>> cycleTime;
-    std::vector<CRGB> color;
+
+    byte hue;                   // current hue (same for all strips)
+    std::vector<CRGB> color;    // specific color per strip
 
     SaturationGlow() :
       cycleTime(NUM_STRIPS),  // this SHOULD call the default constructor of RandParam, picking 7 random values. I think.
@@ -183,10 +176,7 @@ class SaturationGlow : public AbstractEffect
 
     void precompute(milliseconds t) override
     {
-      if (perlinHueMode)
-        hue = inoise8(t / hueTimeScale);
-      else
-        hue = beatsin88(hueBpm88, hueCenter - hueAmplitude, hueCenter + hueAmplitude, 255);
+      hue = inoise8(t / hueTimeScale);
 
       FOR_EACH_STRIP {
         long scaledWave = scaledCubicWave8(t, cycleTime[iStrip], -saturationAmplitude, saturationAmplitude);
