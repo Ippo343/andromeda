@@ -21,8 +21,8 @@ class MissionControl
     // These parameters control how long an effect lasts and how quickly it fades in and out
     milliseconds FADE_IN_DURATION  = 2500;
     milliseconds FADE_OUT_DURATION = 5000;
-    milliseconds MIN_EFFECT_DURATION = 1 MINUTES;
-    milliseconds MAX_EFFECT_DURATION = 5 MINUTES;
+    milliseconds MIN_EFFECT_DURATION = 2 MINUTES;
+    milliseconds MAX_EFFECT_DURATION = 10 MINUTES;
 
     // These contain the actual timestamps to plan the fade in/out and the transition to the next effect
     milliseconds effectStart = 0;       // time when the current effect started
