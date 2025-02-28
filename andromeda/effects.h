@@ -216,8 +216,8 @@ class PaletteWave : public AbstractEffect
     virtual const char* GetName() { return "PaletteWave"; }
 
     CRGBPalette256 palette;
-    RandParam<byte, 2, 10> bpm;
-    RandParam<byte, 1, 5> scale;
+    RandParam<byte, 3, 8> bpm;
+    RandParam<int, 5, 10> scale;
 
     PaletteWave()
     {
