@@ -59,7 +59,7 @@ class ElectricSparks : public AbstractEffect
     // We roll a dice every frame for every led, so the chance must be really small.
     // These are values that I like experimentally, I cannot justify them.
     // TODO: better way to define the frequency
-    unsigned int DICE_LIMIT = 100000;
+    constexpr static unsigned int DICE_LIMIT = 100000;
     RandParam<byte, 5, 20> sparkChance;
 
     // Chance that a spark becomes bigger, rolled out of 100.
@@ -74,10 +74,9 @@ class ElectricSparks : public AbstractEffect
       memset8(newValues, 0, NUM_STRIPS * LEDS_PER_STRIP);
     }
 
-    byte avg38(byte a, byte b, byte c)
+    inline byte avg38(int a, int b, int c)
     {
-      int newV = a + b + c;
-      return newV / 3;
+      return (a + b + c) / 3;
     }
 
     void updatePalette()
