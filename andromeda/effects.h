@@ -49,6 +49,12 @@ class ElectricSparks : public AbstractEffect
 
     CRGBPalette256 palette;
 
+    // Time scale factor for the perlin random noise
+    RandParam<unsigned short, 200, 2000> hueTimeScale;
+
+    // Current base hue (updated based on perlin noise)
+    byte hue;
+
     // This is tricky to figure out if not by trial and error.
     // We roll a dice every frame for every led, so the chance must be really small.
     // These are values that I like experimentally, I cannot justify them.
@@ -74,29 +80,41 @@ class ElectricSparks : public AbstractEffect
       return newV / 3;
     }
 
-    void randomize() override
+    void updatePalette()
     {
-      // Create a new random palette:
-      // - the first color at index 0 is random and fully saturated;
+      // Create the palette based on the current hue.
+      // - the first color at index 0 is the current hue, fully saturated;
       // - the last color is the complementary color of the base color, but partially desaturated
       // - the 1/3 color is the same as the base color, but half-saturated;
       // - the 2/3 color is pure white/
       // This logic was picked by trial and error and looks pretty nice.
 
-      std::vector<CHSV> colors = randomComplementaryColors(2);
-      CHSV desat = colors[0]; desat.s = 128;
+      CHSV base = CHSV(hue, 255, 255);
+      CHSV comp = CHSV(((short)hue + 128) % 256, 128, 255);
+      CHSV desat = base; desat.s = 128;
       CHSV white = CHSV(0, 0, 255);
-      colors[1].s = 128;
 
-      CHSVPalette16 paletteTemp(colors[0], desat, white, colors[1]);
+      CHSVPalette16 paletteTemp(base, desat, white, comp);
 
       // Upscale the palette so no interpolation is needed while running.
       // gives a completely imperceptible performace boost.
       UpscalePalette(paletteTemp, palette);
     }
 
+    void randomize() override
+    {
+      hue = random(0, 256);
+      updatePalette();
+    }
+
     void precompute(milliseconds t) override
     {
+      EVERY_N_MILLISECONDS(100)
+      {
+        hue = inoise8(t / hueTimeScale);
+        updatePalette();
+      }
+
       FOR_EACH_STRIP {
 
         // Value diffusion between neighbouring LEDs:
