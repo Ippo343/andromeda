@@ -119,8 +119,10 @@ class Comms
       client.println();
 
       // TODO: way more controls (depends on polishing the control logic)
+      client.print("<body style=\"background-color:1a1a1a;\">");
       client.print("<p style=\"font-size:7vw;\"><a href=\"/N\">Next</a><br></p>");
       client.print("<p style=\"font-size:7vw;\"><a href=\"/H\">Hold</a><br></p>");
+      client.print("</body>");
 
       // End the HTTP response
       client.println();
