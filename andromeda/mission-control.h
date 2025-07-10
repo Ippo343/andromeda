@@ -18,6 +18,9 @@ class MissionControl
     // The effect that is currently running
     AbstractEffect*    effect;
 
+    // Main ON/OFF switch. If OFF, power down and do nothing.
+    bool ON = true;
+
     // These parameters control how long an effect lasts and how quickly it fades in and out
     milliseconds FADE_IN_DURATION  = 2500;
     milliseconds FADE_OUT_DURATION = 5000;
@@ -141,8 +144,29 @@ class MissionControl
       Log.noticeln("Holding current effect forever");
     }
 
+    void powerOff()
+    {
+      // Immediately switch off all the lights and prevent further updates
+      paint(CRGB::Black);
+      FastLED.show();
+      ON = false;
+    }
+
+    void powerOn()
+    {
+      // Re-eanble further update and set the next transition to happen immediately.
+      // This forces the cycle to restart as soon as the lights come on,
+      // so we restart with a new animation and not in the middle of whatever was interrupted
+      // by the power off command
+      ON = true;
+      nextTransition = millis();
+    }
+
     void update(milliseconds t)
     {
+      if (!ON)
+        return;
+
       if (t >= nextTransition)
       {
         handleTransition();

@@ -28,6 +28,12 @@ class Comms
 
     bool setup()
     {
+      // This doesn't actually work on an R4 :(
+      // That's because the R4 is actually delegating the WiFi to an ESP32,
+      // and the WiFi library does not support setting the hostname from the ESP32 core.
+      // But who knows, if one day support is added, we are ready.
+      WiFi.setHostname("Andromeda");
+
       status = WiFi.begin(WIFI_SSID, WIFI_PASS);
 
       // Only do one attempt to connect
@@ -104,6 +110,16 @@ class Comms
           {
             mc.holdEffect();
           }
+
+          if (currentLine.endsWith("GET /D"))
+          {
+            mc.powerOff();
+          }
+
+          if (currentLine.endsWith("GET /U"))
+          {
+            mc.powerOn();
+          }
         }
       }
 
@@ -124,6 +140,8 @@ class Comms
       client.print("<body style=\"background-color:1a1a1a;\">");
       client.print("<p style=\"font-size:7vw;\"><a href=\"/N\">Next</a><br></p>");
       client.print("<p style=\"font-size:7vw;\"><a href=\"/H\">Hold</a><br></p>");
+      client.print("<p style=\"font-size:7vw;\"><a href=\"/D\">Off</a><br></p>");
+      client.print("<p style=\"font-size:7vw;\"><a href=\"/U\">On</a><br></p>");
       client.print("</body>");
 
       // End the HTTP response
