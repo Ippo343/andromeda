@@ -4,8 +4,8 @@
 #include <ArduinoLog.h>
 #include <FastLED.h>
 
-#include "utils.h"
 #include "geometry.h"
+#include "utils.h"
 #include "moodlight.h"
 #include "control-hints.h"
 #include "effects.h"
