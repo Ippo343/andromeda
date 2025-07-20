@@ -4,7 +4,8 @@
 // The adopter module for general utilities,
 // like typedefs that I like and small functions reused everywhere
 
-#include <stdint.h> // uint32_t
+#include <stdint.h>   // uint8_t
+#include <Arduino.h>
 
 #define byte          uint8_t
 #define milliseconds  unsigned long

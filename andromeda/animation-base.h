@@ -4,6 +4,7 @@
 #include "utils.h"
 #include "geometry.h"
 #include "control-hints.h"
+#include "effects-utils.h"
 
 // Abstract base class for all animations.
 // Animations are not really effects, they are meant to be small programs

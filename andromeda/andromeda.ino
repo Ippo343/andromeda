@@ -1,6 +1,8 @@
 #include "mission-control.h"
 #include "perf-monitor.h"
 #include "comms.h"
+#include "animations.h"
+#include "effects.h"
 
 MissionControl     mc    = MissionControl();
 PerformanceMonitor perf  = PerformanceMonitor();
