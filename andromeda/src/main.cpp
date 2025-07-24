@@ -3,6 +3,7 @@
 #include "comms.h"
 #include "animations.h"
 #include "effects.h"
+#include "energy-param.h"
 
 PerformanceMonitor perf  = PerformanceMonitor();
 Comms              comms = Comms(MissionControl::Instance());
