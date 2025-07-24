@@ -56,12 +56,12 @@ class ElectricSparks : public AbstractEffect
     // These are values that I like experimentally, I cannot justify them.
     // TODO: better way to define the frequency
     constexpr static unsigned int DICE_LIMIT = 100000;
-    RandParam<byte, 5, 20> sparkChance;
+    EnergyParam<byte, 5, 26> sparkChance;
 
     // Chance that a spark becomes bigger, rolled out of 100.
     // If the roll is successful, the width is doubled and then rolled again until it fails.
     // Potentially going up to the full strip in rare cases.
-    RandParam<byte, 40, 70> bigSparkChance;
+    EnergyParam<byte, 40, 70> bigSparkChance;
 
     ElectricSparks()
     {

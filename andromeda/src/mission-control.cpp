@@ -134,6 +134,8 @@ void MissionControl::update(milliseconds t)
   if (!ON)
     return;
 
+  Energy::set(slowSin(millis(), 0.5, 0, 255));
+
   if (t >= nextTransition)
   {
     handleTransition();
