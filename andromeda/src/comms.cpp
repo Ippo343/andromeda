@@ -1,3 +1,5 @@
+#ifdef ARDUINO_R4_WIFI
+
 #include "comms.h"
 
 IPAddress local_IP(192, 168, 1, 201);     // Your chosen static IP
@@ -144,3 +146,5 @@ void Comms::reply(WiFiClient& client)
 
   Log.noticeln("WiFi reply took %d milliseconds", millis() - start);
 }
+
+#endif // ARDUINO_R4_WIFI

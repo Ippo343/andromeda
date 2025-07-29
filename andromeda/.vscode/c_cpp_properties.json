@@ -87,6 +87,7 @@
                 "BACKTRACE_SUPPORT",
                 "LWIP_DNS=1",
                 "CFG_TUSB_MCU=OPT_MCU_RAXXX",
+                "ARDUINO_R4_WIFI",
                 "_RA_CORE=CM4",
                 "_RENESAS_RA_",
                 "ARDUINO=10810",
