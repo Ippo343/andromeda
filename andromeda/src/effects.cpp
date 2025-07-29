@@ -189,7 +189,10 @@ class SaturationGlow : public AbstractEffect
       cycleTime(NUM_STRIPS),  // this SHOULD call the default constructor of RandParam, picking 7 random values. I think.
       color(NUM_STRIPS)
     {
-      saturationAmplitude = min(saturationCenter, (255 - saturationCenter));
+      saturationAmplitude = min(
+        static_cast<byte>(saturationCenter),
+        static_cast<byte>(255 - saturationCenter)
+      );
     }
 
     void precompute(milliseconds t) override
