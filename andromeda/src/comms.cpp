@@ -118,9 +118,6 @@ void Comms::handleRequest(const char* line)
     case 'D':
       mc.powerOff();
       break;
-    case 'U':
-      mc.powerOn();
-      break;
     default:
       // Optional: handle unknown path
       break;
@@ -140,7 +137,6 @@ void Comms::reply(WiFiClient& client)
     "<p style='font-size:7vw;'><a href='/N'>Next</a><br></p>"
     "<p style='font-size:7vw;'><a href='/H'>Hold</a><br></p>"
     "<p style='font-size:7vw;'><a href='/D'>Off</a><br></p>"
-    "<p style='font-size:7vw;'><a href='/U'>On</a><br></p>"
     "</body>"
   );
 

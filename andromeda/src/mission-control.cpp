@@ -83,6 +83,8 @@ void MissionControl::handleTransition()
 {
   Log.noticeln("Handling transition");
 
+  ON = true;  // Ensure the system is ON
+
   runRandomAnimation();
 
   if (effect)
@@ -117,16 +119,6 @@ void MissionControl::powerOff()
   paint(CRGB::Black);
   FastLED.show();
   ON = false;
-}
-
-void MissionControl::powerOn()
-{
-  // Re-eanble further update and set the next transition to happen immediately.
-  // This forces the cycle to restart as soon as the lights come on,
-  // so we restart with a new animation and not in the middle of whatever was interrupted
-  // by the power off command
-  ON = true;
-  nextTransition = millis();
 }
 
 void MissionControl::update(milliseconds t)

@@ -69,8 +69,6 @@ class MissionControl
 
     void powerOff();
 
-    void powerOn();
-
     void update(milliseconds t);
 
     private:
