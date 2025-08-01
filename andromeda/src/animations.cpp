@@ -47,12 +47,13 @@ class SweepStrips : public AbstractAnimation
 // ============================================================================
 
 // Pretty much the same as SweepStrips, but using all the loops instead
-class SweepLoops : public AbstractAnimation
+class ClockSweep : public AbstractAnimation
 {
   public:
-    virtual const char* GetName() { return "SweepLoops"; }
+    virtual const char* GetName() { return "ClockSweep"; }
 
-    RandParam<byte, 50, 100> timeStep;
+    RandParam<unsigned short, 400, 1000> sweepDuration;
+    const unsigned short rampWidth = 1000;  // 10 degrees
 
     void run() override
     {
@@ -68,11 +69,42 @@ class SweepLoops : public AbstractAnimation
   private:
     void colorSweep(CRGB color)
     {
-      FOR_EACH_STRIP
+      // To make the effect smoother the LEDs must ramp up in brightness
+      // instead of just turning on. So if you are below thetaTail you are on,
+      // if you are in between the lead and the tail you are fading in.
+      short thetaLead = 0;  // The angle of the leading edge of the ramp
+      short thetaTail = 0;  // The angle of the trailing edge of the ramp
+
+      milliseconds start = millis();
+      milliseconds t = 0;
+
+      while (t <= sweepDuration)
       {
-        paintStrip(iStrip, color);
+        // Calculate the current angle based on the elapsed time
+        // Must include the ramp to ensure we fill up the whole circle
+        thetaLead = map(t, 0, sweepDuration, 0, FULL_CIRCLE + rampWidth);
+        thetaTail = thetaLead - rampWidth;
+
+        FOR_EACH_STRIP
+        {
+          FOR_EACH_LED
+          {
+            // Get the angle of the current LED
+            unsigned short theta = STRIPS[iStrip].leds[iLed].polar.cdegrees;
+
+            // If the LED is within the leading edge, set it to the color
+            if (theta >= thetaTail && theta <= thetaLead)
+            {
+              // Calculate the brightness based on the position in the ramp
+              byte brightness = map(thetaLead - theta, 0, rampWidth, 0, 255);
+              STRIPS[iStrip].buffer[iLed] = color % brightness;
+            }
+          }
+        }
+
         FastLED.show();
-        delay(timeStep);
+
+        t = millis() - start;
       }
     }
 };
@@ -257,7 +289,7 @@ AbstractAnimation* getRandomAnimation()
     case 1:
       return new SequentialFadeIn();
     case 2:
-      return new SweepLoops();
+      return new ClockSweep();
     case 3:
       return new Swipe();
     default:
