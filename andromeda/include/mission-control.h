@@ -14,6 +14,17 @@
 class MissionControl
 {
   public:
+
+    static MissionControl& Instance()
+    {
+      static MissionControl instance;
+      return instance;
+    }
+
+    // Prevent copy/move construction
+    MissionControl(const MissionControl&) = delete;
+    MissionControl& operator=(const MissionControl&) = delete;
+
     // The effect that is currently running
     AbstractEffect*    effect;
 
@@ -61,6 +72,9 @@ class MissionControl
     void powerOn();
 
     void update(milliseconds t);
+
+    private:
+      MissionControl() = default;
 };
 
 #endif

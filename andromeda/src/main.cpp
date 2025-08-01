@@ -3,10 +3,10 @@
 #include "comms.h"
 #include "animations.h"
 #include "effects.h"
+#include "energy-param.h"
 
-MissionControl     mc    = MissionControl();
 PerformanceMonitor perf  = PerformanceMonitor();
-Comms              comms = Comms(mc);
+Comms              comms = Comms(MissionControl::Instance());
 
 void setup() {
 
@@ -35,7 +35,7 @@ void setup() {
 void loop() {
 
   unsigned long t = millis();
-  mc.update(t);
+  MissionControl::Instance().update(t);
   perf.tick();
 
   EVERY_N_MILLISECONDS(1000) {
