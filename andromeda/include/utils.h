@@ -28,6 +28,8 @@ long scaledCubicWave8(milliseconds t, milliseconds period, long minV, long maxV)
 float Q_rsqrt(float number);
 long cmap(long x, long in_low, long in_high, long out_low, long out_high);
 float slowSin(unsigned long ms, float bpm, uint8_t minVal, uint8_t maxVal);
+void shuffle(int* array, int size);  // Fisher-Yates shuffle
+
 
 // This picks a random T value when instantiated between min and max (inclusive)
 template<typename T, T min, T max>

@@ -12,9 +12,9 @@ class SweepStrips : public AbstractAnimation
 {
   public:
     virtual const char* GetName() { return "SweepStrips"; }
-    
+
     RandParam<byte, 10, 30> timeStep;
-    
+
     void run() override
     {
       std::vector<CHSV> colors = randomComplementaryColors(3);
@@ -25,7 +25,7 @@ class SweepStrips : public AbstractAnimation
       colorSweep(CRGB::White);
       colorSweep(CRGB::Black);
     }
-    
+
   private:
     void colorSweep(CRGB color)
     {
@@ -51,9 +51,9 @@ class SweepLoops : public AbstractAnimation
 {
   public:
     virtual const char* GetName() { return "SweepLoops"; }
-    
+
     RandParam<byte, 50, 100> timeStep;
-    
+
     void run() override
     {
       std::vector<CHSV> colors = randomComplementaryColors(3);
@@ -64,7 +64,7 @@ class SweepLoops : public AbstractAnimation
       colorSweep(CRGB::White);
       colorSweep(CRGB::Black);
     }
-    
+
   private:
     void colorSweep(CRGB color)
     {
@@ -87,17 +87,22 @@ class SequentialFadeIn : public AbstractAnimation
 {
   public:
     virtual const char* GetName() { return "SequentialFadeIn"; }
-    
+
     RandParam<milliseconds, 150, 500> fadeIn;
     milliseconds fadeOut = 2 * fadeIn;
-    
+
     void run() override
     {
       paint(CRGB::Black);
 
-      FOR_EACH_STRIP
+      // Shuffle the strip indices to randomize the order of fading in
+      int strips[NUM_STRIPS];
+      for (int i = 0; i < NUM_STRIPS; i++) strips[i] = i;
+      shuffle(strips, NUM_STRIPS);
+
+      for (byte i = 0; i < NUM_STRIPS; i++)
       {
-        fadeInStrip(iStrip, randomColor(), fadeIn);
+        fadeInStrip(strips[i], randomColor(), fadeIn);
       }
 
       milliseconds start = millis();
@@ -123,12 +128,12 @@ class Swipe : public AbstractAnimation
 {
   public:
     virtual const char* GetName() { return "Swipe"; }
-    
+
     Swipe()
     {
       controlHints |= ControlHints::ROTATE_SPACE;
     }
-    
+
     void run() override
     {
       paint(CRGB::Black);

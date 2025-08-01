@@ -59,3 +59,12 @@ float slowSin(unsigned long ms, float bpm, uint8_t minVal, uint8_t maxVal)
     float norm = (raw + 1.0f) / 2.0f; // 0 to 1
     return minVal + norm * (maxVal - minVal);
 }
+
+void shuffle(int* array, int size) {
+    for (int i = size - 1; i > 0; i--) {
+        int j = random(i + 1);  // random index from 0 to i
+        int temp = array[i];
+        array[i] = array[j];
+        array[j] = temp;
+    }
+}
