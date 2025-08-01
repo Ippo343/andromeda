@@ -1,6 +1,7 @@
 #ifndef EFFECTS_H
 #define EFFECTS_H
 
+#include <math.h>
 #include <vector>
 #include <FastLED.h>
 

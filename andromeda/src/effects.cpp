@@ -462,10 +462,114 @@ class RGBodyProblem : public AbstractEffect
     }
 };
 
+
+// Dreamed up by Claude!
+// TODO: can use a lot of performance optimizations
+class HexagonalRippleGalaxy : public AbstractEffect
+{
+private:
+    // Cached values computed once per frame
+    float timeScale;
+    float spiralOffset;
+    uint8_t baseHue;
+
+public:
+    const char* GetName() override
+    {
+        return "Hexagonal Ripple Galaxy";
+    }
+
+    void precompute(milliseconds t) override
+    {
+        // Convert time to floating point seconds for smoother animation
+        timeScale = t * 0.001f;
+
+        // Slow spiral rotation (one full rotation every ~21 seconds)
+        spiralOffset = timeScale * 0.3f;
+
+        // Cycle through hue spectrum over time (full cycle every ~10 seconds)
+        baseHue = (uint8_t)((t / 40) % 256);
+    }
+
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
+    {
+        // Get position in millimeters
+        float x = led->fixedCartesian.x;
+        float y = led->fixedCartesian.y;
+
+        // Convert to polar coordinates for easier calculations
+        float radius = sqrt(x*x + y*y);
+        float angle = atan2(y, x);
+
+        // Create ripples based on distance from center
+        // Multiple ripple frequencies for complexity
+        float ripple1 = sin((radius * 0.02f) - (timeScale * 3.0f));
+        float ripple2 = sin((radius * 0.01f) - (timeScale * 2.0f)) * 0.5f;
+        float rippleSum = ripple1 + ripple2;
+
+        // Add spiral component using angle
+        float spiral = sin(angle * 3.0f + spiralOffset + radius * 0.005f);
+
+        // Combine ripples and spiral
+        float intensity = (rippleSum + spiral) * 0.25f + 0.5f;
+
+        // Clamp intensity to valid range
+        if (intensity < 0.0f) intensity = 0.0f;
+        if (intensity > 1.0f) intensity = 1.0f;
+
+        // Create color based on position and time
+        // Hue varies with angle and time
+        uint8_t hue = baseHue + (uint8_t)(angle * 40.7f) + (uint8_t)(radius * 0.1f);
+
+        // Saturation decreases towards center for a "hot core" effect
+        uint8_t saturation = 255 - (uint8_t)(radius * 0.3f);
+        if (saturation < 100) saturation = 100; // Minimum saturation
+
+        // Brightness based on our calculated intensity
+        uint8_t brightness = (uint8_t)(intensity * 255);
+
+        // Convert HSV to RGB
+        return hsv2rgb(hue, saturation, brightness);
+    }
+
+    void randomize() override
+    {
+        // Could randomize parameters like ripple speed, spiral direction, etc.
+        // For now, the effect is self-randomizing through time
+    }
+
+private:
+    // Simple HSV to RGB conversion
+    // Optimized for Arduino - uses integer math where possible
+    CRGB hsv2rgb(uint8_t h, uint8_t s, uint8_t v)
+    {
+        uint8_t r, g, b;
+
+        uint8_t region = h / 43;
+        uint8_t remainder = (h - (region * 43)) * 6;
+
+        uint8_t p = (v * (255 - s)) >> 8;
+        uint8_t q = (v * (255 - ((s * remainder) >> 8))) >> 8;
+        uint8_t t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8;
+
+        switch (region) {
+            case 0:  r = v; g = t; b = p; break;
+            case 1:  r = q; g = v; b = p; break;
+            case 2:  r = p; g = v; b = t; break;
+            case 3:  r = p; g = q; b = v; break;
+            case 4:  r = t; g = p; b = v; break;
+            default: r = v; g = p; b = q; break;
+        }
+
+        return CRGB(r, g, b);
+    }
+};
+
+
 // Picks a new random effect and randomizes it
 AbstractEffect* getRandomEffect()
 {
-  byte EFFECTS_COUNT = 8;
+  byte EFFECTS_COUNT = 10;
 
   // Set this to the index of the effect you want to force while testing
   short forcedSelection = -1;
@@ -507,6 +611,9 @@ AbstractEffect* getRandomEffect()
       break;
     case 7:
       retval = new RGBodyProblem();
+      break;
+    case 8:
+      retval = new HexagonalRippleGalaxy();
       break;
     default:
       retval = new ErrorEffect();
