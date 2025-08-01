@@ -43,37 +43,29 @@ class SweepStrips : public AbstractAnimation
 
 
 // ============================================================================
-// ClockSweep - Internal Animation Class
+// BaseSweep - Abstract Base Class for Sweep Animations
 // ============================================================================
 
-class ClockSweep : public AbstractAnimation
+class BaseSweep : public AbstractAnimation
 {
-  public:
-    virtual const char* GetName() { return "ClockSweep"; }
+  protected:
+    bool direction; // Subclasses define meaning (clockwise/outward, etc.)
+    unsigned short sweepDuration;
+    unsigned short rampWidth;
 
-    RandBool clockwise;
-    RandParam<unsigned short, 400, 800> sweepDuration;
-    const unsigned short rampWidth = 1000;  // 10 degrees
+    // Pure virtual functions that subclasses must implement
+    virtual void flipCoordinates() = 0;
+    virtual unsigned short getCoordinate(int strip, int led) = 0;
+    virtual unsigned short getMaxCoordinate() = 0;
 
     void run() override
     {
       std::vector<CHSV> colors = randomComplementaryColors(3);
 
-      // Coordinates trick: implementing both the clockwise and counterclockwise
-      // rotation results in A LOT of code and corner cases. Claude was writing that for me,
-      // but honestly it was fugly. And then I realized that I can just flip the coordinate system
-      // and only keep the clockwise implementation.
-      // The MissionControl logic resets the coordinates before each effect,
-      // so we don't even need to cleanup.
-      if (!clockwise)
+      // Coordinate system flip for direction (if needed)
+      if (!direction)
       {
-        FOR_EACH_STRIP
-        {
-          FOR_EACH_LED
-          {
-            STRIPS[iStrip].leds[iLed].polar.cdegrees = FULL_CIRCLE - STRIPS[iStrip].leds[iLed].polar.cdegrees;
-          }
-        }
+        flipCoordinates();
       }
 
       paint(CRGB::Black);
@@ -86,64 +78,77 @@ class ClockSweep : public AbstractAnimation
     }
 
   private:
-
     void colorSweep(CRGB color)
     {
-      // Simple clockwise implementation - coordinate remapping handles direction
-      short thetaLead = 0;  // The angle of the leading edge of the ramp
-      short thetaTail = 0;  // The angle of the trailing edge of the ramp
+      short coordLead = 0;  // The coordinate of the leading edge of the ramp
+      short coordTail = 0;  // The coordinate of the trailing edge of the ramp
+      unsigned short maxCoord = getMaxCoordinate();
 
       milliseconds start = millis();
       milliseconds t = 0;
 
       while (t <= sweepDuration)
       {
-        // Always sweep clockwise from 0 to full circle + rampWidth
-        thetaLead = map(t, 0, sweepDuration, 0, FULL_CIRCLE + rampWidth);
-        thetaTail = thetaLead - rampWidth;
+        // Always sweep in positive direction from 0 to max + rampWidth
+        coordLead = map(t, 0, sweepDuration, 0, maxCoord + rampWidth);
+        coordTail = coordLead - rampWidth;
 
         FOR_EACH_STRIP
         {
           FOR_EACH_LED
           {
-            unsigned short theta = STRIPS[iStrip].leds[iLed].polar.cdegrees;
+            unsigned short coord = getCoordinate(iStrip, iLed);
 
-            // Simple clockwise range check with wraparound
+            // Range check with boundary handling
             bool inRange;
-            if (thetaLead > FULL_CIRCLE)
+            if (coordLead > maxCoord)
             {
-              // Handle wraparound at the end of sweep
-              inRange = (theta >= thetaTail) || (theta <= (thetaLead - FULL_CIRCLE));
+              // Handle overflow at the boundary
+              if (maxCoord == FULL_CIRCLE) // Angular case - wraparound
+              {
+                inRange = (coord >= coordTail) || (coord <= (coordLead - maxCoord));
+              }
+              else // Radial case - no wraparound
+              {
+                inRange = (coord >= coordTail);
+              }
             }
-            else if (thetaTail < 0)
+            else if (coordTail < 0)
             {
               // Handle negative tail at the beginning of sweep
-              inRange = (theta >= (thetaTail + FULL_CIRCLE)) || (theta <= thetaLead);
+              if (maxCoord == FULL_CIRCLE) // Angular case - wraparound
+              {
+                inRange = (coord >= (coordTail + maxCoord)) || (coord <= coordLead);
+              }
+              else // Radial case - no wraparound
+              {
+                inRange = (coord <= coordLead);
+              }
             }
             else
             {
-              // Normal case - no wraparound
-              inRange = (theta >= thetaTail && theta <= thetaLead);
+              // Normal case - no boundary issues
+              inRange = (coord >= coordTail && coord <= coordLead);
             }
 
             if (inRange)
             {
               // Calculate brightness based on distance from leading edge
               short rampDistance;
-              if (thetaLead > FULL_CIRCLE && theta <= (thetaLead - FULL_CIRCLE))
+              if (maxCoord == FULL_CIRCLE && coordLead > maxCoord && coord <= (coordLead - maxCoord))
               {
-                // LED is in the wrapped portion
-                rampDistance = (thetaLead - FULL_CIRCLE) - theta;
+                // LED is in the wrapped portion (angular case)
+                rampDistance = (coordLead - maxCoord) - coord;
               }
-              else if (thetaTail < 0 && theta >= (thetaTail + FULL_CIRCLE))
+              else if (maxCoord == FULL_CIRCLE && coordTail < 0 && coord >= (coordTail + maxCoord))
               {
-                // LED is in the wrapped portion (negative tail case)
-                rampDistance = thetaLead - (theta - FULL_CIRCLE);
+                // LED is in the wrapped portion (negative tail case, angular)
+                rampDistance = coordLead - (coord - maxCoord);
               }
               else
               {
-                // Normal case
-                rampDistance = thetaLead - theta;
+                // Normal case (both angular and radial)
+                rampDistance = coordLead - coord;
               }
 
               byte brightness = map(rampDistance, 0, rampWidth, 0, 255);
@@ -153,9 +158,92 @@ class ClockSweep : public AbstractAnimation
         }
 
         FastLED.show();
-
         t = millis() - start;
       }
+    }
+};
+
+// ============================================================================
+// ClockSweep - Angular Sweep Animation
+// ============================================================================
+
+class ClockSweep : public BaseSweep
+{
+  public:
+    virtual const char* GetName() { return "ClockSweep"; }
+
+    RandBool clockwise;
+    RandParam<unsigned short, 400, 800> duration;
+
+    ClockSweep()
+    {
+      direction = clockwise;
+      sweepDuration = duration;
+      rampWidth = 1000; // 10 degrees
+    }
+
+  protected:
+    void flipCoordinates() override
+    {
+      FOR_EACH_STRIP
+      {
+        FOR_EACH_LED
+        {
+          STRIPS[iStrip].leds[iLed].polar.cdegrees = FULL_CIRCLE - STRIPS[iStrip].leds[iLed].polar.cdegrees;
+        }
+      }
+      }
+
+    unsigned short getCoordinate(int strip, int led) override
+    {
+      return STRIPS[strip].leds[led].polar.cdegrees;
+    }
+
+    unsigned short getMaxCoordinate() override
+    {
+      return FULL_CIRCLE;
+    }
+};
+
+// ============================================================================
+// RadialSweep - Radial Sweep Animation
+// ============================================================================
+
+class RadialSweep : public BaseSweep
+{
+  public:
+    virtual const char* GetName() { return "RadialSweep"; }
+
+    RandBool outward; // For external API compatibility
+    RandParam<milliseconds, 5000, 10000> duration;
+
+    RadialSweep()
+    {
+      direction = outward;
+      sweepDuration = duration;
+      rampWidth = 100; // Radial ramp width in distance units
+    }
+
+  protected:
+    void flipCoordinates() override
+    {
+      FOR_EACH_STRIP
+      {
+        FOR_EACH_LED
+        {
+          STRIPS[iStrip].leds[iLed].polar.radius = SCREEN_HALF_SIZE - STRIPS[iStrip].leds[iLed].polar.radius;
+        }
+      }
+    }
+
+    unsigned short getCoordinate(int strip, int led) override
+    {
+      return STRIPS[strip].leds[led].polar.radius;
+    }
+
+    unsigned short getMaxCoordinate() override
+    {
+      return SCREEN_HALF_SIZE;
     }
 };
 
@@ -341,6 +429,8 @@ AbstractAnimation* getRandomAnimation()
     case 2:
       return new ClockSweep();
     case 3:
+      return new RadialSweep();
+    case 4:
       return new Swipe();
     default:
       return new ErrorAnimation();
