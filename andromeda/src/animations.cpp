@@ -270,9 +270,11 @@ class SequentialFadeIn : public AbstractAnimation
       for (int i = 0; i < NUM_STRIPS; i++) strips[i] = i;
       shuffle(strips, NUM_STRIPS);
 
+      auto colors = randomComplementaryColors(NUM_STRIPS);
+
       for (byte i = 0; i < NUM_STRIPS; i++)
       {
-        fadeInStrip(strips[i], randomColor(), fadeIn);
+        fadeInStrip(strips[i], colors[i], fadeIn);
       }
 
       milliseconds start = millis();
