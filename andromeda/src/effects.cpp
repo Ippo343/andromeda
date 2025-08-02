@@ -464,14 +464,30 @@ class RGBodyProblem : public AbstractEffect
 
 
 // Dreamed up by Claude!
-// TODO: can use a lot of performance optimizations
+// Optimized for Arduino with FastLED
 class HexagonalRippleGalaxy : public AbstractEffect
 {
 private:
     // Cached values computed once per frame
-    float timeScale;
-    float spiralOffset;
-    uint8_t baseHue;
+    byte timeScale8;     // Time scaled to 0-255
+    byte spiralOffset8;  // Spiral offset as 0-255
+    byte baseHue;
+
+    // Randomizable parameters for variation
+    RandParam<byte, 3, 5> timeShift;          // Time scale divisor (>> 3 to >> 5) - faster
+    RandParam<byte, 5, 7> spiralShift;        // Spiral rotation divisor (>> 5 to >> 7) - faster
+    RandParam<byte, 6, 9> hueShift;           // Hue cycling divisor (>> 6 to >> 9) - faster
+
+    RandParam<byte, 1, 3> ripple1Freq;        // Ripple 1 frequency multiplier
+    RandParam<byte, 1, 4> ripple1TimeScale;   // Ripple 1 time multiplier
+    RandParam<byte, 0, 2> ripple2Freq;        // Ripple 2 frequency multiplier (0 = off)
+    RandParam<byte, 1, 3> ripple2TimeScale;   // Ripple 2 time multiplier
+
+    RandParam<byte, 2, 5> spiralCount;        // Number of spiral arms
+    RandParam<byte, 2, 4> spiralRadiusShift;  // Spiral-radius coupling (>> 2 to >> 4)
+
+    RandParam<byte, 0, 2> hueAngleShift;      // Hue angle contribution (>> 0 to >> 2)
+    RandParam<byte, 3, 5> hueRadiusShift;     // Hue radius contribution (>> 3 to >> 5)
 
 public:
     const char* GetName() override
@@ -481,87 +497,49 @@ public:
 
     void precompute(milliseconds t) override
     {
-        // Convert time to floating point seconds for smoother animation
-        timeScale = t * 0.001f;
+        // Scale time to 8-bit for FastLED trig functions
+        // Use randomized time scaling
+        timeScale8 = t >> static_cast<byte>(timeShift);
 
-        // Slow spiral rotation (one full rotation every ~21 seconds)
-        spiralOffset = timeScale * 0.3f;
+        // Spiral rotation with randomized speed
+        spiralOffset8 = t >> static_cast<byte>(spiralShift);
 
-        // Cycle through hue spectrum over time (full cycle every ~10 seconds)
-        baseHue = (uint8_t)((t / 40) % 256);
+        // Hue cycling with randomized period
+        baseHue = t >> static_cast<byte>(hueShift);
     }
 
     CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
     {
         // Get position in millimeters
-        float x = led->fixedCartesian.x;
-        float y = led->fixedCartesian.y;
+        float x = led->cartesian.x;
+        float y = led->cartesian.y;
 
-        // Convert to polar coordinates for easier calculations
+        // Calculate radius and angle using floating point for accuracy
         float radius = sqrt(x*x + y*y);
         float angle = atan2(y, x);
 
-        // Create ripples based on distance from center
-        // Multiple ripple frequencies for complexity
-        float ripple1 = sin((radius * 0.02f) - (timeScale * 3.0f));
-        float ripple2 = sin((radius * 0.01f) - (timeScale * 2.0f)) * 0.5f;
-        float rippleSum = ripple1 + ripple2;
+        // Convert to 8-bit values for FastLED functions
+        byte radius8 = (byte)constrain(radius * 0.49f, 0, 255);  // Scale ~520mm max radius to 255
+        byte angle8 = (byte)((angle + PI) * 40.584f);  // Map (-π,π) to (0,255)
 
-        // Add spiral component using angle
-        float spiral = sin(angle * 3.0f + spiralOffset + radius * 0.005f);
+        // Create ripples with randomized parameters
+        byte ripple1 = sin8((radius8 * static_cast<byte>(ripple1Freq)) - (timeScale8 * static_cast<byte>(ripple1TimeScale)));
+        byte ripple2 = sin8((radius8 * static_cast<byte>(ripple2Freq)) - (timeScale8 * static_cast<byte>(ripple2TimeScale)));
 
-        // Combine ripples and spiral
-        float intensity = (rippleSum + spiral) * 0.25f + 0.5f;
+        // Combine ripples
+        byte rippleSum = ((ripple1 >> 1) + (ripple2 >> 2)) + 64;
 
-        // Clamp intensity to valid range
-        if (intensity < 0.0f) intensity = 0.0f;
-        if (intensity > 1.0f) intensity = 1.0f;
+        // Add spiral component with randomized parameters
+        byte spiral = sin8((angle8 * static_cast<byte>(spiralCount)) + spiralOffset8 + (radius8 >> static_cast<byte>(spiralRadiusShift)));
 
-        // Create color based on position and time
-        // Hue varies with angle and time
-        uint8_t hue = baseHue + (uint8_t)(angle * 40.7f) + (uint8_t)(radius * 0.1f);
+        // Combine ripples and spiral for saturation modulation instead of brightness
+        byte saturationMod = ((rippleSum >> 1) + (spiral >> 1));
 
-        // Saturation decreases towards center for a "hot core" effect
-        uint8_t saturation = 255 - (uint8_t)(radius * 0.3f);
-        if (saturation < 100) saturation = 100; // Minimum saturation
+        // Create color with randomized hue distribution
+        byte hue = baseHue + (angle8 >> static_cast<byte>(hueAngleShift)) + (radius8 >> static_cast<byte>(hueRadiusShift));
 
-        // Brightness based on our calculated intensity
-        uint8_t brightness = (uint8_t)(intensity * 255);
-
-        // Convert HSV to RGB
-        return hsv2rgb(hue, saturation, brightness);
-    }
-
-    void randomize() override
-    {
-        // Could randomize parameters like ripple speed, spiral direction, etc.
-        // For now, the effect is self-randomizing through time
-    }
-
-private:
-    // Simple HSV to RGB conversion
-    // Optimized for Arduino - uses integer math where possible
-    CRGB hsv2rgb(uint8_t h, uint8_t s, uint8_t v)
-    {
-        uint8_t r, g, b;
-
-        uint8_t region = h / 43;
-        uint8_t remainder = (h - (region * 43)) * 6;
-
-        uint8_t p = (v * (255 - s)) >> 8;
-        uint8_t q = (v * (255 - ((s * remainder) >> 8))) >> 8;
-        uint8_t t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8;
-
-        switch (region) {
-            case 0:  r = v; g = t; b = p; break;
-            case 1:  r = q; g = v; b = p; break;
-            case 2:  r = p; g = v; b = t; break;
-            case 3:  r = p; g = q; b = v; break;
-            case 4:  r = t; g = p; b = v; break;
-            default: r = v; g = p; b = q; break;
-        }
-
-        return CRGB(r, g, b);
+        // Use FastLED's built-in HSV to RGB conversion
+        return CHSV(hue, 255, 255);  // Maximum saturation and brightness
     }
 };
 
