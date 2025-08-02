@@ -215,13 +215,13 @@ class RadialSweep : public BaseSweep
     virtual const char* GetName() { return "RadialSweep"; }
 
     RandBool outward; // For external API compatibility
-    RandParam<milliseconds, 5000, 10000> duration;
+    RandParam<milliseconds, 300, 750> duration;
 
     RadialSweep()
     {
       direction = outward;
       sweepDuration = duration;
-      rampWidth = 100; // Radial ramp width in distance units
+      rampWidth = 10; // Radial ramp width in distance units
     }
 
   protected:
@@ -403,7 +403,7 @@ void ErrorAnimation::run()
 
 AbstractAnimation* getRandomAnimation()
 {
-  byte ANIMATIONS_COUNT = 4;
+  byte ANIMATIONS_COUNT = 5;
 
   // Set this to the index of the animation you want to force while testing
   short forcedSelection = -1;
