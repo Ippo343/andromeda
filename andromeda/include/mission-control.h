@@ -63,13 +63,15 @@ class MissionControl
     // - pick a new effect
     // - pick the next transition time
     // - and also sprinkle random rotation transforms here and there
-    void handleTransition();
+    void handleTransition(AbstractEffect* nextEffect = nullptr, bool playAnimation = true);
 
     void holdEffect();
 
     void powerOff();
 
     void update(milliseconds t);
+
+    void staticWhite();
 
     private:
       MissionControl() = default;

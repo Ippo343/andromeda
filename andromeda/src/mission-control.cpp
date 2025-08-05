@@ -76,21 +76,28 @@ void MissionControl::runRandomAnimation()
 
 // When the transition time is reached:
 // - play an animation
-// - pick a new effect
+// - pick a new effect (unless one is passed in)
 // - pick the next transition time
 // - and also sprinkle random rotation transforms here and there
-void MissionControl::handleTransition()
+void MissionControl::handleTransition(AbstractEffect* nextEffect, bool playAnimation)
 {
   Log.noticeln("Handling transition");
 
   ON = true;  // Ensure the system is ON
 
-  runRandomAnimation();
+  if (playAnimation)
+    runRandomAnimation();
 
+  // Delete the current effect if it exists
   if (effect)
     delete effect;
 
-  effect = getRandomEffect();
+  // If a next effect is provided, use it, otherwise pick a new random effect
+  if (nextEffect)
+    effect = nextEffect;
+  else
+    effect = getRandomEffect();
+
   Log.noticeln("Picked new effect: %s", effect->GetName());
 
   if (effect->controlHints & ControlHints::ROTATE_SPACE)
@@ -105,11 +112,11 @@ void MissionControl::holdEffect()
 {
   // Set nextTransition to the maximum possible value,
   // so that it's never reached and the current effect is held forever.
-  // You also need to set the timing of the fade ramps to hold the brightness at max.
+  // You also need to set the timing of the fade out ramp to hold the brightness at max.
   // Note that using Next from the web UI resets the transition and restarts the cycle.
   nextTransition = ~0UL;
-  fadeInEnd      =  0;
   fadeOutStart   = ~0UL;
+
   Log.noticeln("Holding current effect forever");
 }
 
@@ -141,4 +148,10 @@ void MissionControl::update(milliseconds t)
   effect->postprocess(t);
 
   FastLED.show();
+}
+
+void MissionControl::staticWhite()
+{
+  handleTransition(new StaticWhite(), false);
+  holdEffect();
 }
