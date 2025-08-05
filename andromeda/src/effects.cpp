@@ -547,7 +547,7 @@ public:
 // Picks a new random effect and randomizes it
 AbstractEffect* getRandomEffect()
 {
-  byte EFFECTS_COUNT = 10;
+  byte EFFECTS_COUNT = 9;
 
   // Set this to the index of the effect you want to force while testing
   short forcedSelection = -1;
