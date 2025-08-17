@@ -18,7 +18,7 @@ void MissionControl::setNextTransition()
 //    /                \
 // effectStart      nextTransition
 //
-byte MissionControl::getBrightness(milliseconds t)
+byte MissionControl::getBrightness(milliseconds_t t)
 {
   byte brightness = 0;
 
@@ -30,12 +30,12 @@ byte MissionControl::getBrightness(milliseconds t)
   }
   else if (t < fadeInEnd)
   {
-    milliseconds dt = (t - effectStart);
+    milliseconds_t dt = (t - effectStart);
     brightness = map(dt, 0, FADE_IN_DURATION, 0, 255);
   }
   else if (t > fadeOutStart)
   {
-    milliseconds dt = (t - fadeOutStart);
+    milliseconds_t dt = (t - fadeOutStart);
     brightness = map(dt, 0, FADE_OUT_DURATION, 255, 0);
   }
 
@@ -128,7 +128,7 @@ void MissionControl::powerOff()
   ON = false;
 }
 
-void MissionControl::update(milliseconds t)
+void MissionControl::update(milliseconds_t t)
 {
   if (!ON)
     return;

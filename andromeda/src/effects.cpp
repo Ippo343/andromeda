@@ -14,7 +14,7 @@ class IndividualStripMoodlight : public AbstractEffect
     MoodLight moodlights[NUM_STRIPS];
     CRGB colors[NUM_STRIPS];
 
-    void precompute(milliseconds t) override
+    void precompute(milliseconds_t t) override
     {
       FOR_EACH_STRIP
       {
@@ -22,7 +22,7 @@ class IndividualStripMoodlight : public AbstractEffect
       }
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
     {
       return colors[strip->idx];
     }
@@ -103,7 +103,7 @@ class ElectricSparks : public AbstractEffect
       updatePalette();
     }
 
-    void precompute(milliseconds t) override
+    void precompute(milliseconds_t t) override
     {
       EVERY_N_MILLISECONDS(100)
       {
@@ -126,7 +126,7 @@ class ElectricSparks : public AbstractEffect
       }
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
     {
       // Random injection of new spikes
       if (random(DICE_LIMIT) < sparkChance)
@@ -148,7 +148,7 @@ class ElectricSparks : public AbstractEffect
       return ColorFromPalette(palette, preValues[strip->idx][led->idx]);
     }
 
-    void postprocess(milliseconds t) override
+    void postprocess(milliseconds_t t) override
     {
       // Dissipate the energy to lower values
       FOR_EACH_STRIP
@@ -180,7 +180,7 @@ class SaturationGlow : public AbstractEffect
     byte saturationAmplitude;
 
     // Each strip has a random cycle time
-    std::vector<RandParam<milliseconds, (1 MINUTES), (4 MINUTES)>> cycleTime;
+    std::vector<RandParam<milliseconds_t, (1 MINUTES), (4 MINUTES)>> cycleTime;
 
     byte hue;                   // current hue (same for all strips)
     std::vector<CRGB> color;    // specific color per strip
@@ -195,7 +195,7 @@ class SaturationGlow : public AbstractEffect
       );
     }
 
-    void precompute(milliseconds t) override
+    void precompute(milliseconds_t t) override
     {
       hue = inoise8(t / hueTimeScale);
 
@@ -207,7 +207,7 @@ class SaturationGlow : public AbstractEffect
       }
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
     {
       return color[strip->idx];
     }
@@ -236,7 +236,7 @@ class PaletteWave : public AbstractEffect
       UpscalePalette(palette16, palette);
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
     {
       int v = (led->cartesian.x + led->cartesian.y) / (int)scale;
       byte value = beatsin8(bpm, 0, 255, 0, v);
@@ -253,7 +253,7 @@ class NinjaStar : public AbstractEffect
       return "NinjaStar";
     }
 
-    RandParam<milliseconds, 5000, 5000> duration;
+    RandParam<milliseconds_t, 5000, 5000> duration;
     RandParam<unsigned short, 6, 6> beams;
     RandSign flip;
 
@@ -263,14 +263,14 @@ class NinjaStar : public AbstractEffect
     CRGB outerColor;
     byte offset;
 
-    void precompute(milliseconds t) override
+    void precompute(milliseconds_t t) override
     {
       innerColor = inner.evaluate();
       outerColor = outer.evaluate();
       offset = map((flip * t) % duration, 0, duration, 0, 255);
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
     {
       // TODO: great opportunity for an additional set of coordinates stored in the LED
       // This would allow effects to precompute scaled LED coordinates
@@ -323,7 +323,7 @@ class PolarSwipe : public AbstractEffect
       color = randomColor();
     }
 
-    void precompute(milliseconds t) override
+    void precompute(milliseconds_t t) override
     {
       unsigned short v = beat16(bpm);
 
@@ -347,7 +347,7 @@ class PolarSwipe : public AbstractEffect
         return map(D, 0, bandWidth, 255, 0);
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
     {
       // The central strip is excluded because honestly it just looks weird,
       // it adds a sort of sudden "pop" that looks ugly
@@ -372,7 +372,7 @@ class PolarMoodlight : public AbstractEffect
     RandSine<1, 15> green;
     RandSine<1, 15> blue;
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
     {
       byte R = red.evaluate(led->polar.radius);
       byte G = green.evaluate(led->polar.radius);
@@ -430,7 +430,7 @@ class RGBodyProblem : public AbstractEffect
       return map(v, 0, 255, -SCREEN_HALF_SIZE, SCREEN_HALF_SIZE);
     }
 
-    void precompute(milliseconds t) override
+    void precompute(milliseconds_t t) override
     {
       for (byte i = 0; i < emittersCount; i++)
       {
@@ -439,7 +439,7 @@ class RGBodyProblem : public AbstractEffect
       }
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
     {
       if (emittersCount == 1)
       {
@@ -495,7 +495,7 @@ public:
         return "Hexagonal Ripple Galaxy";
     }
 
-    void precompute(milliseconds t) override
+    void precompute(milliseconds_t t) override
     {
         // Scale time to 8-bit for FastLED trig functions
         // Use randomized time scaling
@@ -508,7 +508,7 @@ public:
         baseHue = t >> static_cast<byte>(hueShift);
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
     {
         // Get position in millimeters
         float x = led->cartesian.x;

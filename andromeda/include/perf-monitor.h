@@ -12,8 +12,8 @@
 class PerformanceMonitor
 {
   private:
-    milliseconds start  = 0;
-    milliseconds end    = 0;
+    milliseconds_t start  = 0;
+    milliseconds_t end    = 0;
     int frames = 0;
 
   public:

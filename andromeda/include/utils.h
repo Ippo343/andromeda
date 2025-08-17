@@ -8,7 +8,7 @@
 #include <Arduino.h>
 
 #define byte          uint8_t
-#define milliseconds  unsigned long
+#define milliseconds_t  unsigned long
 
 #define SECONDS       * 1000
 #define MINUTES       * 60 SECONDS
@@ -24,7 +24,7 @@
 
 void seedRNGs();
 
-long scaledCubicWave8(milliseconds t, milliseconds period, long minV, long maxV);
+long scaledCubicWave8(milliseconds_t t, milliseconds_t period, long minV, long maxV);
 float Q_rsqrt(float number);
 long cmap(long x, long in_low, long in_high, long out_low, long out_high);
 float slowSin(unsigned long ms, float bpm, uint8_t minVal, uint8_t maxVal);

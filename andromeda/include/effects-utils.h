@@ -14,10 +14,10 @@ void paint(CRGB color);
 void paintStrip(byte idx, CRGB color);
 
 // Fade in a strip with the given color over the given duration
-void fadeInStrip(byte idx, CHSV color, milliseconds duration);
+void fadeInStrip(byte idx, CHSV color, milliseconds_t duration);
 
 // Fade in all strips together to the given color in the given duration
-void fadeInAllStrips(CHSV color, milliseconds duration);
+void fadeInAllStrips(CHSV color, milliseconds_t duration);
 
 // TIL this is the professional approach to generating a random color.
 // If you just generate a random RGB triplet the intensity will be all over the place,

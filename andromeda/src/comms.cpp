@@ -129,7 +129,7 @@ void Comms::handleRequest(const char* line)
 
 void Comms::reply(WiFiClient& client)
 {
-  milliseconds start = millis();
+  milliseconds_t start = millis();
 
   client.println(
     "HTTP/1.1 200 OK\r\n"

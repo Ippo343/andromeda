@@ -17,13 +17,13 @@ void paintStrip(byte idx, CRGB color)
 }
 
 // Fade in a strip with the given color over the given duration
-void fadeInStrip(byte idx, CHSV color, milliseconds duration)
+void fadeInStrip(byte idx, CHSV color, milliseconds_t duration)
 {
   paintStrip(idx, CRGB::Black);
   FastLED.show();
 
-  milliseconds start = millis();
-  milliseconds dt = 0;
+  milliseconds_t start = millis();
+  milliseconds_t dt = 0;
   do
   {
     dt = millis() - start;
@@ -36,13 +36,13 @@ void fadeInStrip(byte idx, CHSV color, milliseconds duration)
 }
 
 // Fade in all strips together to the given color in the given duration
-void fadeInAllStrips(CHSV color, milliseconds duration)
+void fadeInAllStrips(CHSV color, milliseconds_t duration)
 {
   paint(CRGB::Black);
   FastLED.show();
 
-  milliseconds start = millis();
-  milliseconds dt = 0;
+  milliseconds_t start = millis();
+  milliseconds_t dt = 0;
   do
   {
     dt = millis() - start;

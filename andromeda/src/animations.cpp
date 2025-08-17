@@ -84,8 +84,8 @@ class BaseSweep : public AbstractAnimation
       short coordTail = 0;  // The coordinate of the trailing edge of the ramp
       unsigned short maxCoord = getMaxCoordinate();
 
-      milliseconds start = millis();
-      milliseconds t = 0;
+      milliseconds_t start = millis();
+      milliseconds_t t = 0;
 
       while (t <= sweepDuration)
       {
@@ -215,7 +215,7 @@ class RadialSweep : public BaseSweep
     virtual const char* GetName() { return "RadialSweep"; }
 
     RandBool outward; // For external API compatibility
-    RandParam<milliseconds, 300, 750> duration;
+    RandParam<milliseconds_t, 300, 750> duration;
 
     RadialSweep()
     {
@@ -258,8 +258,8 @@ class SequentialFadeIn : public AbstractAnimation
   public:
     virtual const char* GetName() { return "SequentialFadeIn"; }
 
-    RandParam<milliseconds, 150, 500> fadeIn;
-    milliseconds fadeOut = 2 * fadeIn;
+    RandParam<milliseconds_t, 150, 500> fadeIn;
+    milliseconds_t fadeOut = 2 * fadeIn;
 
     void run() override
     {
@@ -277,8 +277,8 @@ class SequentialFadeIn : public AbstractAnimation
         fadeInStrip(strips[i], colors[i], fadeIn);
       }
 
-      milliseconds start = millis();
-      milliseconds dt;
+      milliseconds_t start = millis();
+      milliseconds_t dt;
       do
       {
         dt = millis() - start;
@@ -383,7 +383,7 @@ const char* ErrorAnimation::GetName()
 
 void ErrorAnimation::run()
 {
-  milliseconds flashDuration = 250;
+  milliseconds_t flashDuration = 250;
   paint(CRGB::Black);
 
   for (byte i = 0; i < 3; i++)
