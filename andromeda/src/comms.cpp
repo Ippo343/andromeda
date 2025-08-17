@@ -2,6 +2,8 @@
 
 #include "comms.h"
 
+#pragma region Arduino R4 WiFi Implementation
+
 IPAddress local_IP(192, 168, 1, 201);     // Your chosen static IP
 IPAddress gateway(192, 168, 1, 1);        // Your router's IP
 IPAddress subnet(255, 255, 255, 0);       // Usually 255.255.255.0
@@ -144,7 +146,140 @@ void Comms::reply(WiFiClient& client)
     "</body>"
   );
 
-  Log.noticeln("WiFi reply took %d milliseconds", millis() - start);
+  Log.noticeln("WiFi reply took %d milliseconds_t", millis() - start);
 }
 
+#pragma endregion
+
 #endif // ARDUINO_R4_WIFI
+
+#ifdef ESP32
+
+#include "comms.h"
+#include <ESPAsyncWebServer.h>
+
+#pragma region ESP32 Implementation
+
+const int LED_PIN = 2;  // Built-in LED on most ESP32 boards
+
+Comms::Comms(MissionControl& missionControl) :
+  server(80),
+  mc(missionControl)
+{
+}
+
+bool Comms::setup()
+{
+  // Initialize LED
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);  // Start with LED off
+
+  // ESP32 supports hostname setting properly
+  WiFi.setHostname("Andromeda");
+
+  // Configure static IP for ESP32
+  IPAddress local_IP(192, 168, 1, 232);
+  IPAddress gateway(192, 168, 1, 1);
+  IPAddress subnet(255, 255, 255, 0);
+
+  if (!WiFi.config(local_IP, gateway, subnet)) {
+    Log.errorln("Failed to configure static IP");
+  }
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+
+  // Wait for connection with 10 second timeout and LED blinking
+  unsigned long startTime = millis();
+  bool ledState = false;
+  unsigned long lastBlink = millis();
+
+  while (WiFi.status() != WL_CONNECTED && millis() - startTime < 10000) {
+    // Blink LED every 200ms during connection attempt
+    if (millis() - lastBlink > 200) {
+      ledState = !ledState;
+      digitalWrite(LED_PIN, ledState ? HIGH : LOW);
+      lastBlink = millis();
+    }
+    delay(50);  // Small delay to prevent busy-waiting
+  }
+  status = WiFi.status();
+
+  if (status != WL_CONNECTED)
+  {
+    Log.errorln("Could not connect to %s, comms disabled", WIFI_SSID);
+    digitalWrite(LED_PIN, LOW);  // Turn off LED on failure
+    return false;
+  }
+
+  // Connection successful - keep LED on
+  digitalWrite(LED_PIN, HIGH);
+
+  // Set up routes with clean lambda handlers
+  server.on("/N", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    unsigned long start = millis();
+    mc.handleTransition();
+    sendMainPage(request);
+    Log.noticeln("Request /N took %d milliseconds_t", millis() - start);
+  });
+
+  server.on("/H", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    unsigned long start = millis();
+    mc.holdEffect();
+    sendMainPage(request);
+    Log.noticeln("Request /H took %d milliseconds_t", millis() - start);
+  });
+
+  server.on("/D", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    unsigned long start = millis();
+    mc.powerOff();
+    sendMainPage(request);
+    Log.noticeln("Request /D took %d milliseconds_t", millis() - start);
+  });
+
+  server.on("/W", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    unsigned long start = millis();
+    mc.staticWhite();
+    sendMainPage(request);
+    Log.noticeln("Request /W took %d milliseconds_t", millis() - start);
+  });
+
+  // Default route (root)
+  server.on("/", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    unsigned long start = millis();
+    sendMainPage(request);
+    Log.noticeln("Request / took %d milliseconds_t", millis() - start);
+  });
+
+  server.begin();
+  printWifiStatus();
+  return true;
+}
+
+void Comms::sendMainPage(AsyncWebServerRequest *request)
+{
+  const char* html = R"(
+    <body style='background-color:#1a1a1a;'>
+      <p style='font-size:7vw;'><a href='/N'>Next</a><br></p>
+      <p style='font-size:7vw;'><a href='/H'>Hold</a><br></p>
+      <p style='font-size:7vw;'><a href='/D'>Off</a><br></p>
+      <p style='font-size:7vw;'><a href='/W'>White</a><br></p>
+    </body>
+  )";
+
+  request->send(200, "text/html", html);
+}
+
+void Comms::printWifiStatus()
+{
+  Log.noticeln("Connected to %s with IP %s (%d dBm)", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(), WiFi.RSSI());
+}
+
+void Comms::loop()
+{
+  // No loop needed! ESPAsyncWebServer handles everything asynchronously
+}
+
+#pragma endregion
+
+#endif // ESP32

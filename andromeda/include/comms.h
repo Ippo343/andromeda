@@ -2,44 +2,61 @@
 #define WEB_SERVER_H
 
 #include <ArduinoLog.h>
-#include <WiFiS3.h>
 #include "utils.h"
 #include "mission-control.h"
 #include "secrets.h"
 
+#pragma once
+
+#ifdef ARDUINO_R4_WIFI
+#include "WiFiS3.h"
+#endif
+#ifdef ESP32
+#include "WiFi.h"
+#include <ESPAsyncWebServer.h>
+#endif
+
+#ifdef ARDUINO_R4_WIFI
 extern IPAddress local_IP;
 extern IPAddress gateway;
 extern IPAddress subnet;
 extern IPAddress primaryDNS;
 extern IPAddress secondaryDNS;
 extern const byte port;
+#endif
 
 class Comms
 {
   private:
     int status = WL_IDLE_STATUS;
-    WiFiServer server;
-
     MissionControl& mc;
 
+#ifdef ARDUINO_R4_WIFI
+    WiFiServer server;
     static constexpr size_t REQUEST_LINE_BUFFER_SIZE = 64;
     static constexpr unsigned long REQUEST_TIMEOUT_MS = 100;  // Increased timeout for reliability
+#endif
+
+#ifdef ESP32
+    AsyncWebServer server;
+#endif
 
   public:
     Comms(MissionControl& missionControl);
-
     bool setup();
-
-    inline void printWifiStatus();
-
+    void printWifiStatus();
     void loop();
 
   private:
+#ifdef ARDUINO_R4_WIFI
     bool readRequestLine(WiFiClient& client, char* buffer, size_t bufferSize);
-
     void handleRequest(const char* line);
-
     void reply(WiFiClient& client);
+#endif
+
+#ifdef ESP32
+    void sendMainPage(AsyncWebServerRequest *request);
+#endif
 };
 
 #endif
