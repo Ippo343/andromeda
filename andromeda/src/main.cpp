@@ -6,6 +6,10 @@
 #include "effects.h"
 #include "energy-param.h"
 
+#ifdef ESP32
+#include <LittleFS.h>
+#endif
+
 PerformanceMonitor perf  = PerformanceMonitor();
 Comms              comms = Comms(MissionControl::Instance());
 
@@ -14,6 +18,14 @@ void setup() {
   Serial.begin(115200);
   while(!Serial && !Serial.available()) {}
   Log.begin(LOG_LEVEL_VERBOSE, &Serial, true);
+
+#ifdef ESP32
+  if (!LittleFS.begin())
+  {
+    Log.errorln("LittleFS Mount Failed");
+    return;
+  }
+#endif
 
   initializeGeometry();
   FastLED.setCorrection(TypicalLEDStrip);
