@@ -173,6 +173,7 @@ bool Comms::setup()
   digitalWrite(LED_PIN, LOW);  // Start with LED off
 
   // ESP32 supports hostname setting properly
+  WiFi.mode(WIFI_STA);
   WiFi.setHostname("Andromeda");
 
   // Configure static IP for ESP32
@@ -184,7 +185,27 @@ bool Comms::setup()
     Log.errorln("Failed to configure static IP");
   }
 
-  WiFi.mode(WIFI_STA);
+  // Enable auto reconnect
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(false);  // don’t store creds in flash
+
+  // Attach WiFi event handler
+  WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
+    switch (event) {
+      case SYSTEM_EVENT_STA_DISCONNECTED:
+        Log.warningln("WiFi lost connection, attempting reconnect...");
+        digitalWrite(LED_PIN, LOW);
+        WiFi.reconnect();
+        break;
+      case SYSTEM_EVENT_STA_GOT_IP:
+        Log.noticeln("WiFi reconnected with IP %s", WiFi.localIP().toString().c_str());
+        digitalWrite(LED_PIN, HIGH);
+        break;
+      default:
+        break;
+    }
+  });
+
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 
   // Wait for connection with 10 second timeout and LED blinking
