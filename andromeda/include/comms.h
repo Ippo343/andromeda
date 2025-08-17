@@ -45,5 +45,8 @@ class Comms
 
 #ifdef ESP32
     void sendMainPage(AsyncWebServerRequest *request);
+    static TaskHandle_t webServerTaskHandle;
+    static void webServerTask(void* parameter);
+    void setupRoutes();
 #endif
 };

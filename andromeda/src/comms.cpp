@@ -1,8 +1,7 @@
+#pragma region Arduino R4 WiFi Implementation
 #ifdef ARDUINO_R4_WIFI
 
 #include "comms.h"
-
-#pragma region Arduino R4 WiFi Implementation
 
 IPAddress local_IP(192, 168, 1, 201);     // Your chosen static IP
 IPAddress gateway(192, 168, 1, 1);        // Your router's IP
@@ -149,18 +148,17 @@ void Comms::reply(WiFiClient& client)
   Log.noticeln("WiFi reply took %d milliseconds_t", millis() - start);
 }
 
+#endif // ARDUINO_R4_WIFI
 #pragma endregion
 
-#endif // ARDUINO_R4_WIFI
-
+#pragma region ESP32 Implementation
 #ifdef ESP32
 
 #include "comms.h"
 #include <ESPAsyncWebServer.h>
 
-#pragma region ESP32 Implementation
-
 const int LED_PIN = 2;  // Built-in LED on most ESP32 boards
+TaskHandle_t Comms::webServerTaskHandle = nullptr;
 
 Comms::Comms(MissionControl& missionControl) :
   server(80),
@@ -215,44 +213,68 @@ bool Comms::setup()
   // Connection successful - keep LED on
   digitalWrite(LED_PIN, HIGH);
 
-  // Set up routes with clean lambda handlers
+  // Create web server task on Core 0
+  xTaskCreatePinnedToCore(
+    webServerTask,          // Function to implement the task
+    "WebServer",            // Name of the task
+    8192,                   // Stack size in bytes
+    this,                   // Task input parameter
+    1,                      // Priority (1 is the default, higher numbers indicate higher priority)
+    &webServerTaskHandle,   // Task handle
+    0                       // Core 0
+  );
+
+  printWifiStatus();
+  return true;
+}
+
+void Comms::webServerTask(void* parameter)
+{
+  Comms* comms = static_cast<Comms*>(parameter);
+
+  comms->setupRoutes();
+  comms->server.begin();
+  Log.noticeln("Web server started on Core %d", xPortGetCoreID());
+
+  while (true) {
+    // Keep the task alive
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+}
+
+void Comms::setupRoutes()
+{
+  // Command routes
   server.on("/N", HTTP_GET, [this](AsyncWebServerRequest *request) {
-    unsigned long start = millis();
     mc.queueWebCommand(Command::NEXT);
     sendMainPage(request);
   });
 
   server.on("/H", HTTP_GET, [this](AsyncWebServerRequest *request) {
-    unsigned long start = millis();
     mc.queueWebCommand(Command::HOLD);
     sendMainPage(request);
   });
 
   server.on("/D", HTTP_GET, [this](AsyncWebServerRequest *request) {
-    unsigned long start = millis();
     mc.queueWebCommand(Command::POWER_OFF);
     sendMainPage(request);
   });
 
   server.on("/W", HTTP_GET, [this](AsyncWebServerRequest *request) {
-    unsigned long start = millis();
     mc.queueWebCommand(Command::WHITE);
     sendMainPage(request);
   });
 
   // Default route (root)
   server.on("/", HTTP_GET, [this](AsyncWebServerRequest *request) {
-    unsigned long start = millis();
     sendMainPage(request);
   });
-
-  server.begin();
-  printWifiStatus();
-  return true;
 }
 
 void Comms::sendMainPage(AsyncWebServerRequest *request)
 {
+  milliseconds_t start = millis();
+
   const char* html = R"(
     <body style='background-color:#1a1a1a;'>
       <p style='font-size:7vw;'><a href='/N'>Next</a><br></p>
@@ -272,9 +294,7 @@ void Comms::printWifiStatus()
 
 void Comms::loop()
 {
-  // No loop needed! ESPAsyncWebServer handles everything asynchronously
 }
 
-#pragma endregion
-
 #endif // ESP32
+#pragma endregion
