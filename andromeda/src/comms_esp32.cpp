@@ -23,6 +23,13 @@ bool Comms::setup()
   }
   Log.noticeln("LittleFS mounted successfully");
 
+  // Load static files into RAM
+  if (!loadStaticFiles())
+  {
+    Log.errorln("Failed to load static files");
+    return false;
+  }
+
   // Initialize LED
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);  // Start with LED off
@@ -109,6 +116,27 @@ bool Comms::setup()
   return true;
 }
 
+bool Comms::loadStaticFiles()
+{
+  bool success = true;
+
+  // Load HTML into RAM
+  File file = LittleFS.open("/index.html", "r");
+  if (file)
+  {
+    cachedHTML = file.readString();
+    file.close();
+    Log.noticeln("Cached HTML (%d bytes)", cachedHTML.length());
+  }
+  else
+  {
+    Log.errorln("Failed to load index.html");
+    success = false;
+  }
+
+  return success;
+}
+
 void Comms::webServerTask(void* parameter)
 {
   Comms* comms = static_cast<Comms*>(parameter);
@@ -126,20 +154,10 @@ void Comms::webServerTask(void* parameter)
 
 void Comms::setupRoutes()
 {
-  // Static file routes
+  // Static file routes - served from RAM
   server.on("/", HTTP_GET, [this](AsyncWebServerRequest *request)
   {
     sendMainPage(request);
-  });
-
-  server.on("/style.css", HTTP_GET, [this](AsyncWebServerRequest *request)
-  {
-    request->send(LittleFS, "/style.css", "text/css");
-  });
-
-  server.on("/script.js", HTTP_GET, [this](AsyncWebServerRequest *request)
-  {
-    request->send(LittleFS, "/script.js", "application/javascript");
   });
 
   // Command routes - redirect back to main page after command
@@ -179,7 +197,7 @@ void Comms::sendMainPage(AsyncWebServerRequest *request)
 {
   milliseconds_t start = millis();
 
-  request->send(LittleFS, "/index.html", "text/html");
+  request->send(200, "text/html", cachedHTML);
 
   Log.noticeln("Main page served in %d ms", millis() - start);
 }
