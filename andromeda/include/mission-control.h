@@ -1,5 +1,4 @@
-#ifndef CONTROL_LOGIC_H
-#define CONTROL_LOGIC_H
+#pragma once
 
 #include <ArduinoLog.h>
 #include <FastLED.h>
@@ -10,6 +9,20 @@
 #include "control-hints.h"
 #include "effects.h"
 #include "animations.h"
+
+#ifdef ESP32
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+
+// Web command enum for the web server
+enum class Command {
+    NEXT = 'N',
+    HOLD = 'H',
+    POWER_OFF = 'D',
+    WHITE = 'W'
+};
+
+#endif
 
 class MissionControl
 {
@@ -43,6 +56,8 @@ class MissionControl
     milliseconds_t fadeInEnd;             // time when the fade in will end ( = effectStart + FADE_IN_DURATION)
     milliseconds_t fadeOutStart;          // time when the fade out will start ( = nextTransition - FADE_OUT_DURATION)
 
+    void update(milliseconds_t t);
+
     // Picks a new transition time and resets the other timestamps accordingly
     void setNextTransition();
 
@@ -58,6 +73,32 @@ class MissionControl
     // Pick a new random animation, play it, and deallocate it
     void runRandomAnimation();
 
+#ifdef ESP32
+    // Initialize the web command queue
+    void initWebQueue();
+
+    // Process any pending web commands
+    void processWebCommands();
+
+    // Queue a web command from the web server
+    bool queueWebCommand(Command command);
+#endif
+
+#ifdef ESP32
+  // The following methods are called directly and synchronously on the R4,
+  // but they must not be called directly on the ESP32 and must be queued instead.
+  // It's pretty nifty that you can change the accessibility of these methods with a define.
+  // Lowkey liking C++ rn.
+  private:
+#elif defined(ARDUINO_R4_WIFI)
+  public:
+#endif
+    void holdEffect();
+
+    void powerOff();
+
+    void staticWhite();
+
     // When the transition time is reached:
     // - play an animation
     // - pick a new effect
@@ -65,16 +106,11 @@ class MissionControl
     // - and also sprinkle random rotation transforms here and there
     void handleTransition(AbstractEffect* nextEffect = nullptr, bool playAnimation = true);
 
-    void holdEffect();
+  private:
+    MissionControl() = default;
 
-    void powerOff();
-
-    void update(milliseconds_t t);
-
-    void staticWhite();
-
-    private:
-      MissionControl() = default;
-};
-
+#ifdef ESP32
+    QueueHandle_t webCommandQueue = nullptr;
+    static constexpr int WEB_QUEUE_SIZE = 10;
 #endif
+};

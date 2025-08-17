@@ -1,5 +1,65 @@
 #include "mission-control.h"
 
+#ifdef ESP32
+// Initialize the web command queue (call this in setup)
+void MissionControl::initWebQueue()
+{
+  webCommandQueue = xQueueCreate(WEB_QUEUE_SIZE, sizeof(Command));
+  if (webCommandQueue == nullptr) {
+    Log.errorln("Failed to create web command queue");
+  } else {
+    Log.noticeln("Web command queue initialized");
+  }
+}
+
+// Process any pending web commands (call this in main loop)
+void MissionControl::processWebCommands()
+{
+  if (webCommandQueue == nullptr) return;
+
+  Command command;
+  while (xQueueReceive(webCommandQueue, &command, 0) == pdTRUE)
+  {
+    Log.noticeln("Processing web command: %c", command);
+
+    switch (command)
+    {
+      case Command::NEXT:
+        handleTransition();
+        break;
+      case Command::HOLD:
+        holdEffect();
+        break;
+      case Command::POWER_OFF:
+        powerOff();
+        break;
+      case Command::WHITE:
+        staticWhite();
+        break;
+      default:
+        Log.warningln("Unknown web command: %c", static_cast<char>(command));
+        break;
+    }
+  }
+}
+
+// Queue a web command from the web server (call this from Comms)
+bool MissionControl::queueWebCommand(Command command)
+{
+  if (webCommandQueue == nullptr) {
+    initWebQueue();
+  }
+
+  if (xQueueSend(webCommandQueue, &command, 0) == pdTRUE) {
+    Log.traceln("Queued web command: %c", command);
+    return true;
+  } else {
+    Log.warningln("Web command queue full, dropping command: %c", command);
+    return false;
+  }
+}
+#endif
+
 // Picks a new transition time and resets the other timestamps accordingly
 void MissionControl::setNextTransition()
 {

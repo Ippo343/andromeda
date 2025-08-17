@@ -1,19 +1,13 @@
 #include "mission-control.h"
 #include "perf-monitor.h"
-
-#ifdef ARDUINO_R4_WIFI
 #include "comms.h"
-#endif
 
 #include "animations.h"
 #include "effects.h"
 #include "energy-param.h"
 
 PerformanceMonitor perf  = PerformanceMonitor();
-
-#ifdef ARDUINO_R4_WIFI
 Comms              comms = Comms(MissionControl::Instance());
-#endif
 
 void setup() {
 
@@ -25,20 +19,21 @@ void setup() {
   FastLED.setCorrection(TypicalLEDStrip);
   seedRNGs();
 
-#ifdef ARDUINO_R4_WIFI
   WiFiConnectingAnimation connecting;
   connecting.run();
   if (comms.setup())
   {
     WiFiSuccessAnimation success;
     success.run();
+#ifdef ESP32
+    MissionControl::Instance().initWebQueue();
+#endif
   }
   else
   {
     ErrorAnimation error;
     error.run();
   }
-#endif
 }
 
 void loop() {
@@ -51,6 +46,10 @@ void loop() {
   EVERY_N_MILLISECONDS(1000) {
     comms.loop();
   }
+#endif
+
+#ifdef ESP32
+  MissionControl::Instance().processWebCommands();
 #endif
 
   EVERY_N_MILLISECONDS(5000) {

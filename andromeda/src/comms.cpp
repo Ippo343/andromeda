@@ -218,37 +218,32 @@ bool Comms::setup()
   // Set up routes with clean lambda handlers
   server.on("/N", HTTP_GET, [this](AsyncWebServerRequest *request) {
     unsigned long start = millis();
-    mc.handleTransition();
+    mc.queueWebCommand(Command::NEXT);
     sendMainPage(request);
-    Log.noticeln("Request /N took %d milliseconds_t", millis() - start);
   });
 
   server.on("/H", HTTP_GET, [this](AsyncWebServerRequest *request) {
     unsigned long start = millis();
-    mc.holdEffect();
+    mc.queueWebCommand(Command::HOLD);
     sendMainPage(request);
-    Log.noticeln("Request /H took %d milliseconds_t", millis() - start);
   });
 
   server.on("/D", HTTP_GET, [this](AsyncWebServerRequest *request) {
     unsigned long start = millis();
-    mc.powerOff();
+    mc.queueWebCommand(Command::POWER_OFF);
     sendMainPage(request);
-    Log.noticeln("Request /D took %d milliseconds_t", millis() - start);
   });
 
   server.on("/W", HTTP_GET, [this](AsyncWebServerRequest *request) {
     unsigned long start = millis();
-    mc.staticWhite();
+    mc.queueWebCommand(Command::WHITE);
     sendMainPage(request);
-    Log.noticeln("Request /W took %d milliseconds_t", millis() - start);
   });
 
   // Default route (root)
   server.on("/", HTTP_GET, [this](AsyncWebServerRequest *request) {
     unsigned long start = millis();
     sendMainPage(request);
-    Log.noticeln("Request / took %d milliseconds_t", millis() - start);
   });
 
   server.begin();

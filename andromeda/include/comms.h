@@ -1,28 +1,17 @@
-#ifndef WEB_SERVER_H
-#define WEB_SERVER_H
+#pragma once
 
 #include <ArduinoLog.h>
 #include "utils.h"
 #include "mission-control.h"
 #include "secrets.h"
 
-#pragma once
-
 #ifdef ARDUINO_R4_WIFI
 #include "WiFiS3.h"
 #endif
+
 #ifdef ESP32
 #include "WiFi.h"
 #include <ESPAsyncWebServer.h>
-#endif
-
-#ifdef ARDUINO_R4_WIFI
-extern IPAddress local_IP;
-extern IPAddress gateway;
-extern IPAddress subnet;
-extern IPAddress primaryDNS;
-extern IPAddress secondaryDNS;
-extern const byte port;
 #endif
 
 class Comms
@@ -58,5 +47,3 @@ class Comms
     void sendMainPage(AsyncWebServerRequest *request);
 #endif
 };
-
-#endif
