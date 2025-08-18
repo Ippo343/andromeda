@@ -171,6 +171,10 @@ void Comms::setupRoutes()
     replyWithStatus(request, 200);
   });
 
+  server.on("/fps", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(200, "text/plain", String(PerformanceMonitor::Instance().fps()));
+  });
+
   // Fallback for 404 errors
   server.onNotFound([this](AsyncWebServerRequest *request)
   {

@@ -39,10 +39,5 @@ void setup() {
 }
 
 void loop() {
-
   MissionControl::Instance().update(millis());
-
-  EVERY_N_MILLISECONDS(5000) {
-    PerformanceMonitor::Instance().stat();
-  }
 }
