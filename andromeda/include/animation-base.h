@@ -1,9 +1,10 @@
 #pragma once
 
-#include "utils.h"
-#include "geometry.h"
 #include "control-hints.h"
 #include "effects-utils.h"
+#include "geometry.h"
+#include "perf-monitor.h"
+#include "utils.h"
 
 // Abstract base class for all animations.
 // Animations are not really effects, they are meant to be small programs
@@ -28,6 +29,6 @@ class AbstractAnimation
     {
       paint(CRGB::Black);
       FastLED.setBrightness(255);
-      FastLED.show();
+      FASTLED_SHOW();
     }
 };

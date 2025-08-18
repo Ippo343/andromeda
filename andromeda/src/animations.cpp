@@ -33,7 +33,7 @@ class SweepStrips : public AbstractAnimation
         {
           STRIPS[iStrip].buffer[iLed] = color;
         }
-        FastLED.show();
+        FASTLED_SHOW();
         delay(timeStep);
       }
     }
@@ -155,7 +155,7 @@ class BaseSweep : public AbstractAnimation
           }
         }
 
-        FastLED.show();
+        FASTLED_SHOW();
         t = millis() - start;
       }
     }
@@ -282,7 +282,7 @@ class SequentialFadeIn : public AbstractAnimation
         dt = millis() - start;
         byte b = constrain(map(dt, 0, fadeOut, 255, 0), 0, 255);
         FastLED.setBrightness(b);
-        FastLED.show();
+        FASTLED_SHOW();
       }
       while (dt < fadeOut);
     }
@@ -329,7 +329,7 @@ class Swipe : public AbstractAnimation
           fadeToBlackBy(STRIPS[iStrip].buffer, LEDS_PER_STRIP, step);
         }
 
-        FastLED.show();
+        FASTLED_SHOW();
       }
     }
 };
@@ -348,7 +348,7 @@ void WiFiConnectingAnimation::run()
 {
   paint(CRGB::Black);
   paintStrip(0, CRGB::SteelBlue);
-  FastLED.show();
+  FASTLED_SHOW();
 }
 
 
@@ -365,7 +365,7 @@ void WiFiSuccessAnimation::run()
 {
   paint(CRGB::Black);
   paintStrip(0, CRGB::Green);
-  FastLED.show();
+  FASTLED_SHOW();
   delay(250);
 }
 
@@ -387,11 +387,11 @@ void ErrorAnimation::run()
   for (byte i = 0; i < 3; i++)
   {
     paintStrip(0, CRGB::Red);
-    FastLED.show();
+    FASTLED_SHOW();
     delay(flashDuration);
 
     paintStrip(0, CRGB::Black);
-    FastLED.show();
+    FASTLED_SHOW();
     delay(flashDuration);
   }
 }

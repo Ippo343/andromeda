@@ -1,8 +1,9 @@
 #pragma once
 
 #include "animation-base.h"
-#include "geometry.h"
 #include "effects-utils.h"
+#include "geometry.h"
+#include "perf-monitor.h"
 
 class WiFiConnectingAnimation : public AbstractAnimation
 {

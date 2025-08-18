@@ -20,7 +20,7 @@ void paintStrip(byte idx, CRGB color)
 void fadeInStrip(byte idx, CHSV color, milliseconds_t duration)
 {
   paintStrip(idx, CRGB::Black);
-  FastLED.show();
+  FASTLED_SHOW();
 
   milliseconds_t start = millis();
   milliseconds_t dt = 0;
@@ -30,7 +30,7 @@ void fadeInStrip(byte idx, CHSV color, milliseconds_t duration)
     byte v = constrain(map(dt, 0, duration, 0, color.v), 0, 255);
     CHSV c = CHSV(color.h, color.s, v);
     paintStrip(idx, c);
-    FastLED.show();
+    FASTLED_SHOW();
   }
   while (dt < duration);
 }
@@ -39,7 +39,7 @@ void fadeInStrip(byte idx, CHSV color, milliseconds_t duration)
 void fadeInAllStrips(CHSV color, milliseconds_t duration)
 {
   paint(CRGB::Black);
-  FastLED.show();
+  FASTLED_SHOW();
 
   milliseconds_t start = millis();
   milliseconds_t dt = 0;
@@ -51,7 +51,7 @@ void fadeInAllStrips(CHSV color, milliseconds_t duration)
     FOR_EACH_STRIP {
       paintStrip(iStrip, c);
     }
-    FastLED.show();
+    FASTLED_SHOW();
   }
   while (dt < duration);
 }

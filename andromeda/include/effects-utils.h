@@ -2,7 +2,9 @@
 
 #include <FastLED.h>
 #include <vector>
+
 #include "geometry.h"
+#include "perf-monitor.h"
 #include "utils.h"
 
 // Fills every LED with the same color

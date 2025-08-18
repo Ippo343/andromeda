@@ -36,14 +36,11 @@ void setup() {
     ErrorAnimation error;
     error.run();
   }
-
-  PerformanceMonitor::Instance().reset();
 }
 
 void loop() {
 
   MissionControl::Instance().update(millis());
-  PerformanceMonitor::Instance().tick();
 
   EVERY_N_MILLISECONDS(5000) {
     PerformanceMonitor::Instance().stat();
