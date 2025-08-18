@@ -15,7 +15,6 @@ class Comms
     int status = WL_IDLE_STATUS;
     MissionControl& mc;
     AsyncWebServer server;
-    String cachedHTML;
 
   public:
     Comms(MissionControl& missionControl);
@@ -24,7 +23,6 @@ class Comms
     void loop();
 
   private:
-    bool loadStaticFiles();
     void sendMainPage(AsyncWebServerRequest *request);
     static TaskHandle_t webServerTaskHandle;
     static void webServerTask(void* parameter);
