@@ -131,10 +131,10 @@
     <div class="container">
         <h1>Andromeda</h1>
         <div class="button-grid">
-            <a href="/N" class="btn next">Next</a>
-            <a href="/H" class="btn hold">Hold</a>
-            <a href="/D" class="btn off">Off</a>
-            <a href="/W" class="btn white">White</a>
+            <button class="btn next"  data-cmd="/N">Next</button>
+            <button class="btn hold"  data-cmd="/H">Hold</button>
+            <button class="btn off"   data-cmd="/D">Off</button>
+            <button class="btn white" data-cmd="/W">White</button>
         </div>
     </div>
 
@@ -142,8 +142,9 @@
         // Add visual feedback for button presses
         document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('.btn').forEach(btn => {
+                // ripple effect
                 btn.addEventListener('click', function(e) {
-                    // Create ripple effect
+                    e.preventDefault(); // stop navigation
                     const ripple = document.createElement('span');
                     const rect = this.getBoundingClientRect();
                     const size = Math.max(rect.width, rect.height);
@@ -162,12 +163,11 @@
                         animation: ripple 0.6s linear;
                         pointer-events: none;
                     `;
-
                     this.appendChild(ripple);
+                    setTimeout(() => ripple.remove(), 600);
 
-                    setTimeout(() => {
-                        ripple.remove();
-                    }, 600);
+                    // send POST in the background, avoid reloading the page
+                    fetch(this.dataset.cmd, { method: 'POST' });
                 });
             });
         });

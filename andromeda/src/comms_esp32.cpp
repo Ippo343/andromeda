@@ -159,35 +159,35 @@ void Comms::webServerTask(void* parameter)
 
 void Comms::setupRoutes()
 {
-  // Static file routes - served from RAM
+  // Main page
   server.on("/", HTTP_GET, [this](AsyncWebServerRequest *request)
   {
     sendMainPage(request);
   });
 
-  // Command routes - redirect back to main page after command
-  server.on("/N", HTTP_GET, [this](AsyncWebServerRequest *request)
+  // Command routes (POST only, return minimal response)
+  server.on("/N", HTTP_POST, [this](AsyncWebServerRequest *request)
   {
     mc.queueWebCommand(Command::NEXT);
-    sendMainPage(request);
+    request->send(200, "text/plain", "OK");
   });
 
-  server.on("/H", HTTP_GET, [this](AsyncWebServerRequest *request)
+  server.on("/H", HTTP_POST, [this](AsyncWebServerRequest *request)
   {
     mc.queueWebCommand(Command::HOLD);
-    sendMainPage(request);
+    request->send(200, "text/plain", "OK");
   });
 
-  server.on("/D", HTTP_GET, [this](AsyncWebServerRequest *request)
+  server.on("/D", HTTP_POST, [this](AsyncWebServerRequest *request)
   {
     mc.queueWebCommand(Command::POWER_OFF);
-    sendMainPage(request);
+    request->send(200, "text/plain", "OK");
   });
 
-  server.on("/W", HTTP_GET, [this](AsyncWebServerRequest *request)
+  server.on("/W", HTTP_POST, [this](AsyncWebServerRequest *request)
   {
     mc.queueWebCommand(Command::WHITE);
-    sendMainPage(request);
+    request->send(200, "text/plain", "OK");
   });
 
   // Fallback for 404 errors
