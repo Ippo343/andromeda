@@ -24,7 +24,7 @@ class MissionControl
 {
   public:
 
-    static MissionControl& Instance()
+    static inline MissionControl& Instance()
     {
       static MissionControl instance;
       return instance;

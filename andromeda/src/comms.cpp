@@ -1,14 +1,13 @@
 #include "comms.h"
 
 // Built-in LED (used to flash during WiFi connection for my desk tests)
-const int LED_PIN = 2;
+constexpr int LED_PIN = 2;
 
 // Task handle for RTOS to keep the task alive
 TaskHandle_t Comms::webServerTaskHandle = nullptr;
 
-Comms::Comms(MissionControl& missionControl) :
-  server(80),
-  mc(missionControl)
+Comms::Comms() :
+  server(80)
 {
 }
 
@@ -150,25 +149,25 @@ void Comms::setupRoutes()
   // Command routes (POST only, return minimal response)
   server.on("/N", HTTP_POST, [this](AsyncWebServerRequest *request)
   {
-    mc.queueWebCommand(Command::NEXT);
+    MissionControl::Instance().queueWebCommand(Command::NEXT);
     replyWithStatus(request, 200);
   });
 
   server.on("/H", HTTP_POST, [this](AsyncWebServerRequest *request)
   {
-    mc.queueWebCommand(Command::HOLD);
+    MissionControl::Instance().queueWebCommand(Command::HOLD);
     replyWithStatus(request, 200);
   });
 
   server.on("/D", HTTP_POST, [this](AsyncWebServerRequest *request)
   {
-    mc.queueWebCommand(Command::POWER_OFF);
+    MissionControl::Instance().queueWebCommand(Command::POWER_OFF);
     replyWithStatus(request, 200);
   });
 
   server.on("/W", HTTP_POST, [this](AsyncWebServerRequest *request)
   {
-    mc.queueWebCommand(Command::WHITE);
+    MissionControl::Instance().queueWebCommand(Command::WHITE);
     replyWithStatus(request, 200);
   });
 

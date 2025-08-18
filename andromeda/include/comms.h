@@ -13,16 +13,26 @@
 class Comms
 {
   public:
-    Comms(MissionControl& missionControl);
+
+    static inline Comms& Instance()
+    {
+      static Comms instance;
+      return instance;
+    }
+
+    Comms(const Comms&) = delete;
+    Comms& operator=(const Comms&) = delete;
+
     bool setup();
     void printWifiStatus();
 
   private:
+
+    Comms();
+
     int status = WL_IDLE_STATUS;
 
-    MissionControl& mc;
     AsyncWebServer server;
-
     static TaskHandle_t webServerTaskHandle;
     static void webServerTask(void* parameter);
 

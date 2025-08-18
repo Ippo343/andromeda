@@ -9,7 +9,6 @@
 #include <LittleFS.h>
 
 PerformanceMonitor perf  = PerformanceMonitor();
-Comms              comms = Comms(MissionControl::Instance());
 
 void setup() {
 
@@ -29,7 +28,7 @@ void setup() {
 
   WiFiConnectingAnimation connecting;
   connecting.run();
-  if (comms.setup())
+  if (Comms::Instance().setup())
   {
     WiFiSuccessAnimation success;
     success.run();
