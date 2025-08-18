@@ -3,6 +3,7 @@
 #include "comms.h"
 #include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
+#include <ESPmDNS.h>
 
 const int LED_PIN = 2;  // Built-in LED on most ESP32 boards
 TaskHandle_t Comms::webServerTaskHandle = nullptr;
@@ -21,7 +22,6 @@ bool Comms::setup()
     Log.errorln("LittleFS Mount Failed");
     return false;
   }
-  Log.noticeln("LittleFS mounted successfully");
 
   // Load static files into RAM
   if (!loadStaticFiles())
@@ -100,6 +100,11 @@ bool Comms::setup()
 
   // Connection successful - keep LED on
   digitalWrite(LED_PIN, HIGH);
+
+  if (!MDNS.begin("andromeda"))
+  {
+    Log.errorln("MDNS failed to start");
+  }
 
   // Create web server task on Core 0
   xTaskCreatePinnedToCore(
