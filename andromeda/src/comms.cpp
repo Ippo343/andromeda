@@ -1,6 +1,9 @@
 #include "comms.h"
 
-const int LED_PIN = 2;  // Built-in LED on most ESP32 boards
+// Built-in LED (used to flash during WiFi connection for my desk tests)
+const int LED_PIN = 2;
+
+// Task handle for RTOS to keep the task alive
 TaskHandle_t Comms::webServerTaskHandle = nullptr;
 
 Comms::Comms(MissionControl& missionControl) :
@@ -11,18 +14,9 @@ Comms::Comms(MissionControl& missionControl) :
 
 bool Comms::setup()
 {
-  // Initialize LittleFS
-  if (!LittleFS.begin())
-  {
-    Log.errorln("LittleFS Mount Failed");
-    return false;
-  }
-
-  // Initialize LED
   pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, LOW);  // Start with LED off
+  digitalWrite(LED_PIN, LOW);
 
-  // ESP32 supports hostname setting properly
   WiFi.mode(WIFI_STA);
   WiFi.setHostname("Andromeda");
 
@@ -30,7 +24,6 @@ bool Comms::setup()
   IPAddress local_IP(192, 168, 1, 232);
   IPAddress gateway(192, 168, 1, 1);
   IPAddress subnet(255, 255, 255, 0);
-
   if (!WiFi.config(local_IP, gateway, subnet))
   {
     Log.errorln("Failed to configure static IP");
@@ -38,9 +31,14 @@ bool Comms::setup()
 
   // Enable auto reconnect
   WiFi.setAutoReconnect(true);
-  WiFi.persistent(false);  // don't store creds in flash
 
-  // Attach WiFi event handler
+  // Disable persistent WiFi credentials.
+  // This is an unnecessary optimization: our credentials are hardcoded,
+  // so no point storing them in flash with pointless writes.
+  // TODO: make the credentials configurable by the user
+  WiFi.persistent(false);
+
+  // Attach WiFi event handler for reconnection
   WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info)
   {
     switch (event)
@@ -62,11 +60,12 @@ bool Comms::setup()
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 
   // Wait for connection with 10 second timeout and LED blinking
-  unsigned long startTime = millis();
+  milliseconds_t startTime = millis();
+  milliseconds_t lastBlink = millis();
+  milliseconds_t connectTimeout = 10 SECONDS;
   bool ledState = false;
-  unsigned long lastBlink = millis();
 
-  while (WiFi.status() != WL_CONNECTED && millis() - startTime < 10000)
+  while (WiFi.status() != WL_CONNECTED && millis() - startTime < connectTimeout)
   {
     // Blink LED every 200ms during connection attempt
     if (millis() - lastBlink > 200)
@@ -77,6 +76,7 @@ bool Comms::setup()
     }
     delay(50);  // Small delay to prevent busy-waiting
   }
+
   status = WiFi.status();
 
   if (status != WL_CONNECTED)
@@ -89,6 +89,9 @@ bool Comms::setup()
   // Connection successful - keep LED on
   digitalWrite(LED_PIN, HIGH);
 
+  // Enable Multicast-DNS: this enables compatible browsers
+  // to find the device by visiting "andromeda.local" without needing to know the IP address!
+  // ... of course it doesn't work on Windows, why do you ask?
   if (!MDNS.begin("andromeda"))
   {
     Log.errorln("MDNS failed to start");
@@ -102,13 +105,15 @@ bool Comms::setup()
     this,                   // Task input parameter
     1,                      // Priority (1 is the default, higher numbers indicate higher priority)
     &webServerTaskHandle,   // Task handle
-    0                       // Core 0
+    0                       // Core 0 (low-prio network stack core)
   );
 
   printWifiStatus();
+
   return true;
 }
 
+// This is the code for the RTOS task that keeps the server alive
 void Comms::webServerTask(void* parameter)
 {
   Comms* comms = static_cast<Comms*>(parameter);
@@ -119,9 +124,17 @@ void Comms::webServerTask(void* parameter)
 
   while (true)
   {
-    // Keep the task alive
+    // There is no need to do anything else here,
+    // because the ESPAsyncWebServer handles everything in the background
+    // using interrupts and callbacks.
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
+}
+
+// Quick helper to reply to a request with a status code and message
+inline void replyWithStatus(AsyncWebServerRequest *request, int statusCode, const String &message = "OK")
+{
+  request->send(statusCode, "text/plain", message);
 }
 
 void Comms::setupRoutes()
@@ -129,55 +142,45 @@ void Comms::setupRoutes()
   // Main page
   server.on("/", HTTP_GET, [this](AsyncWebServerRequest *request)
   {
-    sendMainPage(request);
+    milliseconds_t start = millis();
+    request->send(LittleFS, "/index.html", "text/html");
+    Log.noticeln("Main page served in %d ms", millis() - start);
   });
 
   // Command routes (POST only, return minimal response)
   server.on("/N", HTTP_POST, [this](AsyncWebServerRequest *request)
   {
     mc.queueWebCommand(Command::NEXT);
-    request->send(200, "text/plain", "OK");
+    replyWithStatus(request, 200);
   });
 
   server.on("/H", HTTP_POST, [this](AsyncWebServerRequest *request)
   {
     mc.queueWebCommand(Command::HOLD);
-    request->send(200, "text/plain", "OK");
+    replyWithStatus(request, 200);
   });
 
   server.on("/D", HTTP_POST, [this](AsyncWebServerRequest *request)
   {
     mc.queueWebCommand(Command::POWER_OFF);
-    request->send(200, "text/plain", "OK");
+    replyWithStatus(request, 200);
   });
 
   server.on("/W", HTTP_POST, [this](AsyncWebServerRequest *request)
   {
     mc.queueWebCommand(Command::WHITE);
-    request->send(200, "text/plain", "OK");
+    replyWithStatus(request, 200);
   });
 
   // Fallback for 404 errors
   server.onNotFound([this](AsyncWebServerRequest *request)
   {
     Log.warningln("404 Not Found: %s", request->url().c_str());
-    request->send(404, "text/plain", "Not Found");
+    replyWithStatus(request, 404, "Not Found");
   });
-}
-
-void Comms::sendMainPage(AsyncWebServerRequest *request)
-{
-  milliseconds_t start = millis();
-  request->send(LittleFS, "/index.html", "text/html");
-  Log.noticeln("Main page served in %d ms", millis() - start);
 }
 
 void Comms::printWifiStatus()
 {
   Log.noticeln("Connected to %s with IP %s (%d dBm)", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(), WiFi.RSSI());
-}
-
-void Comms::loop()
-{
-  // Empty for ESP32 - using async web server
 }

@@ -33,7 +33,6 @@ void setup() {
   {
     WiFiSuccessAnimation success;
     success.run();
-    MissionControl::Instance().initWebQueue();
   }
   else
   {
@@ -47,8 +46,6 @@ void loop() {
   unsigned long t = millis();
   MissionControl::Instance().update(t);
   perf.tick();
-
-  MissionControl::Instance().processWebCommands();
 
   EVERY_N_MILLISECONDS(5000) {
     perf.stat();

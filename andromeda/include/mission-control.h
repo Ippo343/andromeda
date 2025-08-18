@@ -2,16 +2,15 @@
 
 #include <ArduinoLog.h>
 #include <FastLED.h>
-
-#include "geometry.h"
-#include "utils.h"
-#include "moodlight.h"
-#include "control-hints.h"
-#include "effects.h"
-#include "animations.h"
-
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
+
+#include "animations.h"
+#include "control-hints.h"
+#include "effects.h"
+#include "geometry.h"
+#include "moodlight.h"
+#include "utils.h"
 
 // Web command enum for the web server
 enum class Command {
@@ -35,8 +34,16 @@ class MissionControl
     MissionControl(const MissionControl&) = delete;
     MissionControl& operator=(const MissionControl&) = delete;
 
+    // The main update loop: renders a new frame and then checks for new commands
+    void update(milliseconds_t t);
+
+    // Queue a web command from the comms
+    bool queueWebCommand(Command command);
+
+  private:
+
     // The effect that is currently running
-    AbstractEffect*    effect;
+    AbstractEffect* effect;
 
     // Main ON/OFF switch. If OFF, power down and do nothing.
     bool ON = true;
@@ -53,8 +60,6 @@ class MissionControl
     milliseconds_t fadeInEnd;             // time when the fade in will end ( = effectStart + FADE_IN_DURATION)
     milliseconds_t fadeOutStart;          // time when the fade out will start ( = nextTransition - FADE_OUT_DURATION)
 
-    void update(milliseconds_t t);
-
     // Picks a new transition time and resets the other timestamps accordingly
     void setNextTransition();
 
@@ -70,20 +75,13 @@ class MissionControl
     // Pick a new random animation, play it, and deallocate it
     void runRandomAnimation();
 
-    // Initialize the web command queue
-    void initWebQueue();
-
-    // Process any pending web commands
-    void processWebCommands();
-
-    // Queue a web command from the web server
-    bool queueWebCommand(Command command);
-
-  private:
+    // Hold the current effect forever
     void holdEffect();
 
+    // Power off the LEDs and wait
     void powerOff();
 
+    // Switch to a static white color and hold forever (lamp mode)
     void staticWhite();
 
     // When the transition time is reached:
@@ -93,8 +91,13 @@ class MissionControl
     // - and also sprinkle random rotation transforms here and there
     void handleTransition(AbstractEffect* nextEffect = nullptr, bool playAnimation = true);
 
-  private:
-    MissionControl() = default;
+    // Process any pending web commands
+    void processWebCommands();
+
+    // Initialize the web command queue
+    void initWebQueue();
+
+    MissionControl() { initWebQueue(); }
 
     QueueHandle_t webCommandQueue = nullptr;
     static constexpr int WEB_QUEUE_SIZE = 10;

@@ -1,20 +1,21 @@
 #include "mission-control.h"
 
-// Initialize the web command queue (call this in setup)
+// Initialize the web command queue
 void MissionControl::initWebQueue()
 {
   webCommandQueue = xQueueCreate(WEB_QUEUE_SIZE, sizeof(Command));
   if (webCommandQueue == nullptr) {
     Log.errorln("Failed to create web command queue");
-  } else {
-    Log.noticeln("Web command queue initialized");
   }
 }
 
-// Process any pending web commands (call this in main loop)
+// Process any pending web commands
 void MissionControl::processWebCommands()
 {
-  if (webCommandQueue == nullptr) return;
+  if (webCommandQueue == nullptr) {
+    Log.errorln("Web command queue is not initialized");
+    return;
+  }
 
   Command command;
   while (xQueueReceive(webCommandQueue, &command, 0) == pdTRUE)
@@ -42,15 +43,15 @@ void MissionControl::processWebCommands()
   }
 }
 
-// Queue a web command from the web server (call this from Comms)
+// Queue a web command from the web server
 bool MissionControl::queueWebCommand(Command command)
 {
   if (webCommandQueue == nullptr) {
-    initWebQueue();
+    Log.errorln("Web command queue is not initialized");
+    return false;
   }
 
   if (xQueueSend(webCommandQueue, &command, 0) == pdTRUE) {
-    Log.traceln("Queued web command: %c", command);
     return true;
   } else {
     Log.warningln("Web command queue full, dropping command: %c", command);
@@ -188,6 +189,8 @@ void MissionControl::powerOff()
 
 void MissionControl::update(milliseconds_t t)
 {
+  processWebCommands();
+
   if (!ON)
     return;
 
