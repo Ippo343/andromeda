@@ -1,5 +1,4 @@
-#ifndef MOODLIGHT_H
-#define MOODLIGHT_H
+#pragma once
 
 #include <FastLED.h>
 #include "utils.h"
@@ -42,5 +41,3 @@ class MoodLight
     return CRGB(r, g, b);
   }
 };
-
-#endif

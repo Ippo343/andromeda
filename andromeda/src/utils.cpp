@@ -1,6 +1,4 @@
 #include "utils.h"
-#include <Arduino.h>
-#include <FastLED.h>
 
 void seedRNGs()
 {

@@ -1,5 +1,4 @@
-#ifndef ANIMATION_BASE_H
-#define ANIMATION_BASE_H
+#pragma once
 
 #include "utils.h"
 #include "geometry.h"
@@ -32,5 +31,3 @@ class AbstractAnimation
       FastLED.show();
     }
 };
-
-#endif

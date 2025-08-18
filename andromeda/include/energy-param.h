@@ -1,5 +1,4 @@
-#ifndef ENERGY_PARAM_H
-#define ENERGY_PARAM_H
+#pragma once
 
 #include "utils.h"
 
@@ -45,5 +44,3 @@ class EnergyParam
     }
 
 };
-
-#endif

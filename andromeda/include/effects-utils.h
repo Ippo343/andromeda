@@ -1,5 +1,4 @@
-#ifndef EFFECTS_UTILS_H
-#define EFFECTS_UTILS_H
+#pragma once
 
 #include <FastLED.h>
 #include <vector>
@@ -40,5 +39,3 @@ extern const float defaultBrightnessFactor;
 // Uses the famous fast inverse square root for speed.
 // Physically correct (1/d^2) looks cooler than just inverse distance.
 byte brightnessFromEmitter(Led* led, CartesianCoordinates e, float brightnessFactor = defaultBrightnessFactor);
-
-#endif

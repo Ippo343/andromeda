@@ -1,5 +1,4 @@
-#ifndef ANDROMEDA_GEOMETRY_H
-#define ANDROMEDA_GEOMETRY_H
+#pragma once
 
 // Data related to the geometry of the mirror,
 // e.g. dimensions, number of leds, and so on
@@ -92,5 +91,3 @@ void applyGlobalRandomRotation();
 // Undoes any global coordinate transform by resetting the effective coordinates
 // to the original untransformed coordinates
 void resetGlobalTransform();
-
-#endif

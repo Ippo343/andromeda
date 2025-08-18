@@ -1,5 +1,4 @@
-#ifndef PERF_MONITOR_H
-#define PERF_MONITOR_H
+#pragma once
 
 #include <ArduinoLog.h>
 
@@ -32,5 +31,3 @@ class PerformanceMonitor
       start = millis();
     }
 };
-
-#endif

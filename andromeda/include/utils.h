@@ -1,11 +1,11 @@
-#ifndef ANDROMEDA_UTILS_H
-#define ANDROMEDA_UTILS_H
+#pragma once
 
 // The adopter module for general utilities,
 // like typedefs that I like and small functions reused everywhere
 
 #include <stdint.h>   // uint8_t
 #include <Arduino.h>
+#include <FastLED.h>
 
 #define byte          uint8_t
 #define milliseconds_t  unsigned long
@@ -77,5 +77,3 @@ class RandSine
 
     byte evaluate(long x) { return beatsin8(bpm, 0, 255, 0, sign * x); }
 };
-
-#endif

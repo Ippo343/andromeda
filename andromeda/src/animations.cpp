@@ -1,6 +1,4 @@
 #include "animations.h"
-#include "geometry.h"
-#include "effects-utils.h"
 
 // ============================================================================
 // SweepStrips - Internal Animation Class

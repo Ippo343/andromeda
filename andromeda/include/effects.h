@@ -1,5 +1,4 @@
-#ifndef EFFECTS_H
-#define EFFECTS_H
+#pragma once
 
 #include <math.h>
 #include <vector>
@@ -41,5 +40,3 @@ public:
 
 // Picks a new random effect and randomizes it
 AbstractEffect* getRandomEffect();
-
-#endif

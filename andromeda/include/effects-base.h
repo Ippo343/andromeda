@@ -1,5 +1,4 @@
-#ifndef EFFECTS_BASE_H
-#define EFFECTS_BASE_H
+#pragma once
 
 // This header defines the base classes that all effects are built upon
 
@@ -45,5 +44,3 @@ class AbstractEffect
       }
     }
 };
-
-#endif
