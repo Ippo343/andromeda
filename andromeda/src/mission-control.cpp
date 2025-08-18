@@ -67,6 +67,8 @@ void MissionControl::setNextTransition()
   fadeOutStart = fadeInEnd + random(MIN_EFFECT_DURATION, MAX_EFFECT_DURATION);
   nextTransition = fadeOutStart + FADE_OUT_DURATION;
 
+  PerformanceMonitor::Instance().reset();
+
   Log.noticeln("Next transition in %d ms", nextTransition);
 }
 
@@ -144,6 +146,11 @@ void MissionControl::handleTransition(AbstractEffect* nextEffect, bool playAnima
 
   ON = true;  // Ensure the system is ON
 
+  // Clear the effect's performance monitor first.
+  // It will stay at zero frames during the animation.
+  // TODO: what if we tick() at every FastLED.show()? That would count animations too
+  PerformanceMonitor::Instance().reset();
+
   if (playAnimation)
     runRandomAnimation();
 
@@ -189,6 +196,11 @@ void MissionControl::powerOff()
 
 void MissionControl::update(milliseconds_t t)
 {
+  // Ok I agree, this is technically wrong.
+  // We should be ticking at the end of the frame, not at the start.
+  // But it's annoying to write and how far off can we really be?
+  PerformanceMonitor::Instance().tick();
+
   processWebCommands();
 
   if (!ON)

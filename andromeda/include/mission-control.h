@@ -11,6 +11,7 @@
 #include "geometry.h"
 #include "moodlight.h"
 #include "utils.h"
+#include "perf-monitor.h"
 
 // Web command enum for the web server
 enum class Command {

@@ -47,6 +47,5 @@ void loop() {
 
   EVERY_N_MILLISECONDS(5000) {
     PerformanceMonitor::Instance().stat();
-    PerformanceMonitor::Instance().reset();
   }
 }
