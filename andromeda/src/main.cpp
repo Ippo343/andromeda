@@ -8,8 +8,6 @@
 
 #include <LittleFS.h>
 
-PerformanceMonitor perf  = PerformanceMonitor();
-
 void setup() {
 
   Serial.begin(115200);
@@ -38,15 +36,17 @@ void setup() {
     ErrorAnimation error;
     error.run();
   }
+
+  PerformanceMonitor::Instance().reset();
 }
 
 void loop() {
 
-  unsigned long t = millis();
-  MissionControl::Instance().update(t);
-  perf.tick();
+  MissionControl::Instance().update(millis());
+  PerformanceMonitor::Instance().tick();
 
   EVERY_N_MILLISECONDS(5000) {
-    perf.stat();
+    PerformanceMonitor::Instance().stat();
+    PerformanceMonitor::Instance().reset();
   }
 }
