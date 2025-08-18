@@ -1,9 +1,4 @@
-#ifdef ESP32
-
 #include "comms.h"
-#include <ESPAsyncWebServer.h>
-#include <LittleFS.h>
-#include <ESPmDNS.h>
 
 const int LED_PIN = 2;  // Built-in LED on most ESP32 boards
 TaskHandle_t Comms::webServerTaskHandle = nullptr;
@@ -216,5 +211,3 @@ void Comms::loop()
 {
   // Empty for ESP32 - using async web server
 }
-
-#endif // ESP32

@@ -1,6 +1,5 @@
 #include "mission-control.h"
 
-#ifdef ESP32
 // Initialize the web command queue (call this in setup)
 void MissionControl::initWebQueue()
 {
@@ -58,7 +57,6 @@ bool MissionControl::queueWebCommand(Command command)
     return false;
   }
 }
-#endif
 
 // Picks a new transition time and resets the other timestamps accordingly
 void MissionControl::setNextTransition()

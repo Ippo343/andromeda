@@ -10,7 +10,6 @@
 #include "effects.h"
 #include "animations.h"
 
-#ifdef ESP32
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
@@ -21,8 +20,6 @@ enum class Command {
     POWER_OFF = 'D',
     WHITE = 'W'
 };
-
-#endif
 
 class MissionControl
 {
@@ -73,7 +70,6 @@ class MissionControl
     // Pick a new random animation, play it, and deallocate it
     void runRandomAnimation();
 
-#ifdef ESP32
     // Initialize the web command queue
     void initWebQueue();
 
@@ -82,17 +78,8 @@ class MissionControl
 
     // Queue a web command from the web server
     bool queueWebCommand(Command command);
-#endif
 
-#ifdef ESP32
-  // The following methods are called directly and synchronously on the R4,
-  // but they must not be called directly on the ESP32 and must be queued instead.
-  // It's pretty nifty that you can change the accessibility of these methods with a define.
-  // Lowkey liking C++ rn.
   private:
-#elif defined(ARDUINO_R4_WIFI)
-  public:
-#endif
     void holdEffect();
 
     void powerOff();
@@ -109,8 +96,6 @@ class MissionControl
   private:
     MissionControl() = default;
 
-#ifdef ESP32
     QueueHandle_t webCommandQueue = nullptr;
     static constexpr int WEB_QUEUE_SIZE = 10;
-#endif
 };

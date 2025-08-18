@@ -6,9 +6,7 @@
 #include "effects.h"
 #include "energy-param.h"
 
-#ifdef ESP32
 #include <LittleFS.h>
-#endif
 
 PerformanceMonitor perf  = PerformanceMonitor();
 Comms              comms = Comms(MissionControl::Instance());
@@ -19,13 +17,11 @@ void setup() {
   while(!Serial && !Serial.available()) {}
   Log.begin(LOG_LEVEL_VERBOSE, &Serial, true);
 
-#ifdef ESP32
   if (!LittleFS.begin())
   {
     Log.errorln("LittleFS Mount Failed");
     return;
   }
-#endif
 
   initializeGeometry();
   FastLED.setCorrection(TypicalLEDStrip);
@@ -37,9 +33,7 @@ void setup() {
   {
     WiFiSuccessAnimation success;
     success.run();
-#ifdef ESP32
     MissionControl::Instance().initWebQueue();
-#endif
   }
   else
   {
@@ -54,15 +48,7 @@ void loop() {
   MissionControl::Instance().update(t);
   perf.tick();
 
-#ifdef ARDUINO_R4_WIFI
-  EVERY_N_MILLISECONDS(1000) {
-    comms.loop();
-  }
-#endif
-
-#ifdef ESP32
   MissionControl::Instance().processWebCommands();
-#endif
 
   EVERY_N_MILLISECONDS(5000) {
     perf.stat();
