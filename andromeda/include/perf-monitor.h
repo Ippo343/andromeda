@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ArduinoLog.h>
+#include <limits>
 #include <FastLED.h>
 
 // Use this macro instead of calling FastLED.show()
@@ -47,13 +48,31 @@ class PerformanceMonitor
             totalTime += frameTimes[i];
         }
 
-        float avgFrameTime = totalTime / (float)SAMPLE_COUNT;
-        return 1000.0f / avgFrameTime;
+        if (totalTime == 0) {
+            return std::numeric_limits<float>::quiet_NaN();
+        }
+        else
+        {
+            float avgFrameTime = totalTime / (float)SAMPLE_COUNT;
+            return 1000.0f / avgFrameTime;
+        }
     }
 
     void stat()
     {
         Log.noticeln("FPS: %F", fps());
+    }
+
+    // Called by the main loop to stop the performance monitor when the mirror is off.
+    // Otherwise, if nothing is drawn then there is no call to show(), which means the buffer
+    // never changes, which means the FPS counter on the web hangs.
+    void stop()
+    {
+      for (size_t i = 0; i < SAMPLE_COUNT; i++) {
+          frameTimes[i] = 0;
+      }
+      lastFrameTime = 0;
+      frameIndex = 0;
     }
 
   private:

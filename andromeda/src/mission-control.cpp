@@ -185,11 +185,11 @@ void MissionControl::powerOff()
   paint(CRGB::Black);
   FASTLED_SHOW();
   ON = false;
+  PerformanceMonitor::Instance().stop();
 }
 
 void MissionControl::update(milliseconds_t t)
 {
-
   processWebCommands();
 
   if (!ON)
