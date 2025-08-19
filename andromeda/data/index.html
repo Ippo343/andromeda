@@ -53,29 +53,15 @@
         }
 
         h1 {
+            background-image: var(--grad);
             font-family: 'Cinzel Decorative', serif;
             font-weight: 700;
             font-size: 5rem;
             margin-bottom: 2rem;
-
-            /* gradient at 45° with tighter repeat */
-            background: repeating-linear-gradient(
-                to bottom right,
-                #00d4ff 0%,
-                #ff00d4 10%,
-                #00ff88 20%,
-                #ffaa00 30%,
-                #ff0066 40%,
-                #00d4ff 50%
-            );
-
             background-size: 200% 200%;
-
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-
-            /* continuous diagonal movement */
             animation: gradientShift 8s linear infinite;
         }
 
@@ -171,7 +157,7 @@
     <div class="fps-display" id="fps">-- FPS</div>
 
     <div class="container">
-        <h1>A</h1>
+        <h1 id="logo">A</h1>
         <div class="button-grid">
             <button class="btn next"  data-cmd="/N">Next</button>
             <button class="btn hold"  data-cmd="/H">Hold</button>
@@ -181,7 +167,7 @@
     </div>
 
     <script>
-        // FPS monitoring
+        // FPS monitoring: periodically GET the current FPS
         function updateFPS() {
             fetch('/fps')
                 .then(r => r.text())
@@ -194,12 +180,41 @@
                     document.getElementById('fps').textContent = '-- FPS';
                 });
         }
-
         updateFPS();
         setInterval(updateFPS, 500);
 
+        // Functions to generate a new random background gradient for the logo
+        function randomHSL() {
+            const hue = Math.floor(Math.random() * 360);     // any hue
+            const sat = 100;
+            const light = 50;
+            return `hsl(${hue}, ${sat}%, ${light}%)`;
+        }
+
+        function randomGradient() {
+            // pick between 3 and 6 colors
+            const steps = 3 + Math.floor(Math.random() * 4);
+            const colors = Array.from({ length: steps }, randomHSL);
+
+            // repeat first color at end for smooth looping
+            colors.push(colors[0]);
+
+            // distribute stops evenly between 0% and 50%
+            const stopPercent = 50 / (colors.length - 1);
+            const stops = colors
+                .map((c, i) => `${c} ${(i * stopPercent).toFixed(1)}%`)
+                .join(', ');
+
+            // create repeating-linear-gradient for seamless animation
+            return `repeating-linear-gradient(to bottom right, ${stops})`;
+        }
+
         // Add visual feedback for button presses
         document.addEventListener('DOMContentLoaded', function() {
+
+            const h1 = document.getElementById("logo");
+            h1.style.setProperty('--grad', randomGradient());
+
             document.querySelectorAll('.btn').forEach(btn => {
                 // ripple effect
                 btn.addEventListener('click', function(e) {
