@@ -35,12 +35,17 @@
             border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 8px;
             padding: 0.5rem 0.8rem;
-            font-size: 0.8rem;
+            font-size: 1rem;
             color: #666;
             font-family: 'Courier New', monospace;
             font-weight: bold;
             min-width: 80px;
             text-align: center;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .fps-display.hidden {
+            opacity: 0;
+            transition: opacity 0.2s ease;
         }
 
         .container {
@@ -157,7 +162,7 @@
     </style>
 </head>
 <body>
-    <div class="fps-display" id="fps">-- FPS</div>
+    <div class="fps-display hidden" id="fps">-- FPS</div>
 
     <div class="container">
         <h1 id="logo">A</h1>
@@ -217,6 +222,11 @@
 
             const h1 = document.getElementById("logo");
             h1.style.setProperty('--grad', randomGradient());
+
+            const fpsEl = document.getElementById('fps');
+            fpsEl.addEventListener('click', () => {
+                fpsEl.classList.toggle('hidden');   // show/hide
+            });
 
             document.querySelectorAll('.btn').forEach(btn => {
                 // ripple effect
