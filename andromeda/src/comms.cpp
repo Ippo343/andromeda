@@ -189,6 +189,10 @@ inline void replyWithStatus(AsyncWebServerRequest *request, int statusCode, cons
 
 void Comms::setupRoutes()
 {
+  server.on("/common.css", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(LittleFS, "/common.css", "text/css");
+  });
+
   if (isAPMode) {
     setupAPRoutes();
   } else {
@@ -341,8 +345,6 @@ void Comms::setupStationRoutes()
         vTaskDelay(3000 / portTICK_PERIOD_MS);
         ESP.restart();
     }, "RestartTask", 2048, nullptr, 1, nullptr, 0);
-
-    return true;
   });
 
   // Fallback for 404 errors
