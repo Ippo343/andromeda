@@ -23,7 +23,7 @@ class Energy
     inline static void set(byte v) { value = constrain(v, 0, 255); }
 
   private:
-    inline static byte value = 128;
+    static byte value;
 };
 
 
