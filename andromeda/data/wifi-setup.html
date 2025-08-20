@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Andromeda WiFi Setup</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 400px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="text"], input[type="password"], select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        input[type="text"]:focus, input[type="password"]:focus, select:focus {
+            border-color: #4CAF50;
+            outline: none;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-bottom: 10px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .scan-btn {
+            background-color: #2196F3;
+        }
+        .scan-btn:hover {
+            background-color: #1976D2;
+        }
+        .reset-btn {
+            background-color: #ff4444;
+            font-size: 14px;
+            padding: 8px 12px;
+            margin-top: 20px;
+        }
+        .reset-btn:hover {
+            background-color: #cc0000;
+        }
+        .status {
+            text-align: center;
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .loading {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        #networks {
+            margin-bottom: 15px;
+        }
+        .network-option {
+            padding: 10px;
+            margin: 3px 0;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .network-option:hover {
+            background-color: #e9ecef;
+        }
+        .network-option.selected {
+            background-color: #cce5ff;
+            border-color: #2196F3;
+        }
+        .network-name {
+            font-weight: bold;
+        }
+        .network-info {
+            font-size: 12px;
+            color: #666;
+        }
+        .signal-strength {
+            font-size: 12px;
+            color: #666;
+            white-space: nowrap;
+        }
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #856404;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .info-box {
+            background-color: #e7f3ff;
+            border: 1px solid #b8daff;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #004085;
+        }
+        .show-password {
+            display: flex;
+            align-items: center;
+            margin-top: 5px;
+        }
+        .show-password input[type="checkbox"] {
+            width: auto;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛰️ Andromeda WiFi Setup</h1>
+
+        <div class="info-box">
+            <strong>Welcome!</strong><br>
+            Connect your Andromeda device to your WiFi network. The device will remember these settings and automatically connect in the future.
+        </div>
+
+        <button type="button" class="scan-btn" onclick="scanNetworks()" id="scanBtn">
+            Scan for Networks
+        </button>
+        <div id="status"></div>
+        <div id="networks"></div>
+
+        <form method="post" action="/save" id="wifiForm">
+
+            <div class="form-group">
+                <label for="ssid">WiFi Network Name (SSID):</label>
+                <input type="text" id="ssid" name="ssid" required placeholder="Enter network name or select from scan">
+            </div>
+
+            <div class="form-group">
+                <label for="password">WiFi Password:</label>
+                <input type="password" id="password" name="password" placeholder="Leave blank for open networks">
+                <div class="show-password">
+                    <input type="checkbox" id="showPassword" onchange="togglePassword()">
+                    <label for="showPassword">Show password</label>
+                </div>
+            </div>
+
+            <button type="submit" id="connectBtn">Connect to WiFi</button>
+        </form>
+
+        <div style="text-align: center; margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
+            <p style="font-size: 14px; color: #666; margin-bottom: 10px;">
+                Need to reconfigure? Clear saved credentials:
+            </p>
+            <button type="button" class="reset-btn" onclick="resetCredentials()">
+                Clear WiFi Settings
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let selectedNetwork = null;
+
+        function scanNetworks() {
+            const status = document.getElementById('status');
+            const networks = document.getElementById('networks');
+            const scanBtn = document.getElementById('scanBtn');
+
+            scanBtn.disabled = true;
+            scanBtn.innerHTML = '<span class="spinner"></span>Scanning...';
+
+            status.innerHTML = '<div class="status loading"><span class="spinner"></span>Scanning for WiFi networks...</div>';
+            networks.innerHTML = '';
+            selectedNetwork = null;
+
+            fetch('/scan')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Scan request failed');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    status.innerHTML = '';
+                    scanBtn.disabled = false;
+                    scanBtn.innerHTML = 'Scan for Networks';
+
+                    if (data.networks && data.networks.length > 0) {
+                        networks.innerHTML = '<strong>Available Networks (click to select):</strong>';
+
+                        // Sort networks by signal strength (strongest first)
+                        data.networks.sort((a, b) => b.rssi - a.rssi);
+
+                        data.networks.forEach(network => {
+                            if (network.ssid && network.ssid.trim() !== '') {
+                                const div = document.createElement('div');
+                                div.className = 'network-option';
+                                div.onclick = () => selectNetwork(network, div);
+
+                                const signalBars = getSignalBars(network.rssi);
+                                const lockIcon = network.encryption !== 'none' ? '🔒' : '🔓';
+
+                                div.innerHTML = `
+                                    <div>
+                                        <div class="network-name">${escapeHtml(network.ssid)}</div>
+                                        <div class="network-info">${network.encryption}</div>
+                                    </div>
+                                    <div class="signal-strength">
+                                        ${signalBars} ${network.rssi}dBm ${lockIcon}
+                                    </div>
+                                `;
+                                networks.appendChild(div);
+                            }
+                        });
+                    } else {
+                        networks.innerHTML = '<div class="status error">No networks found. Make sure WiFi networks are available and try scanning again.</div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Scan error:', error);
+                    status.innerHTML = '<div class="status error">Scan failed: ' + error.message + '</div>';
+                    scanBtn.disabled = false;
+                    scanBtn.innerHTML = 'Scan for Networks';
+                });
+        }
+
+        function selectNetwork(network, element) {
+            // Remove selection from all networks
+            document.querySelectorAll('.network-option').forEach(el => {
+                el.classList.remove('selected');
+            });
+
+            // Select clicked network
+            element.classList.add('selected');
+            selectedNetwork = network;
+
+            // Fill in the form
+            document.getElementById('ssid').value = network.ssid;
+
+            // Clear password field for new selection
+            document.getElementById('password').value = '';
+
+            // Focus password field if network is encrypted
+            if (network.encryption !== 'none') {
+                document.getElementById('password').focus();
+            }
+        }
+
+        function getSignalBars(rssi) {
+            if (rssi >= -50) return '▰▰▰▰';      // Excellent
+            if (rssi >= -60) return '▰▰▰▱';      // Good
+            if (rssi >= -70) return '▰▰▱▱';      // Fair
+            if (rssi >= -80) return '▰▱▱▱';      // Poor
+            return '▱▱▱▱';                       // Very poor
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function togglePassword() {
+            const passwordField = document.getElementById('password');
+            const checkbox = document.getElementById('showPassword');
+
+            passwordField.type = checkbox.checked ? 'text' : 'password';
+        }
+
+        function validateForm() {
+            const ssid = document.getElementById('ssid').value.trim();
+            const connectBtn = document.getElementById('connectBtn');
+            const form = document.getElementById('wifiForm');
+
+            if (!ssid) {
+                showStatus('Please enter a WiFi network name', 'error');
+                return false;
+            }
+
+            // Disable form and show connecting status
+            connectBtn.disabled = true;
+            connectBtn.innerHTML = '<span class="spinner"></span>Connecting...';
+
+            // Disable all form inputs
+            form.querySelectorAll('input, button').forEach(el => {
+                if (el !== connectBtn) el.disabled = true;
+            });
+
+            showStatus('Testing connection to "' + ssid + '"...', 'loading');
+            return true;
+        }
+
+        function resetCredentials() {
+            if (confirm('This will clear all saved WiFi settings and restart the device. Continue?')) {
+                showStatus('Clearing WiFi settings...', 'loading');
+
+                fetch('/reset', { method: 'POST' })
+                    .then(response => {
+                        if (response.ok) {
+                            showStatus('Settings cleared! Device is restarting...', 'success');
+                        } else {
+                            throw new Error('Reset failed');
+                        }
+                    })
+                    .catch(error => {
+                        showStatus('Reset failed: ' + error.message, 'error');
+                    });
+            }
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            const spinner = type === 'loading' ? '<span class="spinner"></span>' : '';
+            status.innerHTML = `<div class="status ${type}">${spinner}${message}</div>`;
+        }
+
+        // Auto-scan on page load
+        window.onload = function() {
+            // Small delay to ensure page is fully rendered
+            setTimeout(scanNetworks, 500);
+        };
+
+        // Handle form submission errors (if user navigates back)
+        window.addEventListener('pageshow', function(event) {
+            if (event.persisted) {
+                // Reset form state if page was cached
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('connectBtn').innerHTML = 'Connect to WiFi';
+                document.querySelectorAll('input, button').forEach(el => {
+                    el.disabled = false;
+                });
+            }
+        });
+    </script>
+</body>
+</html>
