@@ -347,6 +347,11 @@ void Comms::setupStationRoutes()
     }, "RestartTask", 2048, nullptr, 1, nullptr, 0);
   });
 
+  server.on("/logs", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    request->send(LittleFS, LOG_FILE_OLD, "text/plain");
+    request->send(LittleFS, LOG_FILE_CUR, "text/plain");
+  });
+
   // Fallback for 404 errors
   server.onNotFound([this](AsyncWebServerRequest *request)
   {

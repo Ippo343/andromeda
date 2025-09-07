@@ -30,6 +30,11 @@ long cmap(long x, long in_low, long in_high, long out_low, long out_high);
 float slowSin(unsigned long ms, float bpm, uint8_t minVal, uint8_t maxVal);
 void shuffle(int* array, int size);  // Fisher-Yates shuffle
 
+// Paths for the log files (defined in utils.cpp)
+// They need to be shared because the comms also need to know them
+// so they can serve them over HTTP
+extern const char* LOG_FILE_CUR;
+extern const char* LOG_FILE_OLD;
 
 // This picks a random T value when instantiated between min and max (inclusive)
 template<typename T, T min, T max>

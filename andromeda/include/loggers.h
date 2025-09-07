@@ -3,6 +3,8 @@
 #include <ArduinoLog.h>
 #include <LittleFS.h>
 
+#include "utils.h"
+
 // Logger extension that logs everything to a file in LittleFS
 // with simple log rotation
 class SimpleFileLog : public Print
@@ -10,9 +12,6 @@ class SimpleFileLog : public Print
 private:
   File _logFile;
   size_t _maxSize;
-
-  const char* LOG_FILE_CUR = "/log0.txt";
-  const char* LOG_FILE_OLD = "/log1.txt";
 
   void checkRotation()
   {
@@ -29,6 +28,7 @@ private:
   }
 
 public:
+
   SimpleFileLog(size_t maxSize = 32768) : _maxSize(maxSize)
   {
     _logFile = LittleFS.open(LOG_FILE_CUR, "a");

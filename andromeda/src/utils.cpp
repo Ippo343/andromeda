@@ -1,5 +1,8 @@
 #include "utils.h"
 
+const char* LOG_FILE_CUR = "/log0.txt";
+const char* LOG_FILE_OLD = "/log1.txt";
+
 void seedRNGs()
 {
   // The analog pins not attached to anything, so the voltage fluctuates
