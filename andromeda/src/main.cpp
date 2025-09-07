@@ -1,10 +1,10 @@
-#include "mission-control.h"
-#include "perf-monitor.h"
-#include "comms.h"
-
 #include "animations.h"
+#include "comms.h"
 #include "effects.h"
 #include "energy-param.h"
+#include "loggers.h"
+#include "mission-control.h"
+#include "perf-monitor.h"
 
 #include <LittleFS.h>
 
@@ -12,13 +12,9 @@ void setup() {
 
   Serial.begin(115200);
   while(!Serial && !Serial.available()) {}
-  Log.begin(LOG_LEVEL_VERBOSE, &Serial, true);
+  LittleFS.begin();
 
-  if (!LittleFS.begin())
-  {
-    Log.errorln("LittleFS Mount Failed");
-    return;
-  }
+  setupLoggers();
 
   initializeGeometry();
   FastLED.setCorrection(TypicalLEDStrip);
