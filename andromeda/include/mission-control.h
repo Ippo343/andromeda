@@ -41,6 +41,9 @@ class MissionControl
     // Queue a web command from the comms
     bool queueWebCommand(Command command);
 
+    inline byte getMaxBrightness() const { return maxBrightness; }
+    inline void setMaxBrightness(byte b) { maxBrightness = b; }
+
   private:
 
     // The effect that is currently running
@@ -48,6 +51,11 @@ class MissionControl
 
     // Main ON/OFF switch. If OFF, power down and do nothing.
     bool ON = true;
+
+    // Maximum allowed brightness (0-255)
+    // Note that this is different from FastLED's global brightness,
+    // which is also used for the fade in/out ramps.
+    byte maxBrightness = 255;
 
     // These parameters control how long an effect lasts and how quickly it fades in and out
     milliseconds_t FADE_IN_DURATION  = 2500;
@@ -71,7 +79,7 @@ class MissionControl
     //    /                \
     // effectStart      nextTransition
     //
-    byte getBrightness(milliseconds_t t);
+    byte calcBrightness(milliseconds_t t);
 
     // Pick a new random animation, play it, and deallocate it
     void runRandomAnimation();

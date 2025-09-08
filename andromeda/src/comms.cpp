@@ -352,6 +352,22 @@ void Comms::setupStationRoutes()
     request->send(LittleFS, LOG_FILE_CUR, "text/plain");
   });
 
+  server.on("/brightness", HTTP_GET, [this](AsyncWebServerRequest *request){
+    Log.noticeln("GET brightness: %d", MissionControl::Instance().getMaxBrightness());
+    request->send(200, "text/plain", String(MissionControl::Instance().getMaxBrightness()));
+  });
+
+  server.on("/brightness", HTTP_POST, [this](AsyncWebServerRequest *request){
+    int brightness = request->arg("value").toInt();
+    if (brightness >= 0 && brightness <= 255) {
+      MissionControl::Instance().setMaxBrightness(brightness);
+      Log.noticeln("POST brightness: %d", brightness);
+      request->send(200, "text/plain", "OK");
+    } else {
+      request->send(400, "text/plain", "Invalid range");
+    }
+  });
+
   // Fallback for 404 errors
   server.onNotFound([this](AsyncWebServerRequest *request)
   {

@@ -77,7 +77,7 @@ void MissionControl::setNextTransition()
 //    /                \
 // effectStart      nextTransition
 //
-byte MissionControl::getBrightness(milliseconds_t t)
+byte MissionControl::calcBrightness(milliseconds_t t)
 {
   byte brightness = 0;
 
@@ -85,17 +85,17 @@ byte MissionControl::getBrightness(milliseconds_t t)
   // we are all about microseconds in this highly efficient architecture
   if (t >= fadeInEnd && t <= fadeOutStart)
   {
-    brightness = 255;
+    brightness = this->maxBrightness;
   }
   else if (t < fadeInEnd)
   {
     milliseconds_t dt = (t - effectStart);
-    brightness = map(dt, 0, FADE_IN_DURATION, 0, 255);
+    brightness = map(dt, 0, FADE_IN_DURATION, 0, this->maxBrightness);
   }
   else if (t > fadeOutStart)
   {
     milliseconds_t dt = (t - fadeOutStart);
-    brightness = map(dt, 0, FADE_OUT_DURATION, 255, 0);
+    brightness = map(dt, 0, FADE_OUT_DURATION, this->maxBrightness, 0);
   }
 
   return dim8_raw(constrain(brightness, 0, 255));
@@ -119,7 +119,7 @@ void MissionControl::runRandomAnimation()
   delay(200);
 
   // Reset the brightness to max and give control back to the animation
-  FastLED.setBrightness(255);
+  FastLED.setBrightness(MissionControl::Instance().getMaxBrightness());
   animation->run();
   animation->cleanup();
 
@@ -203,7 +203,7 @@ void MissionControl::update(milliseconds_t t)
     return;
   }
 
-  FastLED.setBrightness(getBrightness(t));
+  FastLED.setBrightness(calcBrightness(t));
 
   effect->precompute(t);
   effect->render(STRIPS, t);

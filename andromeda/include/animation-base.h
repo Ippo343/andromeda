@@ -28,7 +28,6 @@ class AbstractAnimation
     virtual void cleanup()
     {
       paint(CRGB::Black);
-      FastLED.setBrightness(255);
       FASTLED_SHOW();
     }
 };

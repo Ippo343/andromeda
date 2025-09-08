@@ -281,7 +281,11 @@ class SequentialFadeIn : public AbstractAnimation
       {
         dt = millis() - start;
         byte b = constrain(map(dt, 0, fadeOut, 255, 0), 0, 255);
-        FastLED.setBrightness(b);
+
+        FOR_EACH_STRIP {
+          paintStrip(strips[iStrip], colors[iStrip] % b);
+        }
+
         FASTLED_SHOW();
       }
       while (dt < fadeOut);
