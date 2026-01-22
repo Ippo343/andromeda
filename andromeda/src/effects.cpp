@@ -544,10 +544,88 @@ public:
 };
 
 
+// Each strip slowly drifts to a new random color independently
+class IndividualStripDrift : public AbstractEffect
+{
+  public:
+    virtual const char* GetName()
+    {
+      return "IndividualStripDrift";
+    }
+
+    // Random range for the transition duration
+    EnergyParam<milliseconds,  2 SECONDS, 250> transitionDurationMin;
+    EnergyParam<milliseconds, 20 SECONDS, 5 SECONDS> transitionDurationMax;
+
+    // Per-strip timing info
+    std::vector<milliseconds> transitionStartTimes;
+    std::vector<milliseconds> transitionEndTimes;
+
+    // Per-strip color info
+    std::vector<CRGB> prevColors;
+    std::vector<CRGB> targetColors;
+    std::vector<CRGB> currentColors;
+
+    IndividualStripDrift() :
+      prevColors(NUM_STRIPS, CRGB::Black),
+      targetColors(NUM_STRIPS, CRGB::Black),
+      currentColors(NUM_STRIPS, CRGB::Black),
+      transitionEndTimes(NUM_STRIPS, 0),
+      transitionStartTimes(NUM_STRIPS, 0)
+    {
+    }
+
+    void randomize() override
+    {
+      // Initialize all strips to a random color and set up the first transition
+      milliseconds now = millis();
+      FOR_EACH_STRIP
+      {
+        targetColors[iStrip] = randomColor();
+        milliseconds duration = random(transitionDurationMin, transitionDurationMax);
+        transitionStartTimes[iStrip] = now;
+        transitionEndTimes[iStrip] = now + duration;
+      }
+    }
+
+    void precompute(milliseconds t) override
+    {
+      FOR_EACH_STRIP
+      {
+        // Check if we need to pick a new color
+        if (t >= transitionEndTimes[iStrip])
+        {
+          prevColors[iStrip] = targetColors[iStrip];
+          targetColors[iStrip] = randomColor();
+          transitionStartTimes[iStrip] = t;
+          milliseconds duration = random(transitionDurationMin, transitionDurationMax);
+          transitionEndTimes[iStrip] = t + duration;
+        }
+
+        // Compute the interpolation factor between the two colors
+        byte factor = cmap(t, transitionStartTimes[iStrip], transitionEndTimes[iStrip], 0, 255);
+        factor = ease8InOutCubic(factor);
+
+        currentColors[iStrip] = CRGB::blend(
+          prevColors[iStrip],
+          targetColors[iStrip],
+          factor
+        );
+      }
+    }
+
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds t) override
+    {
+      return currentColors[strip->idx];
+    }
+};
+
+
+
 // Picks a new random effect and randomizes it
 AbstractEffect* getRandomEffect()
 {
-  byte EFFECTS_COUNT = 9;
+  byte EFFECTS_COUNT = 10;
 
   // Set this to the index of the effect you want to force while testing
   short forcedSelection = -1;
@@ -592,6 +670,9 @@ AbstractEffect* getRandomEffect()
       break;
     case 8:
       retval = new HexagonalRippleGalaxy();
+      break;
+    case 9:
+      retval = new IndividualStripDrift();
       break;
     default:
       retval = new ErrorEffect();
