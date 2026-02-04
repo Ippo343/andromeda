@@ -109,9 +109,9 @@ void MissionControl::runRandomAnimation()
   Log.noticeln("Picked new animation: %s", animation->GetName());
 
   if (animation->controlHints & ControlHints::ROTATE_SPACE)
-    applyGlobalRandomRotation();
+    GEOMETRY.applyGlobalRandomRotation();
   else
-    resetGlobalTransform();
+    GEOMETRY.resetGlobalTransform();
 
   // First fade everything out to black and add a small delay
   // to create some separation from the effect
@@ -160,9 +160,9 @@ void MissionControl::handleTransition(AbstractEffect* nextEffect, bool playAnima
   Log.noticeln("Picked new effect: %s", effect->GetName());
 
   if (effect->controlHints & ControlHints::ROTATE_SPACE)
-    applyGlobalRandomRotation();
+    GEOMETRY.applyGlobalRandomRotation();
   else
-    resetGlobalTransform();
+    GEOMETRY.resetGlobalTransform();
 
   setNextTransition();
 }
@@ -206,7 +206,18 @@ void MissionControl::update(milliseconds_t t)
   FastLED.setBrightness(calcBrightness(t));
 
   effect->precompute(t);
-  effect->render(STRIPS, t);
+
+  // TODO: Update based on your effect signature
+  // Option A: If effects expect LedStrip array pointer:
+  // effect->render(STRIPS, t);
+  // You'll need to update effects to use GEOMETRY.getStrip() internally
+  //
+  // Option B: If you update effect signatures to not need strips parameter:
+  // effect->render(t);
+  //
+  // For now, keeping original pattern - see EFFECTS_MIGRATION.md for details
+  effect->render(t);
+
   effect->postprocess(t);
 
   FASTLED_SHOW();
