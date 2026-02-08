@@ -14,23 +14,23 @@ enum class FamilyID : uint8_t {
     L_SERIES,
 };
 
+#define MODEL_ID(family, model) (((uint8_t)FamilyID::family << 8) | model)
+
 // Unique identifier for each model
 enum class ModelId : uint16_t {
 
     UNKNOWN = 0,    // For error handling purposes
 
     // That ridiculous little thing that I brought to Eindhoven to replicate an L10
-    SINGLE_STRIP_TEST_DEVICE = ((uint8_t)FamilyID::TEST_DEVICES << 8) | 0,
+    SINGLE_STRIP_TEST_DEVICE = MODEL_ID(TEST_DEVICES, 0),
 
     // The first prototype Andromeda model that started this whole madness
-    ANDROMEDA_MK1 = ((uint8_t)FamilyID::ANDROMEDA << 8) | 0,
+    ANDROMEDA_MK1 = MODEL_ID(ANDROMEDA, 0),
 
-    // The actually commercially viable products
-    L10 = ((uint8_t)FamilyID::L_SERIES << 8) | 0,
-    L25 = ((uint8_t)FamilyID::L_SERIES << 8) | 1,
-    L70 = ((uint8_t)FamilyID::L_SERIES << 8) | 2,
+    // The actually "commercially" "viable" products
+    L70_MK1 = MODEL_ID(L_SERIES, 0),
+    L10_MK1 = MODEL_ID(L_SERIES, 1),
 };
-
 
 // Configuration for a specific LED model
 struct ModelConfig {
