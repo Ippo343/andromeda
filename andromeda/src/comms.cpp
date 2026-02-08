@@ -214,27 +214,92 @@ void Comms::setupRoutes()
 
 void Comms::setupAPRoutes()
 {
-  // Captive portal - redirect everything to setup page
-  server.onNotFound([this](AsyncWebServerRequest *request) {
-    // Check if this is a captive portal detection request
-    String host = request->host();
-    if (host != WiFi.softAPIP().toString()) {
-      // Redirect to our setup page
-      request->redirect("http://" + WiFi.softAPIP().toString() + "/setup");
-      return;
-    }
-
-    // Serve setup page for any request
-    serveSetupPage(request);
-  });
-
-  // Setup page
+  // Main control page - serve index.html as the default
   server.on("/", HTTP_GET, [this](AsyncWebServerRequest *request) {
-    serveSetupPage(request);
+    request->send(LittleFS, "/index.html", "text/html");
   });
 
+  // WiFi setup page - accessible via multiple paths for captive portal compatibility
   server.on("/setup", HTTP_GET, [this](AsyncWebServerRequest *request) {
     serveSetupPage(request);
+  });
+
+  server.on("/wifi", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    serveSetupPage(request);
+  });
+
+  server.on("/wifi-setup.html", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    serveSetupPage(request);
+  });
+
+  // Captive portal detection URLs - redirect to main page
+  server.on("/generate_204", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    request->redirect("http://" + WiFi.softAPIP().toString() + "/");
+  });
+
+  server.on("/gen_204", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    request->redirect("http://" + WiFi.softAPIP().toString() + "/");
+  });
+
+  server.on("/hotspot-detect.html", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    request->redirect("http://" + WiFi.softAPIP().toString() + "/");
+  });
+
+  server.on("/canonical.html", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    request->redirect("http://" + WiFi.softAPIP().toString() + "/");
+  });
+
+  server.on("/success.txt", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", "success");
+  });
+
+  server.on("/ncsi.txt", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", "Microsoft NCSI");
+  });
+
+  // Command routes (same as station mode)
+  server.on("/N", HTTP_POST, [this](AsyncWebServerRequest *request)
+  {
+    MissionControl::Instance().queueWebCommand(Command::NEXT);
+    replyWithStatus(request, 200);
+  });
+
+  server.on("/H", HTTP_POST, [this](AsyncWebServerRequest *request)
+  {
+    MissionControl::Instance().queueWebCommand(Command::HOLD);
+    replyWithStatus(request, 200);
+  });
+
+  server.on("/D", HTTP_POST, [this](AsyncWebServerRequest *request)
+  {
+    MissionControl::Instance().queueWebCommand(Command::POWER_OFF);
+    replyWithStatus(request, 200);
+  });
+
+  server.on("/W", HTTP_POST, [this](AsyncWebServerRequest *request)
+  {
+    MissionControl::Instance().queueWebCommand(Command::WHITE);
+    replyWithStatus(request, 200);
+  });
+
+  server.on("/fps", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(200, "text/plain", String(PerformanceMonitor::Instance().fps()));
+  });
+
+  server.on("/brightness", HTTP_GET, [this](AsyncWebServerRequest *request){
+    Log.noticeln("GET brightness: %d", MissionControl::Instance().getMaxBrightness());
+    request->send(200, "text/plain", String(MissionControl::Instance().getMaxBrightness()));
+  });
+
+  server.on("/brightness", HTTP_POST, [this](AsyncWebServerRequest *request){
+    int brightness = request->arg("value").toInt();
+    if (brightness >= 0 && brightness <= 255) {
+      MissionControl::Instance().setMaxBrightness(brightness);
+      Log.noticeln("POST brightness: %d", brightness);
+      request->send(200, "text/plain", "OK");
+    } else {
+      request->send(400, "text/plain", "Invalid range");
+    }
   });
 
   // WiFi scan endpoint
@@ -292,20 +357,38 @@ void Comms::setupAPRoutes()
         "</body></html>");
   });
 
-    // Reset credentials (for debugging/recovery)
-    server.on("/reset", HTTP_POST, [this](AsyncWebServerRequest *request) {
-      preferences.clear();
-      request->send(200, "text/html",
-        "<html><body style='font-family:Arial;text-align:center;margin-top:50px;'>"
-        "<h2>Credentials Cleared</h2>"
-        "<p>Device will restart in AP mode.</p>"
-        "</body></html>");
+  // Reset credentials (for debugging/recovery)
+  server.on("/reset", HTTP_POST, [this](AsyncWebServerRequest *request) {
+    preferences.clear();
+    request->send(200, "text/html",
+      "<html><body style='font-family:Arial;text-align:center;margin-top:50px;'>"
+      "<h2>Credentials Cleared</h2>"
+      "<p>Device will restart in AP mode.</p>"
+      "</body></html>");
 
-      xTaskCreatePinnedToCore([](void*){
-          vTaskDelay(3000 / portTICK_PERIOD_MS);
-          ESP.restart();
-      }, "RestartTask", 2048, nullptr, 1, nullptr, 0);
-    });
+    xTaskCreatePinnedToCore([](void*){
+        vTaskDelay(3000 / portTICK_PERIOD_MS);
+        ESP.restart();
+    }, "RestartTask", 2048, nullptr, 1, nullptr, 0);
+  });
+
+  // Captive portal - redirect to main page
+  server.onNotFound([this](AsyncWebServerRequest *request) {
+    String url = request->url();
+    Log.noticeln("404: %s", url.c_str());
+
+    // Check if this is a captive portal detection request
+    String host = request->host();
+    if (host != WiFi.softAPIP().toString() && host != "andromeda.local") {
+      // Redirect to our main control page with explicit IP
+      Log.noticeln("Captive portal redirect from host: %s", host.c_str());
+      request->redirect("http://" + WiFi.softAPIP().toString() + "/");
+      return;
+    }
+
+    // For other 404s, serve main page
+    request->send(LittleFS, "/index.html", "text/html");
+  });
 }
 
 void Comms::setupStationRoutes()

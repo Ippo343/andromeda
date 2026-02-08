@@ -29,6 +29,10 @@
     <div class="container">
         <h1 class="logo" id="logo">A</h1>
 
+        <a href="/" class="btn" style="text-decoration: none; margin-bottom: 1.5rem;">
+            ← Back to Controls
+        </a>
+
         <button type="button" class="btn scan-btn" onclick="scanNetworks()" id="scanBtn">
             Scan for Networks
         </button>
@@ -98,55 +102,97 @@
             networks.innerHTML = '';
             selectedNetwork = null;
 
-            fetch('/scan')
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Scan request failed');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    status.innerHTML = '';
-                    scanBtn.disabled = false;
-                    scanBtn.innerHTML = 'Scan for Networks';
+            // Poll for scan results
+            let pollAttempts = 0;
+            const maxPollAttempts = 20; // 20 seconds max
 
-                    if (data.networks && data.networks.length > 0) {
-                        networks.innerHTML = '<strong>Available Networks (click to select):</strong>';
+            function pollScan() {
+                fetch('/scan')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Scan request failed');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        // Check if we have actual networks (scan complete)
+                        if (data.networks && data.networks.length > 0) {
+                            displayNetworks(data.networks);
+                            return;
+                        }
 
-                        // Sort networks by signal strength (strongest first)
-                        data.networks.sort((a, b) => b.rssi - a.rssi);
+                        // Check if there's an error
+                        if (data.error) {
+                            status.innerHTML = '<div class="status error">Scan failed: ' + data.error + '</div>';
+                            scanBtn.disabled = false;
+                            scanBtn.innerHTML = 'Scan for Networks';
+                            return;
+                        }
 
-                        data.networks.forEach(network => {
-                            if (network.ssid && network.ssid.trim() !== '') {
-                                const div = document.createElement('div');
-                                div.className = 'network-option';
-                                div.onclick = () => selectNetwork(network, div);
-
-                                const signalBars = getSignalBars(network.rssi);
-                                const lockIcon = network.encryption !== 'none' ? '🔒' : '🔓';
-
-                                div.innerHTML = `
-                                    <div>
-                                        <div class="network-name">${escapeHtml(network.ssid)}</div>
-                                        <div class="network-info">${network.encryption}</div>
-                                    </div>
-                                    <div class="signal-strength">
-                                        ${signalBars} ${network.rssi}dBm ${lockIcon}
-                                    </div>
-                                `;
-                                networks.appendChild(div);
+                        // Still scanning, poll again
+                        if (data.status === "scanning") {
+                            pollAttempts++;
+                            if (pollAttempts < maxPollAttempts) {
+                                setTimeout(pollScan, 1000); // Poll every second
+                            } else {
+                                status.innerHTML = '<div class="status error">Scan timeout. Please try again.</div>';
+                                scanBtn.disabled = false;
+                                scanBtn.innerHTML = 'Scan for Networks';
                             }
-                        });
-                    } else {
-                        networks.innerHTML = '<div class="status error">No networks found. Make sure WiFi networks are available and try scanning again.</div>';
+                            return;
+                        }
+
+                        // Empty results but not scanning - might mean no networks found
+                        if (data.networks && data.networks.length === 0 && !data.status) {
+                            networks.innerHTML = '<div class="status error">No networks found. Make sure WiFi networks are available and try scanning again.</div>';
+                            status.innerHTML = '';
+                            scanBtn.disabled = false;
+                            scanBtn.innerHTML = 'Scan for Networks';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Scan error:', error);
+                        status.innerHTML = '<div class="status error">Scan failed: ' + error.message + '</div>';
+                        scanBtn.disabled = false;
+                        scanBtn.innerHTML = 'Scan for Networks';
+                    });
+            }
+
+            function displayNetworks(networkList) {
+                status.innerHTML = '';
+                scanBtn.disabled = false;
+                scanBtn.innerHTML = 'Scan for Networks';
+
+                networks.innerHTML = '<strong>Available Networks (click to select):</strong>';
+
+                // Sort networks by signal strength (strongest first)
+                networkList.sort((a, b) => b.rssi - a.rssi);
+
+                networkList.forEach(network => {
+                    if (network.ssid && network.ssid.trim() !== '') {
+                        const div = document.createElement('div');
+                        div.className = 'network-option';
+                        div.onclick = () => selectNetwork(network, div);
+
+                        const signalBars = getSignalBars(network.rssi);
+                        const lockIcon = network.encryption !== 'none' ? '🔒' : '🔓';
+
+                        div.innerHTML = `
+                            <div>
+                                <div class="network-name">${escapeHtml(network.ssid)}</div>
+                                <div class="network-info">${network.encryption}</div>
+                            </div>
+                            <div class="signal-strength">
+                                ${signalBars} ${network.rssi}dBm ${lockIcon}
+                            </div>
+                        `;
+                        networks.appendChild(div);
                     }
-                })
-                .catch(error => {
-                    console.error('Scan error:', error);
-                    status.innerHTML = '<div class="status error">Scan failed: ' + error.message + '</div>';
-                    scanBtn.disabled = false;
-                    scanBtn.innerHTML = 'Scan for Networks';
                 });
+            }
+
+            // Start polling
+            pollScan();
         }
 
         function selectNetwork(network, element) {

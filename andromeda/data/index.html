@@ -105,7 +105,7 @@
         }
 
         .settings-drawer.expanded {
-            max-height: 200px;
+            max-height: 250px;
         }
 
         .settings-content {
@@ -204,6 +204,14 @@
 
     <div class="container">
         <h1 class="logo" id="logo">A</h1>
+
+        <!-- Info banner for AP mode -->
+        <div class="info-box" id="apModeInfo" style="display: none;">
+            💡 Direct control mode. Need WiFi? Try:
+            <a href="/wifi" style="color: #64b5f6; text-decoration: underline;">WiFi Setup</a> or
+            <a href="http://192.168.4.1/wifi" target="_blank" style="color: #64b5f6; text-decoration: underline;">Open WiFi Setup</a>
+        </div>
+
         <div class="button-grid">
             <button class="btn next"  data-cmd="/N">Next</button>
             <button class="btn hold"  data-cmd="/H">Hold</button>
@@ -231,12 +239,27 @@
                             value="128"
                         >
                     </div>
+                    <button class="btn" onclick="goToWifiSetup()" style="margin-top: 1rem;">
+                        WiFi Setup
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
+        // Navigate to WiFi setup (handles captive portal issues)
+        function goToWifiSetup() {
+            // Try multiple methods to escape captive portal
+            window.location.href = '/wifi';
+            // Fallback: try opening in new context
+            setTimeout(() => {
+                if (window.location.pathname !== '/wifi' && window.location.pathname !== '/setup') {
+                    window.open('/wifi', '_blank');
+                }
+            }, 500);
+        }
+
         // FPS monitoring: periodically GET the current FPS
         function updateFPS() {
             fetch('/fps')
@@ -293,6 +316,12 @@
         document.addEventListener('DOMContentLoaded', function() {
             const h1 = document.getElementById("logo");
             h1.style.setProperty('--grad', randomGradient());
+
+            // Check if we're in AP mode by looking at the IP address
+            const hostname = window.location.hostname;
+            if (hostname === '192.168.4.1' || hostname.includes('192.168.4.')) {
+                document.getElementById('apModeInfo').style.display = 'block';
+            }
 
             const fpsEl = document.getElementById('fps');
             fpsEl.addEventListener('click', () => {
