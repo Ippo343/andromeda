@@ -12,7 +12,11 @@ Comms::Comms() :
   webServerTaskHandle(nullptr),
   dnsServer(nullptr),
   isAPMode(false),
-  preferences()
+  preferences(),
+  scanInProgress(false),
+  scanComplete(false),
+  scanResults(""),
+  lastScanTime(0)
 {
 }
 
@@ -128,6 +132,14 @@ bool Comms::startAPMode()
   dnsServer->start(DNS_PORT, "*", apIP); // Redirect all DNS queries to our IP
 
   createWebServerTask();
+
+  // Start an initial WiFi scan in the background
+  // Delay it slightly to let the AP mode stabilize
+  xTaskCreate([](void* param) {
+    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    Comms::Instance().startAsyncScan();
+    vTaskDelete(NULL);
+  }, "InitialScan", 2048, nullptr, 1, nullptr);
 
   return true;
 }
@@ -381,13 +393,15 @@ void Comms::serveSetupPage(AsyncWebServerRequest *request)
   request->send(LittleFS, "/wifi-setup.html", "text/html");
 }
 
-String Comms::scanWiFiNetworks()
+void Comms::onWiFiScanComplete(int networksFound)
 {
-  int networkCount = WiFi.scanNetworks();
+  Comms& instance = Comms::Instance();
+
+  Log.noticeln("WiFi scan complete, found %d networks", networksFound);
 
   String json = "{\"networks\":[";
 
-  for (int i = 0; i < networkCount; i++) {
+  for (int i = 0; i < networksFound; i++) {
     if (i > 0) json += ",";
 
     String encryption = "none";
@@ -409,8 +423,72 @@ String Comms::scanWiFiNetworks()
 
   json += "]}";
 
+  instance.scanResults = json;
+  instance.scanComplete = true;
+  instance.scanInProgress = false;
+  instance.lastScanTime = millis();
+
   WiFi.scanDelete(); // Clean up
-  return json;
+}
+
+void Comms::startAsyncScan()
+{
+  if (scanInProgress) {
+    Log.noticeln("Scan already in progress, skipping");
+    return;
+  }
+
+  Log.noticeln("Starting async WiFi scan");
+  scanInProgress = true;
+  scanComplete = false;
+
+  // Start async scan - this returns immediately
+  WiFi.scanNetworks(true, false, false, 300U, 0U, nullptr, nullptr);
+
+  // Register callback for scan completion
+  WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
+    if (event == ARDUINO_EVENT_WIFI_SCAN_DONE) {
+      int networksFound = WiFi.scanComplete();
+      if (networksFound >= 0) {
+        Comms::onWiFiScanComplete(networksFound);
+      } else if (networksFound == WIFI_SCAN_FAILED) {
+        Comms& instance = Comms::Instance();
+        instance.scanResults = "{\"networks\":[],\"error\":\"Scan failed\"}";
+        instance.scanComplete = true;
+        instance.scanInProgress = false;
+        Log.errorln("WiFi scan failed");
+      }
+    }
+  });
+}
+
+String Comms::scanWiFiNetworks()
+{
+  unsigned long now = millis();
+
+  // Return cached results if they're fresh (less than 30 seconds old)
+  if (scanComplete && (now - lastScanTime < SCAN_CACHE_MS)) {
+    Log.noticeln("Returning cached scan results");
+    return scanResults;
+  }
+
+  // If scan is in progress, return status
+  if (scanInProgress) {
+    Log.noticeln("Scan in progress");
+    return "{\"networks\":[],\"status\":\"scanning\"}";
+  }
+
+  // If we have stale cached results, return them but trigger a new scan
+  if (scanComplete && scanResults.length() > 0) {
+    Log.noticeln("Returning stale results and triggering new scan");
+    startAsyncScan();
+    return scanResults;
+  }
+
+  // No cached results, start a scan and return empty for now
+  Log.noticeln("No cached results, starting new scan");
+  startAsyncScan();
+  return "{\"networks\":[],\"status\":\"scanning\"}";
 }
 
 String Comms::urlDecode(String str) {

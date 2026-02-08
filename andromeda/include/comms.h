@@ -34,6 +34,13 @@ class Comms
     Preferences preferences;
     bool isAPMode;
 
+    // Async WiFi scan state
+    volatile bool scanInProgress;
+    volatile bool scanComplete;
+    String scanResults;
+    unsigned long lastScanTime;
+    static constexpr unsigned long SCAN_CACHE_MS = 30000; // Cache results for 30 seconds
+
     // Core WiFi methods
     bool connectToWiFi(const char* ssid, const char* password);
     bool startAPMode();
@@ -50,6 +57,8 @@ class Comms
 
     // AP mode specific methods
     void serveSetupPage(AsyncWebServerRequest *request);
+    void startAsyncScan();
     String scanWiFiNetworks();
+    static void onWiFiScanComplete(int networksFound);
     String urlDecode(String str);
 };
