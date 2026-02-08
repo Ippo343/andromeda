@@ -149,12 +149,8 @@ void Geometry::loadCoordinates() {
             strips[iStrip].leds[iLed].fixedCartesian = cart;
             strips[iStrip].leds[iLed].cartesian = cart;
 
-            // Copy Polar data from PROGMEM
-            // TODO: why not compute them on the fly from Cartesian coordinates?
-            PolarCoordinates polar;
-            memcpy_P(&polar, &config->polar_data[data_index], sizeof(PolarCoordinates));
-            strips[iStrip].leds[iLed].fixedPolar = polar;
-            strips[iStrip].leds[iLed].polar = polar;
+            strips[iStrip].leds[iLed].fixedPolar = PolarCoordinates(cart); // polar;
+            strips[iStrip].leds[iLed].polar = strips[iStrip].leds[iLed].fixedPolar;
         }
 
         // After finishing a strip, move the offset forward by the length of that strip

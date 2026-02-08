@@ -23,6 +23,27 @@ struct CartesianCoordinates {
 struct PolarCoordinates {
     uint16_t radius;
     uint16_t cdegrees;
+
+    PolarCoordinates() : radius(0), cdegrees(0) {}
+
+    // Constructor from Cartesian coordinates
+    PolarCoordinates(CartesianCoordinates cart) {
+        // Calculate radius
+        float x_sq = (float)cart.x * cart.x;
+        float y_sq = (float)cart.y * cart.y;
+        radius = (uint16_t)sqrt(x_sq + y_sq);
+
+        // Calculate angle in centi-degrees (0-36000 for 0-360 degrees)
+        float angle_rad = atan2f((float)cart.y, (float)cart.x);
+        float angle_deg = angle_rad * 18000.0f / PI;
+
+        // Normalize to 0-36000 range
+        if (angle_deg < 0) {
+            angle_deg += 36000.0f;
+        }
+
+        cdegrees = (uint16_t)angle_deg;
+    }
 };
 
 // Represents geometric information for a single LED

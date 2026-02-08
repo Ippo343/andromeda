@@ -44,7 +44,5 @@ struct ModelConfig {
     uint16_t screen_size_mm;      // Bounding box size
 
     // Coordinate data stored as flat arrays
-    // Access as: cartesian_data[strip_idx * max_leds_per_strip + led_idx]
     const CartesianCoordinates* cartesian_data;
-    const PolarCoordinates* polar_data;
 };
