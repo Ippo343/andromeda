@@ -1,5 +1,7 @@
 #include "effects.h"
 
+using std::vector;
+
 // Use each individual led strip as an independent moodlight.
 // All leds in the same strip have the same color,
 // but each strip fluctuates independently
@@ -11,8 +13,13 @@ class IndividualStripMoodlight : public AbstractEffect
       return "IndividualStripMoodlight";
     }
 
-    MoodLight moodlights[NUM_STRIPS];
-    CRGB colors[NUM_STRIPS];
+    vector<MoodLight> moodlights;
+    vector<CRGB> colors;
+
+    IndividualStripMoodlight()
+      : moodlights(GEOMETRY.getNumStrips()), colors(GEOMETRY.getNumStrips())
+    {
+    }
 
     void precompute(milliseconds_t t) override
     {
@@ -28,8 +35,7 @@ class IndividualStripMoodlight : public AbstractEffect
     }
 };
 
-// Lights up the whole mirror blue, and randomly adds sparks of white
-// that die out very quickly diffusing to neighbouring leds
+
 class ElectricSparks : public AbstractEffect
 {
   public:
@@ -40,8 +46,8 @@ class ElectricSparks : public AbstractEffect
 
     // Palette values for each LED
     // Needs double buffering to correctly compute the averaging of neighbouring pixels
-    byte preValues[NUM_STRIPS][LEDS_PER_STRIP];
-    byte newValues[NUM_STRIPS][LEDS_PER_STRIP];
+    vector<vector<byte>> preValues;
+    vector<vector<byte>> newValues;
 
     CRGBPalette256 palette;
 
@@ -65,9 +71,14 @@ class ElectricSparks : public AbstractEffect
 
     ElectricSparks()
     {
-      // Professional software engineering
-      memset8(preValues, 0, NUM_STRIPS * LEDS_PER_STRIP);
-      memset8(newValues, 0, NUM_STRIPS * LEDS_PER_STRIP);
+      // Allocate vectors for each strip
+      preValues.resize(GEOMETRY.getNumStrips());
+      newValues.resize(GEOMETRY.getNumStrips());
+
+      for (uint8_t i = 0; i < GEOMETRY.getNumStrips(); i++) {
+        preValues[i].resize(GEOMETRY.getStrip(i).num_leds, 0);
+        newValues[i].resize(GEOMETRY.getStrip(i).num_leds, 0);
+      }
     }
 
     inline byte avg38(int a, int b, int c)
@@ -118,11 +129,15 @@ class ElectricSparks : public AbstractEffect
         // taking the value from the previous buffer so that the new buffer is computed correctly
         // TODO: solve the heat conduction partial differential equation (LOL)
 
-        for (byte iLed = 0; iLed < LEDS_PER_STRIP; iLed++)
+        uint8_t stripLen = GEOMETRY.getStrip(iStrip).num_leds;
+        for (byte iLed = 0; iLed < stripLen; iLed++)
+        {
           newValues[iStrip][iLed] = avg38(
             preValues[iStrip][LI(iLed - 1)],
             preValues[iStrip][iLed],
-            preValues[iStrip][LI(iLed + 1)]);
+            preValues[iStrip][LI(iLed + 1)]
+          );
+        }
       }
     }
 
@@ -153,16 +168,18 @@ class ElectricSparks : public AbstractEffect
       // Dissipate the energy to lower values
       FOR_EACH_STRIP
       {
-        FOR_EACH_LED
+        uint8_t stripLen = GEOMETRY.getStrip(iStrip).num_leds;
+        for (uint8_t iLed = 0; iLed < stripLen; iLed++)
         {
           newValues[iStrip][iLed] = scale8(newValues[iStrip][iLed], 254);
         }
       }
 
       // Copy the current buffer so that the next frame can diffuse it
-      memcpy8(preValues, newValues, NUM_STRIPS * LEDS_PER_STRIP);
+      preValues = newValues;
     }
 };
+
 
 // Whole mirror moodlight pulsating around a central saturation
 class SaturationGlow : public AbstractEffect
@@ -180,14 +197,14 @@ class SaturationGlow : public AbstractEffect
     byte saturationAmplitude;
 
     // Each strip has a random cycle time
-    std::vector<RandParam<milliseconds_t, (1 MINUTES), (4 MINUTES)>> cycleTime;
+    vector<RandParam<milliseconds_t, (1 MINUTES), (4 MINUTES)>> cycleTime;
 
     byte hue;                   // current hue (same for all strips)
-    std::vector<CRGB> color;    // specific color per strip
+    vector<CRGB> color;    // specific color per strip
 
     SaturationGlow() :
-      cycleTime(NUM_STRIPS),  // this SHOULD call the default constructor of RandParam, picking 7 random values. I think.
-      color(NUM_STRIPS)
+      cycleTime(GEOMETRY.getNumStrips()),  // this SHOULD call the default constructor of RandParam, picking 7 random values. I think.
+      color(GEOMETRY.getNumStrips())
     {
       saturationAmplitude = min(
         static_cast<byte>(saturationCenter),
@@ -282,7 +299,7 @@ class NinjaStar : public AbstractEffect
       for (byte i = 0; i < 4; i++)
         v = scale8(v, v);
 
-      unsigned short scaledRadius = map(led->polar.radius, 0, SCREEN_HALF_SIZE, 0, 255);
+      unsigned short scaledRadius = map(led->polar.radius, 0, GEOMETRY.getScreenHalfSize(), 0, 255);
       CRGB color = blend(innerColor, outerColor, scaledRadius);
 
       return color % v;
@@ -313,7 +330,7 @@ class PolarSwipe : public AbstractEffect
     // causing an annoying color flicker at the edge.
     //
     unsigned short scanMin = bandWidth / 2;
-    unsigned short scanMax = SCREEN_HALF_SIZE + (bandWidth + 1);
+    unsigned short scanMax = GEOMETRY.getScreenHalfSize() + (bandWidth + 1);
 
     unsigned short bandCenter;
     CRGB color;
@@ -332,7 +349,7 @@ class PolarSwipe : public AbstractEffect
       else
         bandCenter = map(v, 0, 65535, scanMin, scanMax);
 
-      if (bandCenter >= SCREEN_HALF_SIZE + bandWidth)
+      if (bandCenter >= GEOMETRY.getScreenHalfSize() + bandWidth)
         color = randomColor();
     }
 
@@ -398,10 +415,10 @@ class RGBodyProblem : public AbstractEffect
     RandParam<byte, 1, 3> emittersCount;
     RandBool fixedColors;
 
-    std::vector<CartesianCoordinates> locations;
-    std::vector<RandSine<1, 20>> sx;
-    std::vector<RandSine<1, 20>> sy;
-    std::vector<CHSV> colors;
+    vector<CartesianCoordinates> locations;
+    vector<RandSine<1, 20>> sx;
+    vector<RandSine<1, 20>> sy;
+    vector<CHSV> colors;
 
     MoodLight moodlight;
 
@@ -427,7 +444,7 @@ class RGBodyProblem : public AbstractEffect
     // Helper to scale the result of a sine wave to the screen size
     short scale(byte v)
     {
-      return map(v, 0, 255, -SCREEN_HALF_SIZE, SCREEN_HALF_SIZE);
+      return map(v, 0, 255, -GEOMETRY.getScreenHalfSize(), GEOMETRY.getScreenHalfSize());
     }
 
     void precompute(milliseconds_t t) override
@@ -558,20 +575,20 @@ class IndividualStripDrift : public AbstractEffect
     EnergyParam<milliseconds_t, 20 SECONDS, 5 SECONDS> transitionDurationMax;
 
     // Per-strip timing info
-    std::vector<milliseconds_t> transitionStartTimes;
-    std::vector<milliseconds_t> transitionEndTimes;
+    vector<milliseconds_t> transitionStartTimes;
+    vector<milliseconds_t> transitionEndTimes;
 
     // Per-strip color info
-    std::vector<CRGB> prevColors;
-    std::vector<CRGB> targetColors;
-    std::vector<CRGB> currentColors;
+    vector<CRGB> prevColors;
+    vector<CRGB> targetColors;
+    vector<CRGB> currentColors;
 
     IndividualStripDrift() :
-      prevColors(NUM_STRIPS, CRGB::Black),
-      targetColors(NUM_STRIPS, CRGB::Black),
-      currentColors(NUM_STRIPS, CRGB::Black),
-      transitionEndTimes(NUM_STRIPS, 0),
-      transitionStartTimes(NUM_STRIPS, 0)
+      prevColors(GEOMETRY.getNumStrips(), CRGB::Black),
+      targetColors(GEOMETRY.getNumStrips(), CRGB::Black),
+      currentColors(GEOMETRY.getNumStrips(), CRGB::Black),
+      transitionEndTimes(GEOMETRY.getNumStrips(), 0),
+      transitionStartTimes(GEOMETRY.getNumStrips(), 0)
     {
     }
 

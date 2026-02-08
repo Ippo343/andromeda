@@ -5,7 +5,7 @@ const float defaultBrightnessFactor = 255 * 5000;  // * (1 / distance^2)
 void paint(CRGB color)
 {
   FOR_EACH_STRIP {
-    fill_solid(STRIPS[iStrip].buffer, LEDS_PER_STRIP, color);
+    fill_solid(GEOMETRY.getStrip(iStrip).buffer, GEOMETRY.getStrip(iStrip).num_leds, color);
   }
 }
 
@@ -13,7 +13,7 @@ void paint(CRGB color)
 // Thin wrapper around fill_solid because I'm that lazy
 void paintStrip(byte idx, CRGB color)
 {
-  fill_solid(STRIPS[idx].buffer, LEDS_PER_STRIP, color);
+  fill_solid(GEOMETRY.getStrip(idx).buffer, GEOMETRY.getStrip(idx).num_leds, color);
 }
 
 // Fade in a strip with the given color over the given duration
@@ -65,9 +65,9 @@ CHSV randomColor()
 }
 
 // Generate N random complementary colors spaced evenly on the hue wheel
-std::vector<CHSV> randomComplementaryColors(byte N)
+vector<CHSV> randomComplementaryColors(byte N)
 {
-  std::vector<CHSV> retval(N);
+  vector<CHSV> retval(N);
 
   const byte hueStep = (byte)(255.0 / N);
   short a = random8();

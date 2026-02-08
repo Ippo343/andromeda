@@ -2,8 +2,9 @@
 
 #include <FastLED.h>
 #include <vector>
+using std::vector;
 
-#include "geometry.h"
+#include "geometry/geometry.h"
 #include "perf-monitor.h"
 #include "utils.h"
 
@@ -26,7 +27,7 @@ void fadeInAllStrips(CHSV color, milliseconds_t duration);
 CHSV randomColor();
 
 // Generate N random complementary colors spaced evenly on the hue wheel
-std::vector<CHSV> randomComplementaryColors(byte N);
+vector<CHSV> randomComplementaryColors(byte N);
 
 // Pick a random predefined palette
 CRGBPalette16 randomPredefinedPalette();

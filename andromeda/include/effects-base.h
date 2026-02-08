@@ -3,7 +3,7 @@
 // This header defines the base classes that all effects are built upon
 
 #include "utils.h"
-#include "geometry.h"
+#include "geometry/geometry.h"
 #include "control-hints.h"
 
 // Abstract base class for all effects.
@@ -14,7 +14,7 @@
 class AbstractEffect
 {
   public:
-    virtual const char* GetName();
+    virtual const char* GetName() = 0;
 
     control_hints_t controlHints = ControlHints::NONE;
 
@@ -25,7 +25,7 @@ class AbstractEffect
     virtual void precompute(milliseconds_t t) { return ; }
 
     // Evaluates the effect on each led
-    virtual CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t);
+    virtual CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) = 0;
 
     // Called when all the led's have been evaluated
     // to allow postprocess effects like blurring and fading
@@ -35,11 +35,11 @@ class AbstractEffect
     virtual void randomize() { return; }
 
     // Computes the function over all the strips
-    void render(LedStrip* strips, milliseconds_t t)
+    void render(milliseconds_t t)
     {
       FOR_EACH_STRIP {
-        FOR_EACH_LED {
-          strips[iStrip].buffer[iLed] = this->evaluate(&strips[iStrip], &strips[iStrip].leds[iLed], t);
+        FOR_EACH_LED(iStrip) {
+          GEOMETRY.getStrip(iStrip).buffer[iLed] = this->evaluate(&GEOMETRY.getStrip(iStrip), &GEOMETRY.getStrip(iStrip).leds[iLed], t);
         }
       }
     }

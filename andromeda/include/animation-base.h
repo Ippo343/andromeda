@@ -2,7 +2,7 @@
 
 #include "control-hints.h"
 #include "effects-utils.h"
-#include "geometry.h"
+#include "geometry/geometry.h"
 #include "perf-monitor.h"
 #include "utils.h"
 

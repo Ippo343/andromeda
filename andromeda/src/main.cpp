@@ -5,40 +5,42 @@
 #include "loggers.h"
 #include "mission-control.h"
 #include "perf-monitor.h"
-#include "geometry.h"
+#include "geometry/geometry.h"
 #include <LittleFS.h>
 
 void setup() {
   Serial.begin(115200);
   while(!Serial && !Serial.available()) {}
 
+  // Wait a little bit to allow the PC to start the serial monitor before we start spamming it with logs
+  // TODO: improve
+  while (millis() < 500) {
+    delay(100);
+  }
+
   LittleFS.begin();
   setupLoggers();
+  Log.noticeln("=== Andromeda Device Starting Up ===");
 
-  // Initialize geometry with factory configuration
+  // Load model ID
+  // TODO: selection via web UI, currently hardcoded to SINGLE_STRIP_TEST_DEVICE for testing purposes
   ModelId model;
   if (FactoryConfig::isConfigured()) {
     model = FactoryConfig::getModelId();
     Log.noticeln("Loading factory configuration: %s", getModelName(model));
   } else {
-    Log.warningln("Device not factory configured, using default: Andromeda Mk1");
-    model = ModelId::ANDROMEDA_MK1;
-    // Optionally set it for future boots:
-    // FactoryConfig::setModelId(model);
+    model = ModelId::SINGLE_STRIP_TEST_DEVICE;
+    Log.warningln("Device not factory configured, using default: %s", getModelName(model));
   }
 
   GEOMETRY.initialize(model);
 
-  if (!GEOMETRY.isInitialized()) {
-    Log.errorln("Failed to initialize geometry!");
-    while (1) { delay(1000); }
-  }
-
   // Log device configuration
   const ModelConfig* config = GEOMETRY.getConfig();
-  Log.noticeln("Device: %s %s (%d strips, %d mm screen)",
-               config->family, config->model_name,
-               config->num_strips, config->screen_size_mm);
+  Log.noticeln("Device: %s (%d strips, %d mm screen)",
+               config->name,
+               config->num_strips,
+               config->screen_size_mm);
 
   FastLED.setCorrection(TypicalLEDStrip);
   seedRNGs();
@@ -56,6 +58,9 @@ void setup() {
     ErrorAnimation error;
     error.run();
   }
+
+  // To avoid burning my eyes while working at the Social Hub's desk
+  MissionControl::Instance().setMaxBrightness(64);
 }
 
 void loop() {

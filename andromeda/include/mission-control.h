@@ -8,7 +8,7 @@
 #include "animations.h"
 #include "control-hints.h"
 #include "effects.h"
-#include "geometry.h"
+#include "geometry/geometry.h"
 #include "moodlight.h"
 #include "utils.h"
 #include "perf-monitor.h"

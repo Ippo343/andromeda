@@ -2,8 +2,9 @@
 
 #include "model_config.h"
 
+// TODO: this can probably be private in Geometry
+
 // Global registry of all available models
-// Populated by each model's implementation file
 extern const ModelConfig* MODEL_REGISTRY[];
 extern const uint8_t NUM_MODELS;
 

@@ -15,18 +15,12 @@ LedStrip::~LedStrip() {
 }
 
 void LedStrip::allocate(uint8_t count) {
-    // Free any existing allocation
     deallocate();
 
     num_leds = count;
-
-    // Allocate LED geometry array
     leds = new Led[count];
-
-    // Allocate color buffer for FastLED
     buffer = new CRGB[count];
 
-    // Initialize LEDs
     for (uint8_t i = 0; i < count; i++) {
         leds[i].idx = i;
         buffer[i] = CRGB::Black;
@@ -51,7 +45,48 @@ void LedStrip::deallocate() {
 // Geometry Implementation
 // ============================================================================
 
-Geometry::Geometry() : config(nullptr), strips(nullptr), initialized(false) {
+void addLedsToPin(uint8_t pin, CRGB* buffer, int count) {
+    switch (pin) {
+        // PINS VALID ON ALL MODELS (C3, S3, WROOM)
+        case 1:  FastLED.addLeds<WS2812B, 1,  GRB>(buffer, count); break;
+        case 2:  FastLED.addLeds<WS2812B, 2,  GRB>(buffer, count); break;
+        case 4:  FastLED.addLeds<WS2812B, 4,  GRB>(buffer, count); break;
+        case 5:  FastLED.addLeds<WS2812B, 5,  GRB>(buffer, count); break;
+        case 10: Log.errorln("Pin 10 is forbidden by FastLED"); break;
+
+        // PINS VALID ONLY ON S3 and WROOM (High GPIO numbers)
+        #if !defined(ESP32_C3)
+        case 12: FastLED.addLeds<WS2812B, 12, GRB>(buffer, count); break;
+        case 13: FastLED.addLeds<WS2812B, 13, GRB>(buffer, count); break;
+        case 14: FastLED.addLeds<WS2812B, 14, GRB>(buffer, count); break;
+        case 15: FastLED.addLeds<WS2812B, 15, GRB>(buffer, count); break;
+        case 18: FastLED.addLeds<WS2812B, 18, GRB>(buffer, count); break;
+        case 19: FastLED.addLeds<WS2812B, 19, GRB>(buffer, count); break;
+        case 21: FastLED.addLeds<WS2812B, 21, GRB>(buffer, count); break;
+        #if defined(ESP32_S3)
+        case 22: Log.errorln("Pin 22 is forbidden by FastLED on S3"); break;
+        #else
+        case 22: FastLED.addLeds<WS2812B, 22, GRB>(buffer, count); break;
+        #endif
+        case 23: Log.errorln("Pin 23 is forbidden by FastLED"); break;
+        case 25: Log.errorln("Pin 25 is forbidden by FastLED"); break;
+        case 26: FastLED.addLeds<WS2812B, 26, GRB>(buffer, count); break;
+        case 27: Log.errorln("Pin 27 is forbidden by FastLED"); break;
+        #endif
+
+        // PINS VALID ONLY ON WROOM (Even higher GPIO numbers)
+        #if defined(ESP32_WROOM)
+        case 32: FastLED.addLeds<WS2812B, 32, GRB>(buffer, count); break;
+        case 33: FastLED.addLeds<WS2812B, 33, GRB>(buffer, count); break;
+        #endif
+
+        default:
+            Log.errorln("Pin %d is not valid for this specific hardware variant!", pin);
+            break;
+    }
+}
+
+Geometry::Geometry() : config(nullptr), strips(nullptr) {
 }
 
 Geometry::~Geometry() {
@@ -62,24 +97,17 @@ Geometry::~Geometry() {
 }
 
 void Geometry::initialize(ModelId model_id) {
-    if (initialized) {
-        Log.warningln("Geometry already initialized, reinitializing...");
-        if (strips) {
-            delete[] strips;
-            strips = nullptr;
-        }
-    }
 
     // Get model configuration
     config = getModelConfig(model_id);
     if (!config) {
         Log.errorln("Failed to find model configuration for ID %d", (uint8_t)model_id);
-        return;
+        // TODO: handle this more gracefully (e.g., fallback to a default model or enter a safe mode)
     }
 
-    Log.noticeln("Initializing geometry for: %s %s", config->family, config->model_name);
-    Log.noticeln("  Strips: %d, Max LEDs/strip: %d, Screen: %d mm",
-                 config->num_strips, config->max_leds_per_strip, config->screen_size_mm);
+    Log.noticeln("Initializing geometry for: %s", config->name);
+    Log.noticeln("  Strips: %d, Screen: %d mm",
+                 config->num_strips, config->screen_size_mm);
 
     // Allocate strip array
     strips = new LedStrip[config->num_strips];
@@ -87,8 +115,6 @@ void Geometry::initialize(ModelId model_id) {
     // Initialize each strip
     for (uint8_t i = 0; i < config->num_strips; i++) {
         strips[i].idx = i;
-
-        // Read strip length from PROGMEM
         uint8_t strip_length = pgm_read_byte(&config->strip_lengths[i]);
         strips[i].allocate(strip_length);
     }
@@ -96,48 +122,49 @@ void Geometry::initialize(ModelId model_id) {
     // Load coordinates from PROGMEM
     loadCoordinates();
 
-    // Initialize FastLED using model-specific function
-    config->initialize_fastled(strips);
+    // Initialize FastLED controllers for each strip
+    for (uint8_t i = 0; i < config->num_strips; i++) {
+        uint8_t pin = pgm_read_byte(&config->pin_map[i]);
+        addLedsToPin(pin, strips[i].buffer, strips[i].num_leds);
+    }
 
-    initialized = true;
     Log.noticeln("Geometry initialized successfully");
 }
 
 void Geometry::loadCoordinates() {
-    if (!config) return;
-
     Log.verboseln("Loading coordinates from PROGMEM...");
+
+    uint16_t current_offset = 0; // Tracks the current position in the flat PROGMEM array
 
     for (uint8_t iStrip = 0; iStrip < config->num_strips; iStrip++) {
         uint8_t strip_length = strips[iStrip].num_leds;
 
         for (uint8_t iLed = 0; iLed < strip_length; iLed++) {
-            // Calculate index into flat coordinate arrays
-            // Arrays are organized as [strip][led] but stored flat
-            uint16_t coord_index = (uint16_t)iStrip * config->max_leds_per_strip + iLed;
+            // The coordinate is located at (start of strip + current led index)
+            uint16_t data_index = current_offset + iLed;
 
-            // Read cartesian coordinates from PROGMEM
+            // Copy Cartesian data from PROGMEM
             CartesianCoordinates cart;
-            memcpy_P(&cart, &config->cartesian_data[coord_index], sizeof(CartesianCoordinates));
+            memcpy_P(&cart, &config->cartesian_data[data_index], sizeof(CartesianCoordinates));
             strips[iStrip].leds[iLed].fixedCartesian = cart;
             strips[iStrip].leds[iLed].cartesian = cart;
 
-            // Read polar coordinates from PROGMEM
+            // Copy Polar data from PROGMEM
+            // TODO: why not compute them on the fly from Cartesian coordinates?
             PolarCoordinates polar;
-            memcpy_P(&polar, &config->polar_data[coord_index], sizeof(PolarCoordinates));
+            memcpy_P(&polar, &config->polar_data[data_index], sizeof(PolarCoordinates));
             strips[iStrip].leds[iLed].fixedPolar = polar;
             strips[iStrip].leds[iLed].polar = polar;
         }
+
+        // After finishing a strip, move the offset forward by the length of that strip
+        current_offset += strip_length;
     }
 
-    Log.verboseln("Coordinates loaded");
+    Log.verboseln("Coordinates loaded successfully");
 }
 
 void Geometry::applyGlobalRandomRotation() {
-    if (!initialized) {
-        Log.errorln("Cannot apply rotation: geometry not initialized");
-        return;
-    }
 
     // Pick a random angle for the rotation
     float theta = (random(0, 1000) / 1000.0) * 2 * PI;
@@ -151,13 +178,11 @@ void Geometry::applyGlobalRandomRotation() {
     float sinT = sin(theta);
 
     FOR_EACH_STRIP {
-        FOR_EACH_LED {
+        FOR_EACH_LED(iStrip) {
             // Real physical coordinates of the LED
             CartesianCoordinates r = strips[iStrip].leds[iLed].fixedCartesian;
 
             // Apply inverse rotation matrix
-            // This transforms the coordinate system, not the LEDs themselves
-            // See original code comments for detailed explanation
             strips[iStrip].leds[iLed].cartesian.x = (short)(  r.x * cosT + r.y * sinT);
             strips[iStrip].leds[iLed].cartesian.y = (short)(- r.x * sinT + r.y * cosT);
 
@@ -169,15 +194,10 @@ void Geometry::applyGlobalRandomRotation() {
 }
 
 void Geometry::resetGlobalTransform() {
-    if (!initialized) {
-        Log.errorln("Cannot reset transform: geometry not initialized");
-        return;
-    }
-
     Log.noticeln("Resetting global transform");
 
     FOR_EACH_STRIP {
-        FOR_EACH_LED {
+        FOR_EACH_LED(iStrip) {
             strips[iStrip].leds[iLed].cartesian = strips[iStrip].leds[iLed].fixedCartesian;
             strips[iStrip].leds[iLed].polar = strips[iStrip].leds[iLed].fixedPolar;
         }
@@ -195,7 +215,7 @@ namespace FactoryConfig {
     void setModelId(ModelId model_id) {
         Preferences prefs;
         prefs.begin(PREFS_NAMESPACE, false);
-        prefs.putUChar(MODEL_ID_KEY, (uint8_t)model_id);
+        prefs.putUShort(MODEL_ID_KEY, (uint16_t)model_id);
         prefs.end();
 
         Log.noticeln("Factory config: Set model ID to %d (%s)",
@@ -205,7 +225,7 @@ namespace FactoryConfig {
     ModelId getModelId() {
         Preferences prefs;
         prefs.begin(PREFS_NAMESPACE, true);  // read-only
-        uint8_t id = prefs.getUChar(MODEL_ID_KEY, (uint8_t)ModelId::UNKNOWN);
+        uint16_t id = prefs.getUShort(MODEL_ID_KEY, (uint16_t)ModelId::UNKNOWN);
         prefs.end();
 
         return (ModelId)id;

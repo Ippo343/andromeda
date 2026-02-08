@@ -60,7 +60,6 @@ class Geometry {
 private:
     const ModelConfig* config;
     LedStrip* strips;
-    bool initialized;
 
     // Load model coordinates from PROGMEM into RAM
     void loadCoordinates();
@@ -72,6 +71,8 @@ public:
     // Initialize with a specific model
     // Should be called once at startup
     void initialize(ModelId model_id);
+
+    inline const LedStrip* getStrips() const { return strips; }
 
     // Get the current model configuration
     inline const ModelConfig* getConfig() const { return config; }
@@ -85,6 +86,7 @@ public:
     }
 
     // Get screen size
+    // TODO: turn into bounding box
     inline unsigned short getScreenSize() const {
         return config ? config->screen_size_mm : 0;
     }
@@ -98,9 +100,6 @@ public:
 
     // Reset all transforms (restore original coordinates)
     void resetGlobalTransform();
-
-    // Check if geometry is initialized
-    inline bool isInitialized() const { return initialized; }
 };
 
 // Global geometry instance
@@ -109,7 +108,7 @@ extern Geometry GEOMETRY;
 // Convenience macros for iterating over strips and LEDs
 // These now use the dynamic geometry
 #define FOR_EACH_STRIP for (uint8_t iStrip = 0; iStrip < GEOMETRY.getNumStrips(); iStrip++)
-#define FOR_EACH_LED for (uint8_t iLed = 0; iLed < GEOMETRY.getStrip(iStrip).num_leds; iLed++)
+#define FOR_EACH_LED(iStrip) for (uint8_t iLed = 0; iLed < GEOMETRY.getStrip(iStrip).num_leds; iLed++)
 
 // Factory configuration functions
 namespace FactoryConfig {

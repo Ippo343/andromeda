@@ -15,7 +15,7 @@ class SweepStrips : public AbstractAnimation
 
     void run() override
     {
-      std::vector<CHSV> colors = randomComplementaryColors(3);
+      vector<CHSV> colors = randomComplementaryColors(3);
 
       paint(CRGB::Black);
       for (byte c = 0; c < 3; c++)
@@ -27,17 +27,31 @@ class SweepStrips : public AbstractAnimation
   private:
     void colorSweep(CRGB color)
     {
-      FOR_EACH_LED
-      {
-        FOR_EACH_STRIP
-        {
-          STRIPS[iStrip].buffer[iLed] = color;
+      // Find the longest strip
+      uint8_t maxLeds = 0;
+      for (uint8_t i = 0; i < GEOMETRY.getNumStrips(); i++) {
+        maxLeds = max(maxLeds, GEOMETRY.getStrip(i).num_leds);
+      }
+
+      // Sweep with normalized progress
+      for (uint8_t step = 0; step < maxLeds; step++) {
+        FOR_EACH_STRIP {
+          uint8_t stripLen = GEOMETRY.getStrip(iStrip).num_leds;
+
+          // Map the current step to how many LEDs should be lit on this strip
+          uint8_t ledsToLight = map(step, 0, maxLeds - 1, 0, stripLen - 1);
+
+          // Fill from 0 to ledsToLight
+          for (uint8_t i = 0; i <= ledsToLight; i++) {
+            GEOMETRY.getStrip(iStrip).buffer[i] = color;
+          }
         }
         FASTLED_SHOW();
         delay(timeStep);
       }
     }
 };
+
 
 
 // ============================================================================
@@ -58,7 +72,7 @@ class BaseSweep : public AbstractAnimation
 
     void run() override
     {
-      std::vector<CHSV> colors = randomComplementaryColors(3);
+      vector<CHSV> colors = randomComplementaryColors(3);
 
       // Coordinate system flip for direction (if needed)
       if (!direction)
@@ -93,7 +107,7 @@ class BaseSweep : public AbstractAnimation
 
         FOR_EACH_STRIP
         {
-          FOR_EACH_LED
+          FOR_EACH_LED(iStrip)
           {
             unsigned short coord = getCoordinate(iStrip, iLed);
 
@@ -150,7 +164,7 @@ class BaseSweep : public AbstractAnimation
               }
 
               byte brightness = map(rampDistance, 0, rampWidth, 0, 255);
-              STRIPS[iStrip].buffer[iLed] = color % brightness;
+              GEOMETRY.getStrip(iStrip).buffer[iLed] = color % brightness;
             }
           }
         }
@@ -185,16 +199,16 @@ class ClockSweep : public BaseSweep
     {
       FOR_EACH_STRIP
       {
-        FOR_EACH_LED
+        FOR_EACH_LED(iStrip)
         {
-          STRIPS[iStrip].leds[iLed].polar.cdegrees = FULL_CIRCLE - STRIPS[iStrip].leds[iLed].polar.cdegrees;
+          GEOMETRY.getStrip(iStrip).leds[iLed].polar.cdegrees = FULL_CIRCLE - GEOMETRY.getStrip(iStrip).leds[iLed].polar.cdegrees;
         }
       }
       }
 
     unsigned short getCoordinate(int strip, int led) override
     {
-      return STRIPS[strip].leds[led].polar.cdegrees;
+      return GEOMETRY.getStrip(strip).leds[led].polar.cdegrees;
     }
 
     unsigned short getMaxCoordinate() override
@@ -227,21 +241,21 @@ class RadialSweep : public BaseSweep
     {
       FOR_EACH_STRIP
       {
-        FOR_EACH_LED
+        FOR_EACH_LED(iStrip)
         {
-          STRIPS[iStrip].leds[iLed].polar.radius = SCREEN_HALF_SIZE - STRIPS[iStrip].leds[iLed].polar.radius;
+          GEOMETRY.getStrip(iStrip).leds[iLed].polar.radius = GEOMETRY.getScreenHalfSize() - GEOMETRY.getStrip(iStrip).leds[iLed].polar.radius;
         }
       }
     }
 
     unsigned short getCoordinate(int strip, int led) override
     {
-      return STRIPS[strip].leds[led].polar.radius;
+      return GEOMETRY.getStrip(strip).leds[led].polar.radius;
     }
 
     unsigned short getMaxCoordinate() override
     {
-      return SCREEN_HALF_SIZE;
+      return GEOMETRY.getScreenHalfSize();
     }
 };
 
@@ -264,13 +278,13 @@ class SequentialFadeIn : public AbstractAnimation
       paint(CRGB::Black);
 
       // Shuffle the strip indices to randomize the order of fading in
-      int strips[NUM_STRIPS];
-      for (int i = 0; i < NUM_STRIPS; i++) strips[i] = i;
-      shuffle(strips, NUM_STRIPS);
+      int strips[GEOMETRY.getNumStrips()];
+      for (int i = 0; i < GEOMETRY.getNumStrips(); i++) strips[i] = i;
+      shuffle(strips, GEOMETRY.getNumStrips());
 
-      auto colors = randomComplementaryColors(NUM_STRIPS);
+      auto colors = randomComplementaryColors(GEOMETRY.getNumStrips());
 
-      for (byte i = 0; i < NUM_STRIPS; i++)
+      for (byte i = 0; i < GEOMETRY.getNumStrips(); i++)
       {
         fadeInStrip(strips[i], colors[i], fadeIn);
       }
@@ -318,19 +332,19 @@ class Swipe : public AbstractAnimation
       // It looks smoother if you increase in steps of 2 or 3
       RandParam<short, 2, 3> step;
 
-      // It goes to (step * SCREEN_HALF_SIZE) so that the fading trail has time to fully fade out
-      for (short v = -SCREEN_HALF_SIZE; v <= (step * SCREEN_HALF_SIZE); v += step)
+      // It goes to (step * GEOMETRY.getScreenHalfSize()) so that the fading trail has time to fully fade out
+      for (short v = -GEOMETRY.getScreenHalfSize(); v <= (step * GEOMETRY.getScreenHalfSize()); v += step)
       {
         FOR_EACH_STRIP
         {
-          FOR_EACH_LED
+          FOR_EACH_LED(iStrip)
           {
-            short lv = STRIPS[iStrip].leds[iLed].cartesian.x;
+            short lv = GEOMETRY.getStrip(iStrip).leds[iLed].cartesian.x;
             if (lv >= (v - step) && lv <= v)
-              STRIPS[iStrip].buffer[iLed] = color;
+              GEOMETRY.getStrip(iStrip).buffer[iLed] = color;
           }
 
-          fadeToBlackBy(STRIPS[iStrip].buffer, LEDS_PER_STRIP, step);
+          fadeToBlackBy(GEOMETRY.getStrip(iStrip).buffer, GEOMETRY.getStrip(iStrip).num_leds, step);
         }
 
         FASTLED_SHOW();

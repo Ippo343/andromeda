@@ -1,5 +1,5 @@
-#include "models/model_config.h"
-#include "geometry.h"
+#include "geometry/model_config.h"
+#include "geometry/geometry.h"
 #include <FastLED.h>
 
 namespace AndromedaMk1 {
@@ -49,31 +49,19 @@ const PROGMEM PolarCoordinates POLAR_COORDS[NUM_STRIPS][LEDS_PER_STRIP] = {
   { {  158, 16649 }, {  175, 16843 }, {  191, 16851 }, {  207, 16744 }, {  222, 16565 }, {  234, 16288 }, {  245, 15994 }, {  252, 15638 }, {  256, 15284 }, {  257, 14915 }, {  255, 14538 }, {  249, 14184 }, {  240, 13854 }, {  228, 13571 }, {  214, 13330 }, {  198, 13173 }, {  181, 13142 }, {  166, 13255 }, {  151, 13527 }, {  139, 14025 }, {  134, 14690 }, {  134, 15382 }, {  140, 16040 } },
 };
 
-// FastLED initialization function
-// Must use template parameters, so can't be done generically
-void initializeFastLED(LedStrip* strips) {
-    FastLED.addLeds<WS2812B, 2, GRB>(strips[0].buffer, LEDS_PER_STRIP);
-    FastLED.addLeds<WS2812B, 4, GRB>(strips[1].buffer, LEDS_PER_STRIP);
-    FastLED.addLeds<WS2812B, 12, GRB>(strips[2].buffer, LEDS_PER_STRIP);
-    FastLED.addLeds<WS2812B, 13, GRB>(strips[3].buffer, LEDS_PER_STRIP);
-    FastLED.addLeds<WS2812B, 14, GRB>(strips[4].buffer, LEDS_PER_STRIP);
-    FastLED.addLeds<WS2812B, 15, GRB>(strips[5].buffer, LEDS_PER_STRIP);
-    FastLED.addLeds<WS2812B, 18, GRB>(strips[6].buffer, LEDS_PER_STRIP);
-}
-
 // Model configuration
-const ModelConfig CONFIG = {
+extern const ModelConfig CONFIG = {
     .id = ModelId::ANDROMEDA_MK1,
-    .family = "Andromeda",
-    .model_name = "Mk1",
+    .name = "Andromeda Mk1",
+
     .num_strips = NUM_STRIPS,
-    .max_leds_per_strip = LEDS_PER_STRIP,
-    .screen_size_mm = 520,
     .strip_lengths = STRIP_LENGTHS,
     .pin_map = PIN_MAP,
+
+    .screen_size_mm = 520,
+
     .cartesian_data = (const CartesianCoordinates*)CARTESIAN_COORDS,
     .polar_data = (const PolarCoordinates*)POLAR_COORDS,
-    .initialize_fastled = initializeFastLED
 };
 
 } // namespace AndromedaMk1

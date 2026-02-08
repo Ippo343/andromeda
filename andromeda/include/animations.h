@@ -2,7 +2,7 @@
 
 #include "animation-base.h"
 #include "effects-utils.h"
-#include "geometry.h"
+#include "geometry/geometry.h"
 #include "perf-monitor.h"
 
 class WiFiConnectingAnimation : public AbstractAnimation
