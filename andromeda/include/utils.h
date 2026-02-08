@@ -3,11 +3,10 @@
 // The adopter module for general utilities,
 // like typedefs that I like and small functions reused everywhere
 
-#include <stdint.h>   // uint8_t
+#include <stdint.h>
 #include <Arduino.h>
 #include <FastLED.h>
 
-#define byte          uint8_t
 #define milliseconds_t  unsigned long
 
 #define SECONDS       * 1000
@@ -60,11 +59,11 @@ class RandSign : public RandParam<char, -1, 1>
 };
 
 // Represents a sine wave with randomly chosen bpm and direction
-template<byte minBpm, byte maxBpm>
+template<uint8_t minBpm, uint8_t maxBpm>
 class RandSine
 {
   protected:
-    RandParam<byte, minBpm, maxBpm> bpm;
+    RandParam<uint8_t, minBpm, maxBpm> bpm;
     RandSign sign;
 
   public:
@@ -76,5 +75,5 @@ class RandSine
       sign.randomize();
     }
 
-    byte evaluate(long x) { return beatsin8(bpm, 0, 255, 0, sign * x); }
+    uint8_t evaluate(long x) { return beatsin8(bpm, 0, 255, 0, sign * x); }
 };

@@ -314,7 +314,7 @@ void Comms::setupAPRoutes()
 
     Log.noticeln("Headers:");
     int headers = request->headers();
-    for (int i = 0; i < headers; i++) {
+    for (size_t i = 0; i < headers; i++) {
         AsyncWebHeader* h = request->getHeader(i);
         Log.noticeln("  %s: %s", h->name().c_str(), h->value().c_str());
     }
@@ -484,7 +484,7 @@ void Comms::onWiFiScanComplete(int networksFound)
 
   String json = "{\"networks\":[";
 
-  for (int i = 0; i < networksFound; i++) {
+  for (size_t i = 0; i < networksFound; i++) {
     if (i > 0) json += ",";
 
     String encryption = "none";

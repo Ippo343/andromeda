@@ -11,14 +11,14 @@ class MoodLight
   public:
 
     // Min period and period range
-    static const byte MIN_BPM = 3;
-    static const byte MAX_BPM = 20;
+    static const uint8_t MIN_BPM = 3;
+    static const uint8_t MAX_BPM = 20;
 
     // Period of each channel's wave
     // (in beats per minutes since that's what FastLED uses)
-    RandParam<byte, MIN_BPM, MAX_BPM> bpmR;
-    RandParam<byte, MIN_BPM, MAX_BPM> bpmG;
-    RandParam<byte, MIN_BPM, MAX_BPM> bpmB;
+    RandParam<uint8_t, MIN_BPM, MAX_BPM> bpmR;
+    RandParam<uint8_t, MIN_BPM, MAX_BPM> bpmG;
+    RandParam<uint8_t, MIN_BPM, MAX_BPM> bpmB;
 
   void randomize()
   {
@@ -34,9 +34,9 @@ class MoodLight
     // which also gets much worse very quickly as t increases.
     // FastLED implements integer approximations, but they get the time
     // by calling millis() internally.
-    byte r = beatsin8(bpmR);
-    byte g = beatsin8(bpmG);
-    byte b = beatsin8(bpmB);
+    uint8_t r = beatsin8(bpmR);
+    uint8_t g = beatsin8(bpmG);
+    uint8_t b = beatsin8(bpmB);
 
     return CRGB(r, g, b);
   }

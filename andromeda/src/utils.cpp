@@ -29,8 +29,8 @@ void RandSign::randomize()
 long scaledCubicWave8(milliseconds_t t, milliseconds_t period, long minV, long maxV)
 {
   milliseconds_t ct = t % period;
-  byte scaledct = map(ct, 0, period, 0, 255);
-  byte rawWave = cubicwave8(scaledct);
+  uint8_t scaledct = map(ct, 0, period, 0, 255);
+  uint8_t rawWave = cubicwave8(scaledct);
   long scaledWave = map(rawWave, 0, 255, minV, maxV);
   return scaledWave;
 }
@@ -62,7 +62,7 @@ float slowSin(unsigned long ms, float bpm, uint8_t minVal, uint8_t maxVal)
 }
 
 void shuffle(int* array, int size) {
-    for (int i = size - 1; i > 0; i--) {
+    for (size_t i = size - 1; i > 0; i--) {
         int j = random(i + 1);  // random index from 0 to i
         int temp = array[i];
         array[i] = array[j];

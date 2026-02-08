@@ -11,13 +11,13 @@ void paint(CRGB color)
 
 // Paints a single strip with the given color
 // Thin wrapper around fill_solid because I'm that lazy
-void paintStrip(byte idx, CRGB color)
+void paintStrip(int idx, CRGB color)
 {
   fill_solid(GEOMETRY.getStrip(idx).buffer, GEOMETRY.getStrip(idx).num_leds, color);
 }
 
 // Fade in a strip with the given color over the given duration
-void fadeInStrip(byte idx, CHSV color, milliseconds_t duration)
+void fadeInStrip(int idx, CHSV color, milliseconds_t duration)
 {
   paintStrip(idx, CRGB::Black);
   FASTLED_SHOW();
@@ -27,7 +27,7 @@ void fadeInStrip(byte idx, CHSV color, milliseconds_t duration)
   do
   {
     dt = millis() - start;
-    byte v = constrain(map(dt, 0, duration, 0, color.v), 0, 255);
+    uint8_t v = constrain(map(dt, 0, duration, 0, color.v), 0, 255);
     CHSV c = CHSV(color.h, color.s, v);
     paintStrip(idx, c);
     FASTLED_SHOW();
@@ -46,7 +46,7 @@ void fadeInAllStrips(CHSV color, milliseconds_t duration)
   do
   {
     dt = millis() - start;
-    byte v = map(dt, 0, duration, 0, color.v);
+    uint8_t v = map(dt, 0, duration, 0, color.v);
     CHSV c = CHSV(color.h, color.s, v);
     FOR_EACH_STRIP {
       paintStrip(iStrip, c);
@@ -65,16 +65,16 @@ CHSV randomColor()
 }
 
 // Generate N random complementary colors spaced evenly on the hue wheel
-vector<CHSV> randomComplementaryColors(byte N)
+vector<CHSV> randomComplementaryColors(int N)
 {
   vector<CHSV> retval(N);
 
-  const byte hueStep = (byte)(255.0 / N);
+  const int hueStep = (int)(255.0 / N);
   short a = random8();
 
-  for (byte i = 0; i < N; i++)
+  for (size_t i = 0; i < N; i++)
   {
-    byte h = (a + hueStep * i) % 255;
+    int h = (a + hueStep * i) % 255;
     retval[i] = CHSV(h, 255, 255);
   }
 
@@ -120,7 +120,7 @@ CRGBPalette16 randomPredefinedPalette()
 // 255 is obviously the maximum brightness: but then you need to multiply but some factor
 // because otherwise (255 / d^2) is always very very dim.
 // I found 5000 by trial and error and it looks good.
-byte brightnessFromEmitter(Led* led, CartesianCoordinates e, float brightnessFactor)
+uint8_t brightnessFromEmitter(Led* led, CartesianCoordinates e, float brightnessFactor)
 {
   short dx = ( led->cartesian.x - e.x );
   short dy = ( led->cartesian.y - e.y );
@@ -129,12 +129,12 @@ byte brightnessFromEmitter(Led* led, CartesianCoordinates e, float brightnessFac
   // With one single channel, doing everything in floating point with the standard library
   // was tanking the framerate below 40. With the fast algorithm, it runs 3 channels at 75 fps!
   float invdist = Q_rsqrt(dx*dx + dy*dy);
-  byte v = (byte)constrain(brightnessFactor * invdist * invdist, 0, 255);
+  uint8_t v = (uint8_t)constrain(brightnessFactor * invdist * invdist, 0, 255);
 
   // Original formula with just the inverse of the distance.
   // Physically correct, but it looks kinda dull.
   // (1/d^2) looks cooler.
-  // byte v = (byte)constrain(255 * 30 * invdist , 0, 255);
+  // uint8_t v = (uint8_t)constrain(255 * 30 * invdist , 0, 255);
 
   return v;
 }

@@ -46,8 +46,8 @@ class ElectricSparks : public AbstractEffect
 
     // Palette values for each LED
     // Needs double buffering to correctly compute the averaging of neighbouring pixels
-    vector<vector<byte>> preValues;
-    vector<vector<byte>> newValues;
+    vector<vector<uint8_t>> preValues;
+    vector<vector<uint8_t>> newValues;
 
     CRGBPalette256 palette;
 
@@ -55,19 +55,19 @@ class ElectricSparks : public AbstractEffect
     RandParam<unsigned short, 200, 2000> hueTimeScale;
 
     // Current base hue (updated based on perlin noise)
-    byte hue;
+    uint8_t hue;
 
     // This is tricky to figure out if not by trial and error.
     // We roll a dice every frame for every led, so the chance must be really small.
     // These are values that I like experimentally, I cannot justify them.
     // TODO: better way to define the frequency
     constexpr static unsigned int DICE_LIMIT = 100000;
-    EnergyParam<byte, 5, 26> sparkChance;
+    EnergyParam<int, 5, 26> sparkChance;
 
     // Chance that a spark becomes bigger, rolled out of 100.
     // If the roll is successful, the width is doubled and then rolled again until it fails.
     // Potentially going up to the full strip in rare cases.
-    EnergyParam<byte, 40, 70> bigSparkChance;
+    EnergyParam<int, 40, 70> bigSparkChance;
 
     ElectricSparks()
     {
@@ -75,13 +75,13 @@ class ElectricSparks : public AbstractEffect
       preValues.resize(GEOMETRY.getNumStrips());
       newValues.resize(GEOMETRY.getNumStrips());
 
-      for (uint8_t i = 0; i < GEOMETRY.getNumStrips(); i++) {
+      for (size_t i = 0; i < GEOMETRY.getNumStrips(); i++) {
         preValues[i].resize(GEOMETRY.getStrip(i).num_leds, 0);
         newValues[i].resize(GEOMETRY.getStrip(i).num_leds, 0);
       }
     }
 
-    inline byte avg38(int a, int b, int c)
+    inline int avg38(int a, int b, int c)
     {
       return (a + b + c) / 3;
     }
@@ -129,8 +129,8 @@ class ElectricSparks : public AbstractEffect
         // taking the value from the previous buffer so that the new buffer is computed correctly
         // TODO: solve the heat conduction partial differential equation (LOL)
 
-        uint8_t stripLen = GEOMETRY.getStrip(iStrip).num_leds;
-        for (byte iLed = 0; iLed < stripLen; iLed++)
+        size_t stripLen = GEOMETRY.getStrip(iStrip).num_leds;
+        for (size_t iLed = 0; iLed < stripLen; iLed++)
         {
           newValues[iStrip][iLed] = avg38(
             preValues[iStrip][LI(iLed - 1)],
@@ -146,14 +146,14 @@ class ElectricSparks : public AbstractEffect
       // Random injection of new spikes
       if (random(DICE_LIMIT) < sparkChance)
       {
-        byte width = 1;
+        int width = 1;
 
         // Keep rolling for a chance to increase the spark's size
         while (random(100) < bigSparkChance)
           width *= 2;
 
         // Now light up the pixel and its neighbours up to the defined width
-        for (byte w = 0; w < width; w++)
+        for (size_t w = 0; w < width; w++)
         {
           newValues[strip->idx][LI(led->idx + w)] = 255;
           newValues[strip->idx][LI(led->idx - w)] = 255;
@@ -168,8 +168,8 @@ class ElectricSparks : public AbstractEffect
       // Dissipate the energy to lower values
       FOR_EACH_STRIP
       {
-        uint8_t stripLen = GEOMETRY.getStrip(iStrip).num_leds;
-        for (uint8_t iLed = 0; iLed < stripLen; iLed++)
+        size_t stripLen = GEOMETRY.getStrip(iStrip).num_leds;
+        for (size_t iLed = 0; iLed < stripLen; iLed++)
         {
           newValues[iStrip][iLed] = scale8(newValues[iStrip][iLed], 254);
         }
@@ -193,13 +193,13 @@ class SaturationGlow : public AbstractEffect
     // Time scale factor for the perlin random noise
     RandParam<unsigned short, 500, 5000> hueTimeScale;
 
-    RandParam<byte, 100, 156> saturationCenter;         // skewed towards high saturation because colors are pretty
-    byte saturationAmplitude;
+    RandParam<uint8_t, 100, 156> saturationCenter;         // skewed towards high saturation because colors are pretty
+    uint8_t saturationAmplitude;
 
     // Each strip has a random cycle time
     vector<RandParam<milliseconds_t, (1 MINUTES), (4 MINUTES)>> cycleTime;
 
-    byte hue;                   // current hue (same for all strips)
+    uint8_t hue;                   // current hue (same for all strips)
     vector<CRGB> color;    // specific color per strip
 
     SaturationGlow() :
@@ -207,8 +207,8 @@ class SaturationGlow : public AbstractEffect
       color(GEOMETRY.getNumStrips())
     {
       saturationAmplitude = min(
-        static_cast<byte>(saturationCenter),
-        static_cast<byte>(255 - saturationCenter)
+        static_cast<uint8_t>(saturationCenter),
+        static_cast<uint8_t>(255 - saturationCenter)
       );
     }
 
@@ -219,7 +219,7 @@ class SaturationGlow : public AbstractEffect
       FOR_EACH_STRIP
       {
         long scaledWave = scaledCubicWave8(t, cycleTime[iStrip], -saturationAmplitude, saturationAmplitude);
-        byte sat = constrain(saturationCenter + scaledWave, 0, 255);
+        uint8_t sat = constrain(saturationCenter + scaledWave, 0, 255);
         color[iStrip] = CHSV(hue, sat, 255);
       }
     }
@@ -239,7 +239,7 @@ class PaletteWave : public AbstractEffect
     }
 
     CRGBPalette256 palette;
-    RandParam<byte, 3, 8> bpm;
+    RandParam<uint8_t, 3, 8> bpm;
     RandParam<int, 5, 10> scale;
 
     PaletteWave()
@@ -256,7 +256,7 @@ class PaletteWave : public AbstractEffect
     CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
     {
       int v = (led->cartesian.x + led->cartesian.y) / (int)scale;
-      byte value = beatsin8(bpm, 0, 255, 0, v);
+      uint8_t value = beatsin8(bpm, 0, 255, 0, v);
       return ColorFromPalette(palette, value);
     }
 };
@@ -278,7 +278,7 @@ class NinjaStar : public AbstractEffect
     MoodLight outer;
     CRGB innerColor;
     CRGB outerColor;
-    byte offset;
+    uint8_t offset;
 
     void precompute(milliseconds_t t) override
     {
@@ -292,11 +292,11 @@ class NinjaStar : public AbstractEffect
       // TODO: great opportunity for an additional set of coordinates stored in the LED
       // This would allow effects to precompute scaled LED coordinates
       // Might have to be local to the effect in case of performance issues
-      byte theta = map((led->polar.cdegrees * beams) % FULL_CIRCLE, 0, FULL_CIRCLE, 0, 255);
+      uint8_t theta = map((led->polar.cdegrees * beams) % FULL_CIRCLE, 0, FULL_CIRCLE, 0, 255);
 
       // TODO: this is a great opportunity for a LUT
-      byte v = sin8(theta + offset);
-      for (byte i = 0; i < 4; i++)
+      uint8_t v = sin8(theta + offset);
+      for (size_t i = 0; i < 4; i++)
         v = scale8(v, v);
 
       unsigned short scaledRadius = map(led->polar.radius, 0, GEOMETRY.getScreenHalfSize(), 0, 255);
@@ -316,8 +316,8 @@ class PolarSwipe : public AbstractEffect
     }
 
     RandBool flip;
-    RandParam<byte, 10, 40> bpm;
-    RandParam<byte, 20, 80> bandWidth;
+    RandParam<uint8_t, 10, 40> bpm;
+    RandParam<uint8_t, 20, 80> bandWidth;
 
     // Minimum and maximum radii for the swipe.
     // It needs to start from aperture / 2 so that the minimum of the band is at 0,
@@ -353,7 +353,7 @@ class PolarSwipe : public AbstractEffect
         color = randomColor();
     }
 
-    inline byte getBrightness(Led* led)
+    inline uint8_t getBrightness(Led* led)
     {
       unsigned short R = led->polar.radius;
       unsigned short D = abs(R - bandCenter);
@@ -391,9 +391,9 @@ class PolarMoodlight : public AbstractEffect
 
     CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
     {
-      byte R = red.evaluate(led->polar.radius);
-      byte G = green.evaluate(led->polar.radius);
-      byte B = blue.evaluate(led->polar.radius);
+      uint8_t R = red.evaluate(led->polar.radius);
+      uint8_t G = green.evaluate(led->polar.radius);
+      uint8_t B = blue.evaluate(led->polar.radius);
 
       return CRGB(R, G, B);
     }
@@ -412,7 +412,7 @@ class RGBodyProblem : public AbstractEffect
       return "RGBodyProblem";
     }
 
-    RandParam<byte, 1, 3> emittersCount;
+    RandParam<int, 1, 3> emittersCount;
     RandBool fixedColors;
 
     vector<CartesianCoordinates> locations;
@@ -430,7 +430,7 @@ class RGBodyProblem : public AbstractEffect
     {
       controlHints = ControlHints::ROTATE_SPACE;
 
-      for (byte i; i < emittersCount; i++)
+      for (size_t i; i < emittersCount; i++)
       {
         locations[i] = CartesianCoordinates();
         sx[i] = RandSine<1, 20>();
@@ -442,14 +442,14 @@ class RGBodyProblem : public AbstractEffect
     }
 
     // Helper to scale the result of a sine wave to the screen size
-    short scale(byte v)
+    short scale(int v)
     {
       return map(v, 0, 255, -GEOMETRY.getScreenHalfSize(), GEOMETRY.getScreenHalfSize());
     }
 
     void precompute(milliseconds_t t) override
     {
-      for (byte i = 0; i < emittersCount; i++)
+      for (size_t i = 0; i < emittersCount; i++)
       {
         locations[i].x = scale(sx[i].evaluate(0));
         locations[i].y = scale(sy[i].evaluate(0));
@@ -461,16 +461,16 @@ class RGBodyProblem : public AbstractEffect
       if (emittersCount == 1)
       {
         CRGB rawColor = moodlight.evaluate();
-        byte v = brightnessFromEmitter(led, locations[0]);
+        uint8_t v = brightnessFromEmitter(led, locations[0]);
         rawColor.nscale8(v);
         return rawColor;
       }
 
       CRGB finalColor = CRGB::Black;
-      for (byte i = 0; i < emittersCount; i++)
+      for (size_t i = 0; i < emittersCount; i++)
       {
         CRGB emitterColor = colors[i];
-        byte v = brightnessFromEmitter(led, locations[i]);
+        uint8_t v = brightnessFromEmitter(led, locations[i]);
         emitterColor.nscale8(v);
         finalColor += emitterColor;
       }
@@ -486,25 +486,25 @@ class HexagonalRippleGalaxy : public AbstractEffect
 {
 private:
     // Cached values computed once per frame
-    byte timeScale8;     // Time scaled to 0-255
-    byte spiralOffset8;  // Spiral offset as 0-255
-    byte baseHue;
+    uint8_t timeScale8;     // Time scaled to 0-255
+    uint8_t spiralOffset8;  // Spiral offset as 0-255
+    uint8_t baseHue;
 
     // Randomizable parameters for variation
-    RandParam<byte, 3, 5> timeShift;          // Time scale divisor (>> 3 to >> 5) - faster
-    RandParam<byte, 5, 7> spiralShift;        // Spiral rotation divisor (>> 5 to >> 7) - faster
-    RandParam<byte, 6, 9> hueShift;           // Hue cycling divisor (>> 6 to >> 9) - faster
+    RandParam<uint8_t, 3, 5> timeShift;          // Time scale divisor (>> 3 to >> 5) - faster
+    RandParam<uint8_t, 5, 7> spiralShift;        // Spiral rotation divisor (>> 5 to >> 7) - faster
+    RandParam<uint8_t, 6, 9> hueShift;           // Hue cycling divisor (>> 6 to >> 9) - faster
 
-    RandParam<byte, 1, 3> ripple1Freq;        // Ripple 1 frequency multiplier
-    RandParam<byte, 1, 4> ripple1TimeScale;   // Ripple 1 time multiplier
-    RandParam<byte, 0, 2> ripple2Freq;        // Ripple 2 frequency multiplier (0 = off)
-    RandParam<byte, 1, 3> ripple2TimeScale;   // Ripple 2 time multiplier
+    RandParam<uint8_t, 1, 3> ripple1Freq;        // Ripple 1 frequency multiplier
+    RandParam<uint8_t, 1, 4> ripple1TimeScale;   // Ripple 1 time multiplier
+    RandParam<uint8_t, 0, 2> ripple2Freq;        // Ripple 2 frequency multiplier (0 = off)
+    RandParam<uint8_t, 1, 3> ripple2TimeScale;   // Ripple 2 time multiplier
 
-    RandParam<byte, 2, 5> spiralCount;        // Number of spiral arms
-    RandParam<byte, 2, 4> spiralRadiusShift;  // Spiral-radius coupling (>> 2 to >> 4)
+    RandParam<uint8_t, 2, 5> spiralCount;        // Number of spiral arms
+    RandParam<uint8_t, 2, 4> spiralRadiusShift;  // Spiral-radius coupling (>> 2 to >> 4)
 
-    RandParam<byte, 0, 2> hueAngleShift;      // Hue angle contribution (>> 0 to >> 2)
-    RandParam<byte, 3, 5> hueRadiusShift;     // Hue radius contribution (>> 3 to >> 5)
+    RandParam<uint8_t, 0, 2> hueAngleShift;      // Hue angle contribution (>> 0 to >> 2)
+    RandParam<uint8_t, 3, 5> hueRadiusShift;     // Hue radius contribution (>> 3 to >> 5)
 
 public:
     const char* GetName() override
@@ -516,13 +516,13 @@ public:
     {
         // Scale time to 8-bit for FastLED trig functions
         // Use randomized time scaling
-        timeScale8 = t >> static_cast<byte>(timeShift);
+        timeScale8 = t >> static_cast<uint8_t>(timeShift);
 
         // Spiral rotation with randomized speed
-        spiralOffset8 = t >> static_cast<byte>(spiralShift);
+        spiralOffset8 = t >> static_cast<uint8_t>(spiralShift);
 
         // Hue cycling with randomized period
-        baseHue = t >> static_cast<byte>(hueShift);
+        baseHue = t >> static_cast<uint8_t>(hueShift);
     }
 
     CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
@@ -536,24 +536,24 @@ public:
         float angle = atan2(y, x);
 
         // Convert to 8-bit values for FastLED functions
-        byte radius8 = (byte)constrain(radius * 0.49f, 0, 255);  // Scale ~520mm max radius to 255
-        byte angle8 = (byte)((angle + PI) * 40.584f);  // Map (-π,π) to (0,255)
+        uint8_t radius8 = (uint8_t)constrain(radius * 0.49f, 0, 255);  // Scale ~520mm max radius to 255
+        uint8_t angle8 = (uint8_t)((angle + PI) * 40.584f);  // Map (-π,π) to (0,255)
 
         // Create ripples with randomized parameters
-        byte ripple1 = sin8((radius8 * static_cast<byte>(ripple1Freq)) - (timeScale8 * static_cast<byte>(ripple1TimeScale)));
-        byte ripple2 = sin8((radius8 * static_cast<byte>(ripple2Freq)) - (timeScale8 * static_cast<byte>(ripple2TimeScale)));
+        uint8_t ripple1 = sin8((radius8 * static_cast<uint8_t>(ripple1Freq)) - (timeScale8 * static_cast<uint8_t>(ripple1TimeScale)));
+        uint8_t ripple2 = sin8((radius8 * static_cast<uint8_t>(ripple2Freq)) - (timeScale8 * static_cast<uint8_t>(ripple2TimeScale)));
 
         // Combine ripples
-        byte rippleSum = ((ripple1 >> 1) + (ripple2 >> 2)) + 64;
+        uint8_t rippleSum = ((ripple1 >> 1) + (ripple2 >> 2)) + 64;
 
         // Add spiral component with randomized parameters
-        byte spiral = sin8((angle8 * static_cast<byte>(spiralCount)) + spiralOffset8 + (radius8 >> static_cast<byte>(spiralRadiusShift)));
+        uint8_t spiral = sin8((angle8 * static_cast<uint8_t>(spiralCount)) + spiralOffset8 + (radius8 >> static_cast<uint8_t>(spiralRadiusShift)));
 
         // Combine ripples and spiral for saturation modulation instead of brightness
-        byte saturationMod = ((rippleSum >> 1) + (spiral >> 1));
+        uint8_t saturationMod = ((rippleSum >> 1) + (spiral >> 1));
 
         // Create color with randomized hue distribution
-        byte hue = baseHue + (angle8 >> static_cast<byte>(hueAngleShift)) + (radius8 >> static_cast<byte>(hueRadiusShift));
+        uint8_t hue = baseHue + (angle8 >> static_cast<uint8_t>(hueAngleShift)) + (radius8 >> static_cast<uint8_t>(hueRadiusShift));
 
         // Use FastLED's built-in HSV to RGB conversion
         return CHSV(hue, 255, 255);  // Maximum saturation and brightness
@@ -620,7 +620,7 @@ class IndividualStripDrift : public AbstractEffect
         }
 
         // Compute the interpolation factor between the two colors
-        byte factor = cmap(t, transitionStartTimes[iStrip], transitionEndTimes[iStrip], 0, 255);
+        uint8_t factor = cmap(t, transitionStartTimes[iStrip], transitionEndTimes[iStrip], 0, 255);
         factor = ease8InOutCubic(factor);
 
         currentColors[iStrip] = CRGB::blend(
@@ -649,16 +649,16 @@ class CartesianMoodlight : public AbstractEffect
     }
 
     // Tunable parameters
-    byte valleyPower = 5;      // Power for stretching valleys (3-7 recommended)
-    byte maxWavelength = 5;    // Maximum crests per screen (1-10 range)
+    uint8_t valleyPower = 5;      // Power for stretching valleys (3-7 recommended)
+    uint8_t maxWavelength = 5;    // Maximum crests per screen (1-10 range)
 
     // Random amplitude factors for color variation (scaled so max = 255)
-    byte redAmp, greenAmp, blueAmp;
+    uint8_t redAmp, greenAmp, blueAmp;
 
     // Random temporal frequencies (BPM) for each color, stored as accum88
-    RandParam<byte, 1, 15> redBpm;
-    RandParam<byte, 1, 15> greenBpm;
-    RandParam<byte, 1, 15> blueBpm;
+    RandParam<uint8_t, 1, 15> redBpm;
+    RandParam<uint8_t, 1, 15> greenBpm;
+    RandParam<uint8_t, 1, 15> blueBpm;
 
     // Precomputed direction vectors scaled by 256 for integer math
     short redDx, redDy;
@@ -673,7 +673,7 @@ class CartesianMoodlight : public AbstractEffect
 
     // Memoization LUT for sin16 → power stretch
     // 256 entries, one for each possible 8-bit input
-    byte sinPowerLUT[256];
+    uint8_t sinPowerLUT[256];
 
     CartesianMoodlight()
     {
@@ -700,12 +700,12 @@ class CartesianMoodlight : public AbstractEffect
       blueWavelength = random(30, maxWavelength * 100 + 1) * 256 / 100;
 
       // Generate random amplitude factors and scale so max = 255
-      byte r = random(256);
-      byte g = random(256);
-      byte b = random(256);
+      uint8_t r = random(256);
+      uint8_t g = random(256);
+      uint8_t b = random(256);
 
-      byte maxVal = max(r, max(g, b));
-      byte boost = 255 - maxVal;
+      uint8_t maxVal = max(r, max(g, b));
+      uint8_t boost = 255 - maxVal;
 
       redAmp = r + boost;
       greenAmp = g + boost;
@@ -731,9 +731,9 @@ class CartesianMoodlight : public AbstractEffect
       uint16_t bluePhase = computePhase(blueDist, blueWavelength, t, blueBpm);
 
       // Evaluate with memoized power sine and apply amplitude factors
-      byte R = (evaluatePowerSine(redPhase) * redAmp) >> 8;
-      byte G = (evaluatePowerSine(greenPhase) * greenAmp) >> 8;
-      byte B = (evaluatePowerSine(bluePhase) * blueAmp) >> 8;
+      uint8_t R = (evaluatePowerSine(redPhase) * redAmp) >> 8;
+      uint8_t G = (evaluatePowerSine(greenPhase) * greenAmp) >> 8;
+      uint8_t B = (evaluatePowerSine(bluePhase) * blueAmp) >> 8;
 
       return CRGB(R, G, B);
     }
@@ -752,7 +752,7 @@ class CartesianMoodlight : public AbstractEffect
     }
 
     // Compute phase as uint16_t using integer math
-    uint16_t computePhase(int16_t distance, accum88 wavelength, milliseconds_t t, byte bpm)
+    uint16_t computePhase(int16_t distance, accum88 wavelength, milliseconds_t t, uint8_t bpm)
     {
       // Spatial component:
       // distance: -260 to 260 mm
@@ -775,11 +775,11 @@ class CartesianMoodlight : public AbstractEffect
     }
 
     // Evaluate sin16 with power stretch and memoization
-    byte evaluatePowerSine(uint16_t phase)
+    uint8_t evaluatePowerSine(uint16_t phase)
     {
-      // Get sin16 output (-32767 to 32767) and convert to byte (0-255)
+      // Get sin16 output (-32767 to 32767) and convert to uint8_t (0-255)
       int16_t sinVal = sin16(phase);
-      byte sinByte = (sinVal + 32768) >> 8;  // Map to 0-255
+      uint8_t sinByte = (sinVal + 32768) >> 8;  // Map to 0-255
 
       // Check memoization cache
       if (sinPowerLUT[sinByte] != 0xFF) {
@@ -792,11 +792,11 @@ class CartesianMoodlight : public AbstractEffect
       uint32_t result = normalized;
 
       // Raise to power by repeated multiplication
-      for (byte i = 1; i < valleyPower; i++) {
+      for (size_t i = 1; i < valleyPower; i++) {
         result = (result * normalized) >> 16;
       }
 
-      byte finalResult = result >> 8;  // Back to 0-255
+      uint8_t finalResult = result >> 8;  // Back to 0-255
 
       // Store in cache and return
       sinPowerLUT[sinByte] = finalResult;
@@ -808,14 +808,14 @@ class CartesianMoodlight : public AbstractEffect
 // Picks a new random effect and randomizes it
 AbstractEffect* getRandomEffect()
 {
-  byte EFFECTS_COUNT = 11;
+  uint8_t EFFECTS_COUNT = 11;
 
   // Set this to the index of the effect you want to force while testing
   short forcedSelection = -1;
 
-  static byte previousSelection = 255;
+  static uint8_t previousSelection = 255;
 
-  byte selection;
+  uint8_t selection;
   if (forcedSelection >= 0)
     selection = forcedSelection;
   else do

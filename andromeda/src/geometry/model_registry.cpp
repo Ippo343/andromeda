@@ -12,11 +12,11 @@ const ModelConfig* MODEL_REGISTRY[] = {
     &SingleStripTestDevice::CONFIG,
 };
 
-const uint8_t NUM_MODELS = sizeof(MODEL_REGISTRY) / sizeof(MODEL_REGISTRY[0]);
+const size_t NUM_MODELS = sizeof(MODEL_REGISTRY) / sizeof(MODEL_REGISTRY[0]);
 
 // Helper function to find a model config by ID
 const ModelConfig* getModelConfig(ModelId id) {
-    for (uint8_t i = 0; i < NUM_MODELS; i++) {
+    for (size_t i = 0; i < NUM_MODELS; i++) {
         if (MODEL_REGISTRY[i]->id == id) {
             return MODEL_REGISTRY[i];
         }

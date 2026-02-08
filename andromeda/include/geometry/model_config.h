@@ -37,8 +37,8 @@ struct ModelConfig {
     ModelId id;
     const char* name;             // e.g., "Andromeda", "L-Series", "H-Series"
 
-    uint8_t num_strips;           // Number of LED strips in this model
-    const uint8_t* strip_lengths; // Actual number of LEDs in each strip
+    size_t num_strips;           // Number of LED strips in this model
+    const size_t* strip_lengths; // Actual number of LEDs in each strip
     const uint8_t* pin_map;       // GPIO pin for each strip
 
     uint16_t screen_size_mm;      // Bounding box size

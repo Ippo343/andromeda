@@ -14,14 +14,14 @@ LedStrip::~LedStrip() {
     deallocate();
 }
 
-void LedStrip::allocate(uint8_t count) {
+void LedStrip::allocate(size_t count) {
     deallocate();
 
     num_leds = count;
     leds = new Led[count];
     buffer = new CRGB[count];
 
-    for (uint8_t i = 0; i < count; i++) {
+    for (size_t i = 0; i < count; i++) {
         leds[i].idx = i;
         buffer[i] = CRGB::Black;
     }
@@ -113,9 +113,9 @@ void Geometry::initialize(ModelId model_id) {
     strips = new LedStrip[config->num_strips];
 
     // Initialize each strip
-    for (uint8_t i = 0; i < config->num_strips; i++) {
+    for (size_t i = 0; i < config->num_strips; i++) {
         strips[i].idx = i;
-        uint8_t strip_length = pgm_read_byte(&config->strip_lengths[i]);
+        size_t strip_length = pgm_read_byte(&config->strip_lengths[i]);
         strips[i].allocate(strip_length);
     }
 
@@ -123,7 +123,7 @@ void Geometry::initialize(ModelId model_id) {
     loadCoordinates();
 
     // Initialize FastLED controllers for each strip
-    for (uint8_t i = 0; i < config->num_strips; i++) {
+    for (size_t i = 0; i < config->num_strips; i++) {
         uint8_t pin = pgm_read_byte(&config->pin_map[i]);
         addLedsToPin(pin, strips[i].buffer, strips[i].num_leds);
     }
@@ -136,10 +136,10 @@ void Geometry::loadCoordinates() {
 
     uint16_t current_offset = 0; // Tracks the current position in the flat PROGMEM array
 
-    for (uint8_t iStrip = 0; iStrip < config->num_strips; iStrip++) {
-        uint8_t strip_length = strips[iStrip].num_leds;
+    for (size_t iStrip = 0; iStrip < config->num_strips; iStrip++) {
+        size_t strip_length = strips[iStrip].num_leds;
 
-        for (uint8_t iLed = 0; iLed < strip_length; iLed++) {
+        for (size_t iLed = 0; iLed < strip_length; iLed++) {
             // The coordinate is located at (start of strip + current led index)
             uint16_t data_index = current_offset + iLed;
 

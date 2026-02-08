@@ -11,14 +11,14 @@ class SweepStrips : public AbstractAnimation
   public:
     virtual const char* GetName() { return "SweepStrips"; }
 
-    RandParam<byte, 10, 30> timeStep;
+    RandParam<int, 10, 30> timeStep;
 
     void run() override
     {
       vector<CHSV> colors = randomComplementaryColors(3);
 
       paint(CRGB::Black);
-      for (byte c = 0; c < 3; c++)
+      for (size_t c = 0; c < 3; c++)
         colorSweep(colors[c]);
       colorSweep(CRGB::White);
       colorSweep(CRGB::Black);
@@ -28,21 +28,21 @@ class SweepStrips : public AbstractAnimation
     void colorSweep(CRGB color)
     {
       // Find the longest strip
-      uint8_t maxLeds = 0;
-      for (uint8_t i = 0; i < GEOMETRY.getNumStrips(); i++) {
+      size_t maxLeds = 0;
+      for (size_t i = 0; i < GEOMETRY.getNumStrips(); i++) {
         maxLeds = max(maxLeds, GEOMETRY.getStrip(i).num_leds);
       }
 
       // Sweep with normalized progress
-      for (uint8_t step = 0; step < maxLeds; step++) {
+      for (size_t step = 0; step < maxLeds; step++) {
         FOR_EACH_STRIP {
-          uint8_t stripLen = GEOMETRY.getStrip(iStrip).num_leds;
+          size_t stripLen = GEOMETRY.getStrip(iStrip).num_leds;
 
           // Map the current step to how many LEDs should be lit on this strip
-          uint8_t ledsToLight = map(step, 0, maxLeds - 1, 0, stripLen - 1);
+          size_t ledsToLight = map(step, 0, maxLeds - 1, 0, stripLen - 1);
 
           // Fill from 0 to ledsToLight
-          for (uint8_t i = 0; i <= ledsToLight; i++) {
+          for (size_t i = 0; i <= ledsToLight; i++) {
             GEOMETRY.getStrip(iStrip).buffer[i] = color;
           }
         }
@@ -81,7 +81,7 @@ class BaseSweep : public AbstractAnimation
       }
 
       paint(CRGB::Black);
-      for (byte c = 0; c < 3; c++)
+      for (size_t c = 0; c < 3; c++)
       {
         colorSweep(colors[c]);
       }
@@ -163,7 +163,7 @@ class BaseSweep : public AbstractAnimation
                 rampDistance = coordLead - coord;
               }
 
-              byte brightness = map(rampDistance, 0, rampWidth, 0, 255);
+              uint8_t brightness = map(rampDistance, 0, rampWidth, 0, 255);
               GEOMETRY.getStrip(iStrip).buffer[iLed] = color % brightness;
             }
           }
@@ -279,12 +279,12 @@ class SequentialFadeIn : public AbstractAnimation
 
       // Shuffle the strip indices to randomize the order of fading in
       int strips[GEOMETRY.getNumStrips()];
-      for (int i = 0; i < GEOMETRY.getNumStrips(); i++) strips[i] = i;
+      for (size_t i = 0; i < GEOMETRY.getNumStrips(); i++) strips[i] = i;
       shuffle(strips, GEOMETRY.getNumStrips());
 
       auto colors = randomComplementaryColors(GEOMETRY.getNumStrips());
 
-      for (byte i = 0; i < GEOMETRY.getNumStrips(); i++)
+      for (size_t i = 0; i < GEOMETRY.getNumStrips(); i++)
       {
         fadeInStrip(strips[i], colors[i], fadeIn);
       }
@@ -294,7 +294,7 @@ class SequentialFadeIn : public AbstractAnimation
       do
       {
         dt = millis() - start;
-        byte b = constrain(map(dt, 0, fadeOut, 255, 0), 0, 255);
+        uint8_t b = constrain(map(dt, 0, fadeOut, 255, 0), 0, 255);
 
         FOR_EACH_STRIP {
           paintStrip(strips[iStrip], colors[iStrip] % b);
@@ -402,7 +402,7 @@ void ErrorAnimation::run()
   milliseconds_t flashDuration = 250;
   paint(CRGB::Black);
 
-  for (byte i = 0; i < 3; i++)
+  for (size_t i = 0; i < 3; i++)
   {
     paintStrip(0, CRGB::Red);
     FASTLED_SHOW();
@@ -421,14 +421,14 @@ void ErrorAnimation::run()
 
 AbstractAnimation* getRandomAnimation()
 {
-  byte ANIMATIONS_COUNT = 5;
+  size_t ANIMATIONS_COUNT = 5;
 
   // Set this to the index of the animation you want to force while testing
   short forcedSelection = -1;
 
-  static byte previousSelection = 255;
+  static size_t previousSelection = 255;
 
-  byte selection;
+  size_t selection;
   if (forcedSelection >= 0)
     selection = forcedSelection;
   else

@@ -13,10 +13,10 @@ void paint(CRGB color);
 
 // Paints a single strip with the given color
 // Thin wrapper around fill_solid because I'm that lazy
-void paintStrip(byte idx, CRGB color);
+void paintStrip(int idx, CRGB color);
 
 // Fade in a strip with the given color over the given duration
-void fadeInStrip(byte idx, CHSV color, milliseconds_t duration);
+void fadeInStrip(int idx, CHSV color, milliseconds_t duration);
 
 // Fade in all strips together to the given color in the given duration
 void fadeInAllStrips(CHSV color, milliseconds_t duration);
@@ -27,7 +27,7 @@ void fadeInAllStrips(CHSV color, milliseconds_t duration);
 CHSV randomColor();
 
 // Generate N random complementary colors spaced evenly on the hue wheel
-vector<CHSV> randomComplementaryColors(byte N);
+vector<CHSV> randomComplementaryColors(int N);
 
 // Pick a random predefined palette
 CRGBPalette16 randomPredefinedPalette();
@@ -41,4 +41,4 @@ extern const float defaultBrightnessFactor;
 // Compute brightness based on emitter position and a brightness factor.
 // Uses the famous fast inverse square root for speed.
 // Physically correct (1/d^2) looks cooler than just inverse distance.
-byte brightnessFromEmitter(Led* led, CartesianCoordinates e, float brightnessFactor = defaultBrightnessFactor);
+uint8_t brightnessFromEmitter(Led* led, CartesianCoordinates e, float brightnessFactor = defaultBrightnessFactor);

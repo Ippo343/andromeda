@@ -5,11 +5,11 @@
 namespace AndromedaMk1 {
 
 // Number of strips and LEDs per strip
-const uint8_t NUM_STRIPS = 7;
-const uint8_t LEDS_PER_STRIP = 23;
+const size_t NUM_STRIPS = 7;
+const size_t LEDS_PER_STRIP = 23;
 
 // Strip lengths (all strips have same length for this model)
-const PROGMEM uint8_t STRIP_LENGTHS[NUM_STRIPS] = {
+const PROGMEM size_t STRIP_LENGTHS[NUM_STRIPS] = {
     23, 23, 23, 23, 23, 23, 23
 };
 

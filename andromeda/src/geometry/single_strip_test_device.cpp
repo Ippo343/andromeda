@@ -5,7 +5,7 @@
 namespace SingleStripTestDevice {
 
 const uint8_t NUM_STRIPS = 1;
-const PROGMEM uint8_t STRIP_LENGTHS[NUM_STRIPS] = { 56 };
+const PROGMEM size_t STRIP_LENGTHS[NUM_STRIPS] = { 56 };
 const PROGMEM uint8_t PIN_MAP[NUM_STRIPS] = { 1 };
 
 const PROGMEM CartesianCoordinates STRIP_CARTESIAN[] = {

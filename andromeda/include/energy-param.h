@@ -19,11 +19,11 @@
 class Energy
 {
   public:
-    inline static byte get() { return value; }
-    inline static void set(byte v) { value = constrain(v, 0, 255); }
+    inline static uint8_t get() { return value; }
+    inline static void set(uint8_t v) { value = v; }
 
   private:
-    static byte value;
+    static uint8_t value;
 };
 
 
@@ -42,5 +42,4 @@ class EnergyParam
     {
         return cmap(Energy::get(), 0, 255, min, max);
     }
-
 };

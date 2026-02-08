@@ -6,7 +6,7 @@
 
 // Global registry of all available models
 extern const ModelConfig* MODEL_REGISTRY[];
-extern const uint8_t NUM_MODELS;
+extern const size_t NUM_MODELS;
 
 // Helper function to find a model config by ID
 const ModelConfig* getModelConfig(ModelId id);

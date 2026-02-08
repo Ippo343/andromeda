@@ -15,20 +15,20 @@ const unsigned short FULL_CIRCLE = 360 * 100;
 
 // Cartesian coordinates (x, y) in millimeters
 struct CartesianCoordinates {
-    short x;
-    short y;
+    int16_t x;
+    int16_t y;
 };
 
 // Polar coordinates: radius in mm, angle in centi-degrees
 struct PolarCoordinates {
-    unsigned short radius;
-    unsigned short cdegrees;
+    uint16_t radius;
+    uint16_t cdegrees;
 };
 
 // Represents geometric information for a single LED
 class Led {
 public:
-    uint8_t idx;                          // Index in the strip that contains it
+    size_t idx;                          // Index in the strip that contains it
     CartesianCoordinates fixedCartesian;  // Physical location, never changes
     PolarCoordinates fixedPolar;          // Physical location (polar), never changes
     CartesianCoordinates cartesian;       // Transformed coordinates (for effects)
@@ -39,8 +39,8 @@ public:
 // Contains geometry info and color buffer for rendering
 class LedStrip {
 public:
-    uint8_t idx;           // Index of the strip in the structure
-    uint8_t num_leds;      // Actual number of LEDs in this strip
+    size_t idx;           // Index of the strip in the structure
+    size_t num_leds;      // Actual number of LEDs in this strip
     Led* leds;             // Dynamically allocated array of LEDs
     CRGB* buffer;          // Color buffer for FastLED rendering
 
@@ -48,7 +48,7 @@ public:
     ~LedStrip();
 
     // Allocate memory for LEDs and buffer
-    void allocate(uint8_t count);
+    void allocate(size_t count);
 
     // Free allocated memory
     void deallocate();
@@ -78,10 +78,10 @@ public:
     inline const ModelConfig* getConfig() const { return config; }
 
     // Get number of strips in current model
-    inline uint8_t getNumStrips() const { return config ? config->num_strips : 0; }
+    inline size_t getNumStrips() const { return config ? config->num_strips : 0; }
 
     // Get a specific strip (bounds checking in debug builds)
-    inline LedStrip& getStrip(uint8_t i) {
+    inline LedStrip& getStrip(size_t i) {
         return strips[i];
     }
 
@@ -107,8 +107,8 @@ extern Geometry GEOMETRY;
 
 // Convenience macros for iterating over strips and LEDs
 // These now use the dynamic geometry
-#define FOR_EACH_STRIP for (uint8_t iStrip = 0; iStrip < GEOMETRY.getNumStrips(); iStrip++)
-#define FOR_EACH_LED(iStrip) for (uint8_t iLed = 0; iLed < GEOMETRY.getStrip(iStrip).num_leds; iLed++)
+#define FOR_EACH_STRIP for (size_t iStrip = 0; iStrip < GEOMETRY.getNumStrips(); iStrip++)
+#define FOR_EACH_LED(iStrip) for (size_t iLed = 0; iLed < GEOMETRY.getStrip(iStrip).num_leds; iLed++)
 
 // Factory configuration functions
 namespace FactoryConfig {

@@ -77,9 +77,9 @@ void MissionControl::setNextTransition()
 //    /                \
 // effectStart      nextTransition
 //
-byte MissionControl::calcBrightness(milliseconds_t t)
+uint8_t MissionControl::calcBrightness(milliseconds_t t)
 {
-  byte brightness = 0;
+  uint8_t brightness = 0;
 
   // Most of the time is spent in the middle so test that first
   // we are all about microseconds in this highly efficient architecture
