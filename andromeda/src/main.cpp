@@ -13,10 +13,7 @@ void setup() {
   while(!Serial && !Serial.available()) {}
 
   // Wait a little bit to allow the PC to start the serial monitor before we start spamming it with logs
-  // TODO: improve
-  while (millis() < 500) {
-    delay(100);
-  }
+  delay(50);
 
   LittleFS.begin();
   setupLoggers();
