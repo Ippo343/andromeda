@@ -47,6 +47,14 @@ struct PolarCoordinates {
 };
 
 // Represents geometric information for a single LED
+//
+// TODO: I suspect the layout of this struct is the memory bottleneck.
+// As it is each Led struct is 20 bytes, and a cache line should be 32 bytes, so we kinda suck.
+// But effects never access the fixed coordinates, and the index can be passed as an argument to evaluate,
+// and that would take us down to 8 bytes theoretically which means 4 Leds per cache line.
+//
+// All of this assumes we really are RAM bound, but there's another likely culprit which is the LED driver.
+// WS2812B run at 800kHz so it's not quite clear if we are bound to the cache miss or to the LED driver speed.
 class Led {
 public:
     size_t idx;                          // Index in the strip that contains it
