@@ -37,10 +37,7 @@ void setup() {
 
   // Log device configuration
   const ModelConfig* config = GEOMETRY.getConfig();
-  Log.noticeln("Device: %s (%d strips, %d mm screen)",
-               config->name,
-               config->num_strips,
-               config->screen_size_mm);
+  Log.noticeln("Device: %s", config->name);
 
   FastLED.setCorrection(TypicalLEDStrip);
   seedRNGs();

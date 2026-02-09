@@ -48,7 +48,8 @@ extern const ModelConfig CONFIG = {
     .strip_lengths = STRIP_LENGTHS,
     .pin_map = PIN_MAP,
 
-    .screen_size_mm = 520,
+    .screen_height_mm = 520,
+    .screen_width_mm = 520,
 
     .cartesian_data = (const CartesianCoordinates*)CARTESIAN_COORDS,
 };

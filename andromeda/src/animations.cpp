@@ -243,7 +243,7 @@ class RadialSweep : public BaseSweep
       {
         FOR_EACH_LED(iStrip)
         {
-          GEOMETRY.getStrip(iStrip).leds[iLed].polar.radius = GEOMETRY.getScreenHalfSize() - GEOMETRY.getStrip(iStrip).leds[iLed].polar.radius;
+          GEOMETRY.getStrip(iStrip).leds[iLed].polar.radius = GEOMETRY.getScreenRadius() - GEOMETRY.getStrip(iStrip).leds[iLed].polar.radius;
         }
       }
     }
@@ -255,7 +255,7 @@ class RadialSweep : public BaseSweep
 
     unsigned short getMaxCoordinate() override
     {
-      return GEOMETRY.getScreenHalfSize();
+      return GEOMETRY.getScreenRadius();
     }
 };
 
@@ -333,7 +333,7 @@ class Swipe : public AbstractAnimation
       RandParam<short, 2, 3> step;
 
       // It goes to (step * GEOMETRY.getScreenHalfSize()) so that the fading trail has time to fully fade out
-      for (short v = -GEOMETRY.getScreenHalfSize(); v <= (step * GEOMETRY.getScreenHalfSize()); v += step)
+      for (short v = -GEOMETRY.getScreenRadius(); v <= (step * GEOMETRY.getScreenRadius()); v += step)
       {
         FOR_EACH_STRIP
         {

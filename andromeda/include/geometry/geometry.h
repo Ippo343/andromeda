@@ -115,13 +115,25 @@ public:
     }
 
     // Get screen size
-    // TODO: turn into bounding box
-    inline unsigned short getScreenSize() const {
-        return config ? config->screen_size_mm : 0;
+    inline unsigned short getScreenHeight() const {
+        return config->screen_height_mm;
+    }
+    inline unsigned short getScreenWidth() const {
+        return config->screen_width_mm;
+    }
+    inline unsigned short getScreenHalfHeight() const {
+        return getScreenHeight() / 2;
+    }
+    inline unsigned short getScreenHalfWidth() const {
+        return getScreenWidth() / 2;
     }
 
-    inline unsigned short getScreenHalfSize() const {
-        return getScreenSize() / 2;
+    inline unsigned short getScreenRadius() const {
+        static unsigned short screenRadius = 0;
+        if (screenRadius == 0) {
+            screenRadius = max(getScreenHalfHeight(), getScreenHalfWidth());
+        }
+        return screenRadius;
     }
 
     // Apply random rotation transform to all LED coordinates

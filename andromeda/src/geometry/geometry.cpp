@@ -106,8 +106,6 @@ void Geometry::initialize(ModelId model_id) {
     }
 
     Log.noticeln("Initializing geometry for: %s", config->name);
-    Log.noticeln("  Strips: %d, Screen: %d mm",
-                 config->num_strips, config->screen_size_mm);
 
     // Allocate strip array
     strips = new LedStrip[config->num_strips];

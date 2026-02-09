@@ -299,7 +299,7 @@ class NinjaStar : public AbstractEffect
       for (size_t i = 0; i < 4; i++)
         v = scale8(v, v);
 
-      unsigned short scaledRadius = map(led->polar.radius, 0, GEOMETRY.getScreenHalfSize(), 0, 255);
+      unsigned short scaledRadius = map(led->polar.radius, 0, GEOMETRY.getScreenRadius(), 0, 255);
       CRGB color = blend(innerColor, outerColor, scaledRadius);
 
       return color % v;
@@ -330,7 +330,7 @@ class PolarSwipe : public AbstractEffect
     // causing an annoying color flicker at the edge.
     //
     unsigned short scanMin = bandWidth / 2;
-    unsigned short scanMax = GEOMETRY.getScreenHalfSize() + (bandWidth + 1);
+    unsigned short scanMax = GEOMETRY.getScreenRadius() + (bandWidth + 1);
 
     unsigned short bandCenter;
     CRGB color;
@@ -349,7 +349,7 @@ class PolarSwipe : public AbstractEffect
       else
         bandCenter = map(v, 0, 65535, scanMin, scanMax);
 
-      if (bandCenter >= GEOMETRY.getScreenHalfSize() + bandWidth)
+      if (bandCenter >= GEOMETRY.getScreenRadius() + bandWidth)
         color = randomColor();
     }
 
@@ -404,6 +404,8 @@ class PolarMoodlight : public AbstractEffect
 // The color of each LED is decided based on the distance from each emitter.
 // It also has a single-channel mode where there is a single emitter
 // hooked up to a moodlight source.
+// TODO: use both 3 body problem and double pendulum
+// TODO: render in the correct bounding box
 class RGBodyProblem : public AbstractEffect
 {
   public:
@@ -444,7 +446,7 @@ class RGBodyProblem : public AbstractEffect
     // Helper to scale the result of a sine wave to the screen size
     short scale(int v)
     {
-      return map(v, 0, 255, -GEOMETRY.getScreenHalfSize(), GEOMETRY.getScreenHalfSize());
+      return map(v, 0, 255, -GEOMETRY.getScreenRadius(), GEOMETRY.getScreenRadius());
     }
 
     void precompute(milliseconds_t t) override

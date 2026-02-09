@@ -41,7 +41,8 @@ struct ModelConfig {
     const size_t* strip_lengths; // Actual number of LEDs in each strip
     const uint8_t* pin_map;       // GPIO pin for each strip
 
-    uint16_t screen_size_mm;      // Bounding box size
+    uint16_t screen_height_mm;
+    uint16_t screen_width_mm;
 
     // Coordinate data stored as flat arrays
     const CartesianCoordinates* cartesian_data;
