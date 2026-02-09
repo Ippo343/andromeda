@@ -44,6 +44,18 @@ class MissionControl
     inline uint8_t getMaxBrightness() const { return maxBrightness; }
     inline void setMaxBrightness(uint8_t b) { maxBrightness = b; }
 
+    inline void lowerCpuFrequency()
+    {
+      Log.noticeln("Lowering CPU frequency to 80 MHz");
+      setCpuFrequencyMhz(80);
+    }
+
+    inline void raiseCpuFrequency()
+    {
+      Log.noticeln("Raising CPU frequency to %d MHz", F_CPU_MHZ);
+      setCpuFrequencyMhz(F_CPU_MHZ);
+    }
+
   private:
 
     // The effect that is currently running
