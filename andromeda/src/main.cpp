@@ -6,6 +6,7 @@
 #include "mission-control.h"
 #include "perf-monitor.h"
 #include "geometry/geometry.h"
+#include "version.h"
 #include <LittleFS.h>
 
 void setup() {
@@ -18,6 +19,8 @@ void setup() {
   LittleFS.begin();
   setupLoggers();
   Log.noticeln("=== Andromeda Device Starting Up ===");
+  Log.noticeln("=== Version: %s", VERSION);
+  Log.noticeln("====================================");
 
   // Load model ID
   // TODO: selection via web UI, currently hardcoded to SINGLE_STRIP_TEST_DEVICE for testing purposes
