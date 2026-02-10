@@ -27,12 +27,16 @@ class ErrorEffect : public AbstractEffect
     }
 };
 
-class StaticWhite : public AbstractEffect
+class StaticColor : public AbstractEffect
 {
    public:
-    const CRGB color = CRGB(255, 255, 170);
-    const char* GetName() override { return "Static White"; }
+    const char* GetName() override { return "Static Color"; }
+
+    CRGB color;
     CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override { return color; }
+
+    StaticColor(CRGB c) : color(c) {}
+    StaticColor() : StaticColor(CRGB(255, 255, 170)) {}
 };
 
 // Picks a new random effect and randomizes it

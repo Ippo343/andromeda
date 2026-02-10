@@ -19,7 +19,7 @@ enum class Command
     NEXT = 'N',
     HOLD = 'H',
     POWER_OFF = 'D',
-    WHITE = 'W'
+    COLOR = 'C'
 };
 
 class MissionControl
@@ -41,8 +41,11 @@ class MissionControl
     // Queue a web command from the comms
     bool queueWebCommand(Command command);
 
+    // TODO: this is different from "public uint8_t maxBrightness"... how?
     inline uint8_t getMaxBrightness() const { return maxBrightness; }
     inline void setMaxBrightness(uint8_t b) { maxBrightness = b; }
+
+    CRGB staticColor = CRGB::White;
 
     // 80 MHz seems to be the minimum frequency for the WiFi and LED drivers to work,
     // at least on the C3 where I tried messing with it. At 40MHz nothing works lol.
@@ -118,8 +121,8 @@ class MissionControl
     // Power off the LEDs and wait
     void powerOff();
 
-    // Switch to a static white color and hold forever (lamp mode)
-    void staticWhite();
+    // Switch to a static color and hold forever (lamp mode)
+    void transitionToStaticColor();
 
     // When the transition time is reached:
     // - play an animation

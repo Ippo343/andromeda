@@ -16,10 +16,10 @@ void MissionControl::processWebCommands()
         return;
     }
 
-    Command command;
+    Command command(Command::NEXT);
     while (xQueueReceive(webCommandQueue, &command, 0) == pdTRUE)
     {
-        Log.noticeln("Processing web command: %c", command);
+        Log.noticeln("Processing web command: %c", static_cast<char>(command));
 
         switch (command)
         {
@@ -32,8 +32,22 @@ void MissionControl::processWebCommands()
             case Command::POWER_OFF:
                 powerOff();
                 break;
-            case Command::WHITE:
-                staticWhite();
+            case Command::COLOR:
+                // If we are not already in StaticColor mode, transition to it. Otherwise, just
+                // update the color.
+                if (effect == nullptr) break;
+                if (strcmp(effect->GetName(), "Static Color") != 0) { transitionToStaticColor(); }
+                else
+                {
+                    // Update the color of the current StaticColor effect
+                    StaticColor* staticEffect = static_cast<StaticColor*>(effect);
+                    if (staticEffect)
+                    {
+                        staticEffect->color = staticColor;
+                        Log.noticeln("Updated static color to: R=%d, G=%d, B=%d", staticColor.r,
+                                     staticColor.g, staticColor.b);
+                    }
+                }
                 break;
             default:
                 Log.warningln("Unknown web command: %c", static_cast<char>(command));
@@ -54,7 +68,7 @@ bool MissionControl::queueWebCommand(Command command)
     if (xQueueSend(webCommandQueue, &command, 0) == pdTRUE) { return true; }
     else
     {
-        Log.warningln("Web command queue full, dropping command: %c", command);
+        Log.warningln("Web command queue full, dropping command: %c", static_cast<char>(command));
         return false;
     }
 }
@@ -219,8 +233,8 @@ void MissionControl::update(milliseconds_t t)
     FASTLED_SHOW();
 }
 
-void MissionControl::staticWhite()
+void MissionControl::transitionToStaticColor()
 {
-    handleTransition(new StaticWhite(), false);
+    handleTransition(new StaticColor(staticColor), false);
     holdEffect();
 }

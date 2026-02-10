@@ -173,11 +173,27 @@ void Comms::setupRoutes()
                   MissionControl::Instance().queueWebCommand(Command::POWER_OFF);
                   r->send(200);
               });
-    server.on("/W", HTTP_POST,
+
+    server.on("/color", HTTP_POST,
               [](AsyncWebServerRequest* r)
               {
-                  MissionControl::Instance().queueWebCommand(Command::WHITE);
-                  r->send(200);
+                  Log.noticeln("Received color command with args: %s", r->args() > 0 ? "" : "none");
+                  if (r->hasArg("r") && r->hasArg("g") && r->hasArg("b"))
+                  {
+                      int red = r->arg("r").toInt();
+                      int green = r->arg("g").toInt();
+                      int blue = r->arg("b").toInt();
+
+                      if (red >= 0 && red <= 255 && green >= 0 && green <= 255 && blue >= 0 &&
+                          blue <= 255)
+                      {
+                          MissionControl::Instance().staticColor = CRGB(red, green, blue);
+                          MissionControl::Instance().queueWebCommand(Command::COLOR);
+                          r->send(200);
+                      }
+                      else { r->send(400, "text/plain", "RGB values must be 0-255"); }
+                  }
+                  else { r->send(400, "text/plain", "Missing r, g, or b parameter"); }
               });
 
     // Shared Config & Monitoring
