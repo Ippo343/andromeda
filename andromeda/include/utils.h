@@ -3,19 +3,19 @@
 // The adopter module for general utilities,
 // like typedefs that I like and small functions reused everywhere
 
-#include <stdint.h>
 #include <Arduino.h>
 #include <FastLED.h>
+#include <stdint.h>
 
-#define milliseconds_t  unsigned long
+#define milliseconds_t unsigned long
 
-#define SECONDS       * 1000
-#define MINUTES       * 60 SECONDS
+#define SECONDS *1000
+#define MINUTES *60 SECONDS
 
 // Looping Index macro: keeps the index always within the strip
 // simplifying code that needs to access consecutive LEDs.
 // Basically python's array[-1] but for C
-#define LI(idx) ( (idx + GEOMETRY.getStrip(idx).num_leds) % GEOMETRY.getStrip(idx).num_leds )
+#define LI(idx) ((idx + GEOMETRY.getStrip(idx).num_leds) % GEOMETRY.getStrip(idx).num_leds)
 
 void seedRNGs();
 
@@ -32,20 +32,21 @@ extern const char* LOG_FILE_CUR;
 extern const char* LOG_FILE_OLD;
 
 // This picks a random T value when instantiated between min and max (inclusive)
-template<typename T, T min, T max>
+template <typename T, T min, T max>
 class RandParam
 {
-  protected:
+   protected:
     T value;
-  public:
-    RandParam() { randomize(); }   // including the max
+
+   public:
+    RandParam() { randomize(); }  // including the max
     inline operator T() const { return value; }
     virtual void randomize() { value = random(min, max + 1); }
 };
 
 class RandBool : public RandParam<bool, 0, 1>
 {
-  public:
+   public:
     void randomize() override;
 };
 
@@ -54,25 +55,25 @@ class RandBool : public RandParam<bool, 0, 1>
 //    (-1|1) * (led.x)
 class RandSign : public RandParam<char, -1, 1>
 {
-  public:
+   public:
     void randomize() override;
 };
 
 // Represents a sine wave with randomly chosen bpm and direction
-template<uint8_t minBpm, uint8_t maxBpm>
+template <uint8_t minBpm, uint8_t maxBpm>
 class RandSine
 {
-  protected:
+   protected:
     RandParam<uint8_t, minBpm, maxBpm> bpm;
     RandSign sign;
 
-  public:
+   public:
     RandSine() { randomize(); }
 
     void randomize()
     {
-      bpm.randomize();
-      sign.randomize();
+        bpm.randomize();
+        sign.randomize();
     }
 
     uint8_t evaluate(long x) { return beatsin8(bpm, 0, 255, 0, sign * x); }

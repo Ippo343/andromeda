@@ -13,13 +13,12 @@
 // between different effects.
 class AbstractAnimation
 {
-  public:
-
+   public:
     virtual const char* GetName();
 
     control_hints_t controlHints = ControlHints::NONE;
 
-    virtual ~AbstractAnimation() { }
+    virtual ~AbstractAnimation() {}
 
     virtual void run();
 
@@ -27,7 +26,7 @@ class AbstractAnimation
     // to prevent funny inputs going into the next effect
     virtual void cleanup()
     {
-      paint(CRGB::Black);
-      FASTLED_SHOW();
+        paint(CRGB::Black);
+        FASTLED_SHOW();
     }
 };

@@ -7,8 +7,9 @@ struct CartesianCoordinates;
 struct PolarCoordinates;
 class LedStrip;
 
-enum class FamilyID : uint8_t {
-    UNKNOWN = 0,        // For error handling purposes
+enum class FamilyID : uint8_t
+{
+    UNKNOWN = 0,  // For error handling purposes
     TEST_DEVICES,
     ANDROMEDA,
     L_SERIES,
@@ -17,9 +18,10 @@ enum class FamilyID : uint8_t {
 #define MODEL_ID(family, model) (((uint8_t)FamilyID::family << 8) | model)
 
 // Unique identifier for each model
-enum class ModelId : uint16_t {
+enum class ModelId : uint16_t
+{
 
-    UNKNOWN = 0,    // For error handling purposes
+    UNKNOWN = 0,  // For error handling purposes
 
     // That ridiculous little thing that I brought to Eindhoven to replicate an L10
     SINGLE_STRIP_TEST_DEVICE = MODEL_ID(TEST_DEVICES, 0),
@@ -33,12 +35,13 @@ enum class ModelId : uint16_t {
 };
 
 // Configuration for a specific LED model
-struct ModelConfig {
+struct ModelConfig
+{
     ModelId id;
-    const char* name;             // e.g., "Andromeda", "L-Series", "H-Series"
+    const char* name;  // e.g., "Andromeda", "L-Series", "H-Series"
 
-    size_t num_strips;           // Number of LED strips in this model
-    const size_t* strip_lengths; // Actual number of LEDs in each strip
+    size_t num_strips;            // Number of LED strips in this model
+    const size_t* strip_lengths;  // Actual number of LEDs in each strip
     const uint8_t* pin_map;       // GPIO pin for each strip
 
     uint16_t screen_height_mm;

@@ -1,0 +1,25 @@
+---
+BasedOnStyle: Google
+
+# 4-Space Indentation
+IndentWidth: 4
+ColumnLimit: 100
+UseTab: Never
+
+# C# / Type-centric Alignment (int& x)
+DerivePointerAlignment: false
+PointerAlignment: Left
+
+# The "Allman" Style (Braces on new lines everywhere)
+BreakBeforeBraces: Allman
+
+# Keep short getters/properties on one line
+AllowShortFunctionsOnASingleLine: All
+# Also allow 'if (a) return;' on one line if you like the C# compact style
+AllowShortBlocksOnASingleLine: Always
+AllowShortIfStatementsOnASingleLine: WithoutElse
+
+# Cleanup
+SortIncludes: true
+Standard: Latest
+...

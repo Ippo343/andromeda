@@ -7,7 +7,7 @@
 
 class WiFiConnectingAnimation : public AbstractAnimation
 {
-  public:
+   public:
     virtual const char* GetName();
 
     void run() override;
@@ -15,7 +15,7 @@ class WiFiConnectingAnimation : public AbstractAnimation
 
 class WiFiSuccessAnimation : public AbstractAnimation
 {
-  public:
+   public:
     virtual const char* GetName();
 
     void run() override;
@@ -23,7 +23,7 @@ class WiFiSuccessAnimation : public AbstractAnimation
 
 class ErrorAnimation : public AbstractAnimation
 {
-  public:
+   public:
     virtual const char* GetName();
 
     void run() override;

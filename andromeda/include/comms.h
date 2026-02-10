@@ -1,10 +1,11 @@
 #pragma once
 #include <ArduinoLog.h>
+#include <DNSServer.h>
 #include <ESPAsyncWebServer.h>
 #include <ESPmDNS.h>
 #include <LittleFS.h>
 #include <Preferences.h>
-#include <DNSServer.h>
+
 #include "WiFi.h"
 #include "mission-control.h"
 #include "secrets.h"
@@ -12,18 +13,18 @@
 
 class Comms
 {
-  public:
+   public:
     static inline Comms& Instance()
     {
-      static Comms instance;
-      return instance;
+        static Comms instance;
+        return instance;
     }
     Comms(const Comms&) = delete;
     Comms& operator=(const Comms&) = delete;
     bool setup();
     void printWifiStatus();
 
-  private:
+   private:
     Comms();
     int status = WL_IDLE_STATUS;
     AsyncWebServer server;
@@ -39,14 +40,15 @@ class Comms
     volatile bool scanComplete;
     String scanResults;
     unsigned long lastScanTime;
-    static constexpr unsigned long SCAN_CACHE_MS = 30000; // Cache results for 30 seconds
+    static constexpr unsigned long SCAN_CACHE_MS = 30000;  // Cache results for 30 seconds
 
     // Core WiFi methods
     bool connectToWiFi(const char* ssid, const char* password);
     bool startAPMode();
     bool startStationMode();
     bool testWiFiConnection(const char* ssid, const char* password);
-    bool processWiFiCredentials(AsyncWebServerRequest* request, const String& ssid, const String& password);
+    bool processWiFiCredentials(AsyncWebServerRequest* request, const String& ssid,
+                                const String& password);
 
     // Web server setup
     static void webServerTask(void* parameter);
@@ -56,7 +58,7 @@ class Comms
     void setupStationRoutes();
 
     // AP mode specific methods
-    void serveSetupPage(AsyncWebServerRequest *request);
+    void serveSetupPage(AsyncWebServerRequest* request);
     void startAsyncScan();
     String scanWiFiNetworks();
     static void onWiFiScanComplete(int networksFound);

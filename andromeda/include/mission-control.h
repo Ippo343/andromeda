@@ -10,11 +10,12 @@
 #include "effects.h"
 #include "geometry/geometry.h"
 #include "moodlight.h"
-#include "utils.h"
 #include "perf-monitor.h"
+#include "utils.h"
 
 // Web command enum for the web server
-enum class Command {
+enum class Command
+{
     NEXT = 'N',
     HOLD = 'H',
     POWER_OFF = 'D',
@@ -23,12 +24,11 @@ enum class Command {
 
 class MissionControl
 {
-  public:
-
+   public:
     static inline MissionControl& Instance()
     {
-      static MissionControl instance;
-      return instance;
+        static MissionControl instance;
+        return instance;
     }
 
     // Prevent copy/move construction
@@ -46,18 +46,17 @@ class MissionControl
 
     inline void lowerCpuFrequency()
     {
-      Log.noticeln("Lowering CPU frequency to 80 MHz");
-      setCpuFrequencyMhz(80);
+        Log.noticeln("Lowering CPU frequency to 80 MHz");
+        setCpuFrequencyMhz(80);
     }
 
     inline void raiseCpuFrequency()
     {
-      Log.noticeln("Raising CPU frequency to %d MHz", F_CPU_MHZ);
-      setCpuFrequencyMhz(F_CPU_MHZ);
+        Log.noticeln("Raising CPU frequency to %d MHz", F_CPU_MHZ);
+        setCpuFrequencyMhz(F_CPU_MHZ);
     }
 
-  private:
-
+   private:
     // The effect that is currently running
     AbstractEffect* effect;
 
@@ -70,16 +69,18 @@ class MissionControl
     uint8_t maxBrightness = 255;
 
     // These parameters control how long an effect lasts and how quickly it fades in and out
-    milliseconds_t FADE_IN_DURATION  = 2500;
+    milliseconds_t FADE_IN_DURATION = 2500;
     milliseconds_t FADE_OUT_DURATION = 5000;
     milliseconds_t MIN_EFFECT_DURATION = 2 MINUTES;
     milliseconds_t MAX_EFFECT_DURATION = 10 MINUTES;
 
-    // These contain the actual timestamps to plan the fade in/out and the transition to the next effect
-    milliseconds_t effectStart = 0;       // time when the current effect started
-    milliseconds_t nextTransition = 0;    // time when the current effect will end
-    milliseconds_t fadeInEnd;             // time when the fade in will end ( = effectStart + FADE_IN_DURATION)
-    milliseconds_t fadeOutStart;          // time when the fade out will start ( = nextTransition - FADE_OUT_DURATION)
+    // These contain the actual timestamps to plan the fade in/out and the transition to the next
+    // effect
+    milliseconds_t effectStart = 0;     // time when the current effect started
+    milliseconds_t nextTransition = 0;  // time when the current effect will end
+    milliseconds_t fadeInEnd;  // time when the fade in will end ( = effectStart + FADE_IN_DURATION)
+    milliseconds_t
+        fadeOutStart;  // time when the fade out will start ( = nextTransition - FADE_OUT_DURATION)
 
     // Picks a new transition time and resets the other timestamps accordingly
     void setNextTransition();

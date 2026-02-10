@@ -1,39 +1,35 @@
 #pragma once
 
-#include <math.h>
-#include <vector>
 #include <FastLED.h>
+#include <math.h>
 
-#include "geometry/geometry.h"
-#include "utils.h"
+#include <vector>
+
 #include "effects-base.h"
 #include "effects-utils.h"
-#include "moodlight.h"
 #include "energy-param.h"
-
+#include "geometry/geometry.h"
+#include "moodlight.h"
+#include "utils.h"
 
 // I don't think this will ever show, but why not
 class ErrorEffect : public AbstractEffect
 {
-  public:
-    virtual const char* GetName()
-    {
-      return "ErrorEffect";
-    }
+   public:
+    virtual const char* GetName() { return "ErrorEffect"; }
 
     CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
     {
-      if (strip->idx == 0)
-        return CRGB::Red;
-      else
-        return CRGB::Black;
+        if (strip->idx == 0)
+            return CRGB::Red;
+        else
+            return CRGB::Black;
     }
 };
 
-
 class StaticWhite : public AbstractEffect
 {
-public:
+   public:
     const CRGB color = CRGB(255, 255, 170);
     const char* GetName() override { return "Static White"; }
     CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override { return color; }

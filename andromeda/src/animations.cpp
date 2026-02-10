@@ -8,51 +8,52 @@
 // then white and then black sequentially
 class SweepStrips : public AbstractAnimation
 {
-  public:
+   public:
     virtual const char* GetName() { return "SweepStrips"; }
 
     RandParam<int, 10, 30> timeStep;
 
     void run() override
     {
-      vector<CHSV> colors = randomComplementaryColors(3);
+        vector<CHSV> colors = randomComplementaryColors(3);
 
-      paint(CRGB::Black);
-      for (size_t c = 0; c < 3; c++)
-        colorSweep(colors[c]);
-      colorSweep(CRGB::White);
-      colorSweep(CRGB::Black);
+        paint(CRGB::Black);
+        for (size_t c = 0; c < 3; c++) colorSweep(colors[c]);
+        colorSweep(CRGB::White);
+        colorSweep(CRGB::Black);
     }
 
-  private:
+   private:
     void colorSweep(CRGB color)
     {
-      // Find the longest strip
-      size_t maxLeds = 0;
-      for (size_t i = 0; i < GEOMETRY.getNumStrips(); i++) {
-        maxLeds = max(maxLeds, GEOMETRY.getStrip(i).num_leds);
-      }
-
-      // Sweep with normalized progress
-      for (size_t step = 0; step < maxLeds; step++) {
-        FOR_EACH_STRIP {
-          size_t stripLen = GEOMETRY.getStrip(iStrip).num_leds;
-
-          // Map the current step to how many LEDs should be lit on this strip
-          size_t ledsToLight = map(step, 0, maxLeds - 1, 0, stripLen - 1);
-
-          // Fill from 0 to ledsToLight
-          for (size_t i = 0; i <= ledsToLight; i++) {
-            GEOMETRY.getStrip(iStrip).buffer[i] = color;
-          }
+        // Find the longest strip
+        size_t maxLeds = 0;
+        for (size_t i = 0; i < GEOMETRY.getNumStrips(); i++)
+        {
+            maxLeds = max(maxLeds, GEOMETRY.getStrip(i).num_leds);
         }
-        FASTLED_SHOW();
-        delay(timeStep);
-      }
+
+        // Sweep with normalized progress
+        for (size_t step = 0; step < maxLeds; step++)
+        {
+            FOR_EACH_STRIP
+            {
+                size_t stripLen = GEOMETRY.getStrip(iStrip).num_leds;
+
+                // Map the current step to how many LEDs should be lit on this strip
+                size_t ledsToLight = map(step, 0, maxLeds - 1, 0, stripLen - 1);
+
+                // Fill from 0 to ledsToLight
+                for (size_t i = 0; i <= ledsToLight; i++)
+                {
+                    GEOMETRY.getStrip(iStrip).buffer[i] = color;
+                }
+            }
+            FASTLED_SHOW();
+            delay(timeStep);
+        }
     }
 };
-
-
 
 // ============================================================================
 // BaseSweep - Abstract Base Class for Sweep Animations
@@ -60,8 +61,8 @@ class SweepStrips : public AbstractAnimation
 
 class BaseSweep : public AbstractAnimation
 {
-  protected:
-    bool direction; // Subclasses define meaning (clockwise/outward, etc.)
+   protected:
+    bool direction;  // Subclasses define meaning (clockwise/outward, etc.)
     unsigned short sweepDuration;
     unsigned short rampWidth;
 
@@ -72,106 +73,102 @@ class BaseSweep : public AbstractAnimation
 
     void run() override
     {
-      vector<CHSV> colors = randomComplementaryColors(3);
+        vector<CHSV> colors = randomComplementaryColors(3);
 
-      // Coordinate system flip for direction (if needed)
-      if (!direction)
-      {
-        flipCoordinates();
-      }
+        // Coordinate system flip for direction (if needed)
+        if (!direction) { flipCoordinates(); }
 
-      paint(CRGB::Black);
-      for (size_t c = 0; c < 3; c++)
-      {
-        colorSweep(colors[c]);
-      }
-      colorSweep(CRGB::White);
-      colorSweep(CRGB::Black);
+        paint(CRGB::Black);
+        for (size_t c = 0; c < 3; c++) { colorSweep(colors[c]); }
+        colorSweep(CRGB::White);
+        colorSweep(CRGB::Black);
     }
 
-  private:
+   private:
     void colorSweep(CRGB color)
     {
-      short coordLead = 0;  // The coordinate of the leading edge of the ramp
-      short coordTail = 0;  // The coordinate of the trailing edge of the ramp
-      unsigned short maxCoord = getMaxCoordinate();
+        short coordLead = 0;  // The coordinate of the leading edge of the ramp
+        short coordTail = 0;  // The coordinate of the trailing edge of the ramp
+        unsigned short maxCoord = getMaxCoordinate();
 
-      milliseconds_t start = millis();
-      milliseconds_t t = 0;
+        milliseconds_t start = millis();
+        milliseconds_t t = 0;
 
-      while (t <= sweepDuration)
-      {
-        // Always sweep in positive direction from 0 to max + rampWidth
-        coordLead = map(t, 0, sweepDuration, 0, maxCoord + rampWidth);
-        coordTail = coordLead - rampWidth;
-
-        FOR_EACH_STRIP
+        while (t <= sweepDuration)
         {
-          FOR_EACH_LED(iStrip)
-          {
-            unsigned short coord = getCoordinate(iStrip, iLed);
+            // Always sweep in positive direction from 0 to max + rampWidth
+            coordLead = map(t, 0, sweepDuration, 0, maxCoord + rampWidth);
+            coordTail = coordLead - rampWidth;
 
-            // Range check with boundary handling
-            bool inRange;
-            if (coordLead > maxCoord)
+            FOR_EACH_STRIP
             {
-              // Handle overflow at the boundary
-              if (maxCoord == FULL_CIRCLE) // Angular case - wraparound
-              {
-                inRange = (coord >= coordTail) || (coord <= (coordLead - maxCoord));
-              }
-              else // Radial case - no wraparound
-              {
-                inRange = (coord >= coordTail);
-              }
-            }
-            else if (coordTail < 0)
-            {
-              // Handle negative tail at the beginning of sweep
-              if (maxCoord == FULL_CIRCLE) // Angular case - wraparound
-              {
-                inRange = (coord >= (coordTail + maxCoord)) || (coord <= coordLead);
-              }
-              else // Radial case - no wraparound
-              {
-                inRange = (coord <= coordLead);
-              }
-            }
-            else
-            {
-              // Normal case - no boundary issues
-              inRange = (coord >= coordTail && coord <= coordLead);
+                FOR_EACH_LED(iStrip)
+                {
+                    unsigned short coord = getCoordinate(iStrip, iLed);
+
+                    // Range check with boundary handling
+                    bool inRange;
+                    if (coordLead > maxCoord)
+                    {
+                        // Handle overflow at the boundary
+                        if (maxCoord == FULL_CIRCLE)  // Angular case - wraparound
+                        {
+                            inRange = (coord >= coordTail) || (coord <= (coordLead - maxCoord));
+                        }
+                        else  // Radial case - no wraparound
+                        {
+                            inRange = (coord >= coordTail);
+                        }
+                    }
+                    else if (coordTail < 0)
+                    {
+                        // Handle negative tail at the beginning of sweep
+                        if (maxCoord == FULL_CIRCLE)  // Angular case - wraparound
+                        {
+                            inRange = (coord >= (coordTail + maxCoord)) || (coord <= coordLead);
+                        }
+                        else  // Radial case - no wraparound
+                        {
+                            inRange = (coord <= coordLead);
+                        }
+                    }
+                    else
+                    {
+                        // Normal case - no boundary issues
+                        inRange = (coord >= coordTail && coord <= coordLead);
+                    }
+
+                    if (inRange)
+                    {
+                        // Calculate brightness based on distance from leading edge
+                        short rampDistance;
+                        if (maxCoord == FULL_CIRCLE && coordLead > maxCoord &&
+                            coord <= (coordLead - maxCoord))
+                        {
+                            // LED is in the wrapped portion (angular case)
+                            rampDistance = (coordLead - maxCoord) - coord;
+                        }
+                        else if (maxCoord == FULL_CIRCLE && coordTail < 0 &&
+                                 coord >= (coordTail + maxCoord))
+                        {
+                            // LED is in the wrapped portion (negative tail case, angular)
+                            rampDistance = coordLead - (coord - maxCoord);
+                        }
+                        else
+                        {
+                            // Normal case (both angular and radial)
+                            rampDistance = coordLead - coord;
+                        }
+
+                        uint8_t brightness = map(rampDistance, 0, rampWidth, 0, 255);
+                        GEOMETRY.getStrip(iStrip).buffer[iLed] = color % brightness;
+                    }
+                }
             }
 
-            if (inRange)
-            {
-              // Calculate brightness based on distance from leading edge
-              short rampDistance;
-              if (maxCoord == FULL_CIRCLE && coordLead > maxCoord && coord <= (coordLead - maxCoord))
-              {
-                // LED is in the wrapped portion (angular case)
-                rampDistance = (coordLead - maxCoord) - coord;
-              }
-              else if (maxCoord == FULL_CIRCLE && coordTail < 0 && coord >= (coordTail + maxCoord))
-              {
-                // LED is in the wrapped portion (negative tail case, angular)
-                rampDistance = coordLead - (coord - maxCoord);
-              }
-              else
-              {
-                // Normal case (both angular and radial)
-                rampDistance = coordLead - coord;
-              }
-
-              uint8_t brightness = map(rampDistance, 0, rampWidth, 0, 255);
-              GEOMETRY.getStrip(iStrip).buffer[iLed] = color % brightness;
-            }
-          }
+            FASTLED_SHOW();
+            t = millis() - start;
         }
-
-        FASTLED_SHOW();
-        t = millis() - start;
-      }
     }
 };
 
@@ -181,7 +178,7 @@ class BaseSweep : public AbstractAnimation
 
 class ClockSweep : public BaseSweep
 {
-  public:
+   public:
     virtual const char* GetName() { return "ClockSweep"; }
 
     RandBool clockwise;
@@ -189,32 +186,30 @@ class ClockSweep : public BaseSweep
 
     ClockSweep()
     {
-      direction = clockwise;
-      sweepDuration = duration;
-      rampWidth = 1000; // 10 degrees
+        direction = clockwise;
+        sweepDuration = duration;
+        rampWidth = 1000;  // 10 degrees
     }
 
-  protected:
+   protected:
     void flipCoordinates() override
     {
-      FOR_EACH_STRIP
-      {
-        FOR_EACH_LED(iStrip)
+        FOR_EACH_STRIP
         {
-          GEOMETRY.getStrip(iStrip).leds[iLed].polar.cdegrees = FULL_CIRCLE - GEOMETRY.getStrip(iStrip).leds[iLed].polar.cdegrees;
+            FOR_EACH_LED(iStrip)
+            {
+                GEOMETRY.getStrip(iStrip).leds[iLed].polar.cdegrees =
+                    FULL_CIRCLE - GEOMETRY.getStrip(iStrip).leds[iLed].polar.cdegrees;
+            }
         }
-      }
-      }
+    }
 
     unsigned short getCoordinate(int strip, int led) override
     {
-      return GEOMETRY.getStrip(strip).leds[led].polar.cdegrees;
+        return GEOMETRY.getStrip(strip).leds[led].polar.cdegrees;
     }
 
-    unsigned short getMaxCoordinate() override
-    {
-      return FULL_CIRCLE;
-    }
+    unsigned short getMaxCoordinate() override { return FULL_CIRCLE; }
 };
 
 // ============================================================================
@@ -223,42 +218,39 @@ class ClockSweep : public BaseSweep
 
 class RadialSweep : public BaseSweep
 {
-  public:
+   public:
     virtual const char* GetName() { return "RadialSweep"; }
 
-    RandBool outward; // For external API compatibility
+    RandBool outward;  // For external API compatibility
     RandParam<milliseconds_t, 300, 750> duration;
 
     RadialSweep()
     {
-      direction = outward;
-      sweepDuration = duration;
-      rampWidth = 10; // Radial ramp width in distance units
+        direction = outward;
+        sweepDuration = duration;
+        rampWidth = 10;  // Radial ramp width in distance units
     }
 
-  protected:
+   protected:
     void flipCoordinates() override
     {
-      FOR_EACH_STRIP
-      {
-        FOR_EACH_LED(iStrip)
+        FOR_EACH_STRIP
         {
-          GEOMETRY.getStrip(iStrip).leds[iLed].polar.radius = GEOMETRY.getScreenRadius() - GEOMETRY.getStrip(iStrip).leds[iLed].polar.radius;
+            FOR_EACH_LED(iStrip)
+            {
+                GEOMETRY.getStrip(iStrip).leds[iLed].polar.radius =
+                    GEOMETRY.getScreenRadius() - GEOMETRY.getStrip(iStrip).leds[iLed].polar.radius;
+            }
         }
-      }
     }
 
     unsigned short getCoordinate(int strip, int led) override
     {
-      return GEOMETRY.getStrip(strip).leds[led].polar.radius;
+        return GEOMETRY.getStrip(strip).leds[led].polar.radius;
     }
 
-    unsigned short getMaxCoordinate() override
-    {
-      return GEOMETRY.getScreenRadius();
-    }
+    unsigned short getMaxCoordinate() override { return GEOMETRY.getScreenRadius(); }
 };
-
 
 // ============================================================================
 // SequentialFadeIn - Internal Animation Class
@@ -267,7 +259,7 @@ class RadialSweep : public BaseSweep
 // Fade in each strip with a random color
 class SequentialFadeIn : public AbstractAnimation
 {
-  public:
+   public:
     virtual const char* GetName() { return "SequentialFadeIn"; }
 
     RandParam<milliseconds_t, 150, 500> fadeIn;
@@ -275,37 +267,32 @@ class SequentialFadeIn : public AbstractAnimation
 
     void run() override
     {
-      paint(CRGB::Black);
+        paint(CRGB::Black);
 
-      // Shuffle the strip indices to randomize the order of fading in
-      int strips[GEOMETRY.getNumStrips()];
-      for (size_t i = 0; i < GEOMETRY.getNumStrips(); i++) strips[i] = i;
-      shuffle(strips, GEOMETRY.getNumStrips());
+        // Shuffle the strip indices to randomize the order of fading in
+        int strips[GEOMETRY.getNumStrips()];
+        for (size_t i = 0; i < GEOMETRY.getNumStrips(); i++) strips[i] = i;
+        shuffle(strips, GEOMETRY.getNumStrips());
 
-      auto colors = randomComplementaryColors(GEOMETRY.getNumStrips());
+        auto colors = randomComplementaryColors(GEOMETRY.getNumStrips());
 
-      for (size_t i = 0; i < GEOMETRY.getNumStrips(); i++)
-      {
-        fadeInStrip(strips[i], colors[i], fadeIn);
-      }
-
-      milliseconds_t start = millis();
-      milliseconds_t dt;
-      do
-      {
-        dt = millis() - start;
-        uint8_t b = constrain(map(dt, 0, fadeOut, 255, 0), 0, 255);
-
-        FOR_EACH_STRIP {
-          paintStrip(strips[iStrip], colors[iStrip] % b);
+        for (size_t i = 0; i < GEOMETRY.getNumStrips(); i++)
+        {
+            fadeInStrip(strips[i], colors[i], fadeIn);
         }
 
-        FASTLED_SHOW();
-      }
-      while (dt < fadeOut);
+        milliseconds_t start = millis();
+        milliseconds_t dt;
+        do {
+            dt = millis() - start;
+            uint8_t b = constrain(map(dt, 0, fadeOut, 255, 0), 0, 255);
+
+            FOR_EACH_STRIP { paintStrip(strips[iStrip], colors[iStrip] % b); }
+
+            FASTLED_SHOW();
+        } while (dt < fadeOut);
     }
 };
-
 
 // ============================================================================
 // Swipe - Internal Animation Class
@@ -314,106 +301,92 @@ class SequentialFadeIn : public AbstractAnimation
 // Swipes a random color from left to right and then fades it out
 class Swipe : public AbstractAnimation
 {
-  public:
+   public:
     virtual const char* GetName() { return "Swipe"; }
 
-    Swipe()
-    {
-      controlHints |= ControlHints::ROTATE_SPACE;
-    }
+    Swipe() { controlHints |= ControlHints::ROTATE_SPACE; }
 
     void run() override
     {
-      paint(CRGB::Black);
-      CRGB color = randomColor();
+        paint(CRGB::Black);
+        CRGB color = randomColor();
 
-      // Even without any delay, scrolling the whole screen size takes a long time
-      // (which I am a bit suspicious of to be honest, but I guess calling it 520 times is a bit much).
-      // It looks smoother if you increase in steps of 2 or 3
-      RandParam<short, 2, 3> step;
+        // Even without any delay, scrolling the whole screen size takes a long time
+        // (which I am a bit suspicious of to be honest, but I guess calling it 520 times is a bit
+        // much). It looks smoother if you increase in steps of 2 or 3
+        RandParam<short, 2, 3> step;
 
-      // It goes to (step * GEOMETRY.getScreenHalfSize()) so that the fading trail has time to fully fade out
-      for (short v = -GEOMETRY.getScreenRadius(); v <= (step * GEOMETRY.getScreenRadius()); v += step)
-      {
-        FOR_EACH_STRIP
+        // It goes to (step * GEOMETRY.getScreenHalfSize()) so that the fading trail has time to
+        // fully fade out
+        for (short v = -GEOMETRY.getScreenRadius(); v <= (step * GEOMETRY.getScreenRadius());
+             v += step)
         {
-          FOR_EACH_LED(iStrip)
-          {
-            short lv = GEOMETRY.getStrip(iStrip).leds[iLed].cartesian.x;
-            if (lv >= (v - step) && lv <= v)
-              GEOMETRY.getStrip(iStrip).buffer[iLed] = color;
-          }
+            FOR_EACH_STRIP
+            {
+                FOR_EACH_LED(iStrip)
+                {
+                    short lv = GEOMETRY.getStrip(iStrip).leds[iLed].cartesian.x;
+                    if (lv >= (v - step) && lv <= v) GEOMETRY.getStrip(iStrip).buffer[iLed] = color;
+                }
 
-          fadeToBlackBy(GEOMETRY.getStrip(iStrip).buffer, GEOMETRY.getStrip(iStrip).num_leds, step);
+                fadeToBlackBy(GEOMETRY.getStrip(iStrip).buffer, GEOMETRY.getStrip(iStrip).num_leds,
+                              step);
+            }
+
+            FASTLED_SHOW();
         }
-
-        FASTLED_SHOW();
-      }
     }
 };
-
 
 // ============================================================================
 // WiFiConnectingAnimation - External Animation Class Implementation
 // ============================================================================
 
-const char* WiFiConnectingAnimation::GetName()
-{
-  return "WiFiConnectingAnimation";
-}
+const char* WiFiConnectingAnimation::GetName() { return "WiFiConnectingAnimation"; }
 
 void WiFiConnectingAnimation::run()
 {
-  paint(CRGB::Black);
-  paintStrip(0, CRGB::SteelBlue);
-  FASTLED_SHOW();
+    paint(CRGB::Black);
+    paintStrip(0, CRGB::SteelBlue);
+    FASTLED_SHOW();
 }
-
 
 // ============================================================================
 // WiFiSuccessAnimation - External Animation Class Implementation
 // ============================================================================
 
-const char* WiFiSuccessAnimation::GetName()
-{
-  return "WiFiSuccessAnimation";
-}
+const char* WiFiSuccessAnimation::GetName() { return "WiFiSuccessAnimation"; }
 
 void WiFiSuccessAnimation::run()
 {
-  paint(CRGB::Black);
-  paintStrip(0, CRGB::Green);
-  FASTLED_SHOW();
-  delay(250);
+    paint(CRGB::Black);
+    paintStrip(0, CRGB::Green);
+    FASTLED_SHOW();
+    delay(250);
 }
-
 
 // ============================================================================
 // ErrorAnimation - External Animation Class Implementation
 // ============================================================================
 
-const char* ErrorAnimation::GetName()
-{
-  return "ErrorAnimation";
-}
+const char* ErrorAnimation::GetName() { return "ErrorAnimation"; }
 
 void ErrorAnimation::run()
 {
-  milliseconds_t flashDuration = 250;
-  paint(CRGB::Black);
+    milliseconds_t flashDuration = 250;
+    paint(CRGB::Black);
 
-  for (size_t i = 0; i < 3; i++)
-  {
-    paintStrip(0, CRGB::Red);
-    FASTLED_SHOW();
-    delay(flashDuration);
+    for (size_t i = 0; i < 3; i++)
+    {
+        paintStrip(0, CRGB::Red);
+        FASTLED_SHOW();
+        delay(flashDuration);
 
-    paintStrip(0, CRGB::Black);
-    FASTLED_SHOW();
-    delay(flashDuration);
-  }
+        paintStrip(0, CRGB::Black);
+        FASTLED_SHOW();
+        delay(flashDuration);
+    }
 }
-
 
 // ============================================================================
 // Utility Functions
@@ -421,36 +394,35 @@ void ErrorAnimation::run()
 
 AbstractAnimation* getRandomAnimation()
 {
-  size_t ANIMATIONS_COUNT = 5;
+    size_t ANIMATIONS_COUNT = 5;
 
-  // Set this to the index of the animation you want to force while testing
-  short forcedSelection = -1;
+    // Set this to the index of the animation you want to force while testing
+    short forcedSelection = -1;
 
-  static size_t previousSelection = 255;
+    static size_t previousSelection = 255;
 
-  size_t selection;
-  if (forcedSelection >= 0)
-    selection = forcedSelection;
-  else
-    do
-      selection = random(ANIMATIONS_COUNT);
-    while (selection == previousSelection);
+    size_t selection;
+    if (forcedSelection >= 0)
+        selection = forcedSelection;
+    else
+        do selection = random(ANIMATIONS_COUNT);
+        while (selection == previousSelection);
 
-  previousSelection = selection;
+    previousSelection = selection;
 
-  switch (selection)
-  {
-    case 0:
-      return new SweepStrips();
-    case 1:
-      return new SequentialFadeIn();
-    case 2:
-      return new ClockSweep();
-    case 3:
-      return new RadialSweep();
-    case 4:
-      return new Swipe();
-    default:
-      return new ErrorAnimation();
-  }
+    switch (selection)
+    {
+        case 0:
+            return new SweepStrips();
+        case 1:
+            return new SequentialFadeIn();
+        case 2:
+            return new ClockSweep();
+        case 3:
+            return new RadialSweep();
+        case 4:
+            return new Swipe();
+        default:
+            return new ErrorAnimation();
+    }
 }

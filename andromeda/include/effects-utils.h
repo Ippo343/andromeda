@@ -1,6 +1,7 @@
 #pragma once
 
 #include <FastLED.h>
+
 #include <vector>
 using std::vector;
 
@@ -41,4 +42,5 @@ extern const float defaultBrightnessFactor;
 // Compute brightness based on emitter position and a brightness factor.
 // Uses the famous fast inverse square root for speed.
 // Physically correct (1/d^2) looks cooler than just inverse distance.
-uint8_t brightnessFromEmitter(Led* led, CartesianCoordinates e, float brightnessFactor = defaultBrightnessFactor);
+uint8_t brightnessFromEmitter(Led* led, CartesianCoordinates e,
+                              float brightnessFactor = defaultBrightnessFactor);

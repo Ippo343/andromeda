@@ -1,6 +1,7 @@
 #pragma once
 
 #include <FastLED.h>
+
 #include "utils.h"
 
 // Moodlights are essentially sources of fluctuating colors,
@@ -8,8 +9,7 @@
 
 class MoodLight
 {
-  public:
-
+   public:
     // Min period and period range
     static const uint8_t MIN_BPM = 3;
     static const uint8_t MAX_BPM = 20;
@@ -20,24 +20,24 @@ class MoodLight
     RandParam<uint8_t, MIN_BPM, MAX_BPM> bpmG;
     RandParam<uint8_t, MIN_BPM, MAX_BPM> bpmB;
 
-  void randomize()
-  {
-    bpmR.randomize();
-    bpmG.randomize();
-    bpmB.randomize();
-  }
+    void randomize()
+    {
+        bpmR.randomize();
+        bpmG.randomize();
+        bpmB.randomize();
+    }
 
-  CRGB evaluate()
-  {
-    // NOTE: this actually ignores the t argument
-    // because computing sin(t) has horrible performance
-    // which also gets much worse very quickly as t increases.
-    // FastLED implements integer approximations, but they get the time
-    // by calling millis() internally.
-    uint8_t r = beatsin8(bpmR);
-    uint8_t g = beatsin8(bpmG);
-    uint8_t b = beatsin8(bpmB);
+    CRGB evaluate()
+    {
+        // NOTE: this actually ignores the t argument
+        // because computing sin(t) has horrible performance
+        // which also gets much worse very quickly as t increases.
+        // FastLED implements integer approximations, but they get the time
+        // by calling millis() internally.
+        uint8_t r = beatsin8(bpmR);
+        uint8_t g = beatsin8(bpmG);
+        uint8_t b = beatsin8(bpmB);
 
-    return CRGB(r, g, b);
-  }
+        return CRGB(r, g, b);
+    }
 };

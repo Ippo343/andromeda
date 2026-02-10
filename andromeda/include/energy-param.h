@@ -18,14 +18,13 @@
  */
 class Energy
 {
-  public:
+   public:
     inline static uint8_t get() { return value; }
     inline static void set(uint8_t v) { value = v; }
 
-  private:
+   private:
     static uint8_t value;
 };
-
 
 /*
  * EnergyParam is a template class that maps the global energy value to its range.
@@ -36,10 +35,6 @@ class Energy
 template <typename T, T min, T max>
 class EnergyParam
 {
-  public:
-
-    inline operator T() const
-    {
-        return cmap(Energy::get(), 0, 255, min, max);
-    }
+   public:
+    inline operator T() const { return cmap(Energy::get(), 0, 255, min, max); }
 };

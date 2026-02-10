@@ -6,6 +6,6 @@ typedef unsigned char control_hints_t;
 
 enum ControlHints : control_hints_t
 {
-  NONE         = 0,
-  ROTATE_SPACE = 1    // Apply a global rotation transform to the whole space
+    NONE = 0,
+    ROTATE_SPACE = 1  // Apply a global rotation transform to the whole space
 };
