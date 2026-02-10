@@ -8,6 +8,9 @@ constexpr const char* AP_SSID = "Andromeda-Setup";
 constexpr const char* AP_PASSWORD = "";  // Open network for easier setup
 constexpr int DNS_PORT = 53;
 
+constexpr const char* PREFERENCES_NAMESPACE = "wifi";
+
+
 Comms::Comms()
     : server(80),
       webServerTaskHandle(nullptr),
@@ -24,9 +27,10 @@ Comms::Comms()
 bool Comms::setup()
 {
     // Try to load stored WiFi credentials
-    preferences.begin("wifi", false);
+    preferences.begin(PREFERENCES_NAMESPACE, true);
     String storedSSID = preferences.getString("ssid", "");
     String storedPassword = preferences.getString("password", "");
+    preferences.end();
 
     bool connectionSuccess = false;
 
@@ -360,7 +364,9 @@ void Comms::setupAPRoutes()
     server.on("/reset", HTTP_POST,
               [this](AsyncWebServerRequest* request)
               {
+                  preferences.begin(PREFERENCES_NAMESPACE, false);
                   preferences.clear();
+                  preferences.end();
                   request->send(
                       200, "text/html",
                       "<html><body style='font-family:Arial;text-align:center;margin-top:50px;'>"
@@ -446,7 +452,9 @@ void Comms::setupStationRoutes()
     server.on("/wifi-reset", HTTP_GET,
               [this](AsyncWebServerRequest* request)
               {
+                  preferences.begin(PREFERENCES_NAMESPACE, false);
                   preferences.clear();
+                  preferences.end();
                   request->send(200, "text/plain",
                                 "WiFi credentials cleared. Device will restart in AP mode.");
 
@@ -695,8 +703,10 @@ bool Comms::processWiFiCredentials(AsyncWebServerRequest* request, const String&
         if (testWiFiConnection(ssid.c_str(), password.c_str()))
         {
             // Save credentials
+            preferences.begin(PREFERENCES_NAMESPACE, false);
             preferences.putString("ssid", ssid);
             preferences.putString("password", password);
+            preferences.end();
 
             request->send(
                 200, "text/html",
