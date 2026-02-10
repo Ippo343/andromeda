@@ -70,6 +70,9 @@ class ElectricSparks : public AbstractEffect
             preValues[i].resize(GEOMETRY.getStrip(i).num_leds, 0);
             newValues[i].resize(GEOMETRY.getStrip(i).num_leds, 0);
         }
+
+        hue = random(0, 256);
+        updatePalette();
     }
 
     inline int avg38(int a, int b, int c) { return (a + b + c) / 3; }
@@ -94,12 +97,6 @@ class ElectricSparks : public AbstractEffect
         // Upscale the palette so no interpolation is needed while running.
         // gives a completely imperceptible performace boost.
         UpscalePalette(paletteTemp, palette);
-    }
-
-    void randomize() override
-    {
-        hue = random(0, 256);
-        updatePalette();
     }
 
     void precompute(milliseconds_t t) override
@@ -222,10 +219,9 @@ class PaletteWave : public AbstractEffect
     RandParam<uint8_t, 3, 8> bpm;
     RandParam<int, 5, 10> scale;
 
-    PaletteWave() { controlHints |= ControlHints::ROTATE_SPACE; }
-
-    void randomize() override
+    PaletteWave()
     {
+        controlHints |= ControlHints::ROTATE_SPACE;
         CRGBPalette16 palette16 = randomPredefinedPalette();
         UpscalePalette(palette16, palette);
     }
@@ -305,7 +301,7 @@ class PolarSwipe : public AbstractEffect
     unsigned short bandCenter;
     CRGB color;
 
-    void randomize() override { color = randomColor(); }
+    PolarSwipe() { color = randomColor(); }
 
     void precompute(milliseconds_t t) override
     {
@@ -544,10 +540,6 @@ class IndividualStripDrift : public AbstractEffect
           currentColors(GEOMETRY.getNumStrips(), CRGB::Black),
           transitionEndTimes(GEOMETRY.getNumStrips(), 0),
           transitionStartTimes(GEOMETRY.getNumStrips(), 0)
-    {
-    }
-
-    void randomize() override
     {
         // Initialize all strips to a random color and set up the first transition
         milliseconds_t now = millis();
@@ -809,6 +801,5 @@ AbstractEffect* getRandomEffect()
             break;
     }
 
-    retval->randomize();
     return retval;
 }

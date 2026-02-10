@@ -31,9 +31,6 @@ class AbstractEffect
     // to allow postprocess effects like blurring and fading
     virtual void postprocess(milliseconds_t t) { return; }
 
-    // Randomize the effect's parameters
-    virtual void randomize() { return; }
-
     // Computes the function over all the strips
     void render(milliseconds_t t)
     {
