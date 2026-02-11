@@ -560,6 +560,9 @@
                 this.preview.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
                 this.info.textContent = `RGB: ${r}, ${g}, ${b}`;
 
+                // Update the logo color to match the wheel selection. You are a genius, Annalisa!
+                document.getElementById('logo').style.webkitTextFillColor = `rgb(${r}, ${g}, ${b})`;
+
                 // Send color to server
                 this.sendColor(r, g, b);
             }
@@ -679,6 +682,18 @@
                     `;
                     this.appendChild(ripple);
                     setTimeout(() => ripple.remove(), 600);
+
+                    // Switch off the logo gradient when "Off" is clicked, and restore it when "Next" is clicked
+                    const logo = document.getElementById('logo');
+                    if (this.classList.contains('off')) {
+                        // Turn logo black
+                        logo.style.webkitTextFillColor = 'black';
+                    }
+                    else if (this.classList.contains('next')) {
+                        // Reset to gradient: generate a new one and make text transparent
+                        logo.style.setProperty('--grad', randomGradient());
+                        logo.style.webkitTextFillColor = 'transparent';
+                    }
 
                     fetch(this.dataset.cmd, { method: 'POST' });
                 });
