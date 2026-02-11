@@ -43,9 +43,9 @@ void MissionControl::processWebCommands()
                     StaticColor* staticEffect = static_cast<StaticColor*>(effect);
                     if (staticEffect)
                     {
-                        staticEffect->color = staticColor;
-                        Log.noticeln("Updated static color to: R=%d, G=%d, B=%d", staticColor.r,
-                                     staticColor.g, staticColor.b);
+                        staticEffect->targetColor = staticColor;
+                        Log.noticeln("Updated static targetColor to: R=%d, G=%d, B=%d",
+                                     staticColor.r, staticColor.g, staticColor.b);
                     }
                 }
                 break;

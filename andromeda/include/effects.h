@@ -32,10 +32,18 @@ class StaticColor : public AbstractEffect
    public:
     const char* GetName() override { return "Static Color"; }
 
-    CRGB color;
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override { return color; }
+    CRGB targetColor;   // the color selected by the user, which we will blend towards
+    CRGB currentColor;  // the color we are currently displaying, which will blend towards the
+                        // targetColor
 
-    StaticColor(CRGB c) : color(c) {}
+    void precompute(milliseconds_t t) override
+    {
+        currentColor = CRGB::blend(currentColor, targetColor, 1);
+    }
+
+    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override { return currentColor; }
+
+    StaticColor(CRGB c) : targetColor(c) {}
     StaticColor() : StaticColor(CRGB(255, 255, 170)) {}
 };
 
