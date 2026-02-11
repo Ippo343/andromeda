@@ -453,6 +453,9 @@
         }
 
         // Color Wheel Implementation
+        // TODO: have Claude replace this with a proper HSV wheel.
+        // This one has issues: the colors on the edge are not fully saturated,
+        // and you can drag outside of the area (to get full green, for the record)
         class ColorWheel {
             constructor(canvasId, selectorId, previewId, infoId) {
                 this.canvas = document.getElementById(canvasId);
