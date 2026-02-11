@@ -307,10 +307,30 @@
             margin-bottom: 1rem;
             padding: 0 1rem;
             font-size: 0.65rem;
-            color: rgba(255, 255, 255, 0.25); /* Faded to be non-intrusive */
+            color: rgba(255, 255, 255, 0.25);
             text-align: center;
             width: 100%;
             font-family: sans-serif;
+        }
+
+        .legal-footer summary {
+            cursor: pointer;
+            list-style: none; /* Hides the default arrow in most browsers */
+            text-decoration: underline;
+            transition: color 0.2s ease;
+            user-select: none;
+        }
+
+        .legal-footer summary::-webkit-details-marker {
+            display: none; /* Hides the arrow in Chrome/Safari */
+        }
+
+        .legal-footer summary:hover {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .legal-content {
+            margin-top: 0.5rem;
             line-height: 1.4;
         }
 
@@ -409,8 +429,13 @@
         </div>
     </div>
     <footer class="legal-footer">
-        OSS Credits: FastLED/ArduinoLog (MIT); Arduino/ESPAsync (LGPL); ESP-IDF (Apache).
-        Proprietary code reserved. LGPL source/object files available upon request.
+        <details>
+            <summary>Legal notice</summary>
+            <div class="legal-content">
+                OSS Credits: FastLED/ArduinoLog (MIT); Arduino/ESPAsync (LGPL); ESP-IDF (Apache).
+                Proprietary code reserved. LGPL source/object files available upon request.
+            </div>
+        </details>
     </footer>
 
     <script>
