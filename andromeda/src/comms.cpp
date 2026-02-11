@@ -213,45 +213,12 @@ void Comms::setupRoutes()
                   r->send(200);
               });
 
-    server.on("/color", HTTP_POST,
-              [](AsyncWebServerRequest* r)
-              {
-                  Log.traceln("Received /color: %s", r->args() > 0 ? "" : "none");
-                  if (r->hasArg("r") && r->hasArg("g") && r->hasArg("b"))
-                  {
-                      int red = r->arg("r").toInt();
-                      int green = r->arg("g").toInt();
-                      int blue = r->arg("b").toInt();
-
-                      if (red >= 0 && red <= 255 && green >= 0 && green <= 255 && blue >= 0 &&
-                          blue <= 255)
-                      {
-                          MissionControl::Instance().staticColor = CRGB(red, green, blue);
-                          MissionControl::Instance().queueWebCommand(Command::COLOR);
-                          r->send(200);
-                      }
-                      else { r->send(400, "text/plain", "RGB values must be 0-255"); }
-                  }
-                  else { r->send(400, "text/plain", "Missing r, g, or b parameter"); }
-              });
-
     // Shared Config & Monitoring
     server.on("/fps", HTTP_GET, [](AsyncWebServerRequest* r)
               { r->send(200, "text/plain", String(PerformanceMonitor::Instance().fps())); });
     server.on(
         "/brightness", HTTP_GET, [](AsyncWebServerRequest* r)
         { r->send(200, "text/plain", String(MissionControl::Instance().getMaxBrightness())); });
-    server.on("/brightness", HTTP_POST,
-              [](AsyncWebServerRequest* r)
-              {
-                  int val = r->arg("value").toInt();
-                  if (val >= 0 && val <= 255)
-                  {
-                      MissionControl::Instance().setMaxBrightness(val);
-                      r->send(200);
-                  }
-                  else { r->send(400); }
-              });
 
     // WiFi functionality
     server.on("/scan", HTTP_GET, [this](AsyncWebServerRequest* r)
