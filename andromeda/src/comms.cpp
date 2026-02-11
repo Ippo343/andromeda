@@ -146,6 +146,45 @@ void Comms::webServerTask(void* parameter)
 
 void Comms::setupRoutes()
 {
+    // WebSocket endpoint
+    static AsyncWebSocket ws("/ws");
+    ws.onEvent(
+        [](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg,
+           uint8_t* data, size_t len)
+        {
+            if (type == WS_EVT_DATA)
+            {
+                AwsFrameInfo* info = (AwsFrameInfo*)arg;
+                if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT)
+                {
+                    data[len] = 0;
+                    String msg = String((char*)data);
+
+                    // Parse simple JSON
+                    if (msg.indexOf("\"type\":\"color\"") >= 0)
+                    {
+                        int r = msg.substring(msg.indexOf("\"r\":") + 4).toInt();
+                        int g = msg.substring(msg.indexOf("\"g\":") + 4).toInt();
+                        int b = msg.substring(msg.indexOf("\"b\":") + 4).toInt();
+                        if (r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255)
+                        {
+                            MissionControl::Instance().staticColor = CRGB(r, g, b);
+                            MissionControl::Instance().queueWebCommand(Command::COLOR);
+                        }
+                    }
+                    else if (msg.indexOf("\"type\":\"brightness\"") >= 0)
+                    {
+                        int val = msg.substring(msg.indexOf("\"value\":") + 8).toInt();
+                        if (val >= 0 && val <= 255)
+                        {
+                            MissionControl::Instance().setMaxBrightness(val);
+                        }
+                    }
+                }
+            }
+        });
+    server.addHandler(&ws);
+
     // Global static files
     server.on("/", HTTP_GET,
               [](AsyncWebServerRequest* r) { r->send(LittleFS, "/index.html", "text/html"); });
@@ -177,7 +216,7 @@ void Comms::setupRoutes()
     server.on("/color", HTTP_POST,
               [](AsyncWebServerRequest* r)
               {
-                  Log.noticeln("Received color command with args: %s", r->args() > 0 ? "" : "none");
+                  Log.traceln("Received /color: %s", r->args() > 0 ? "" : "none");
                   if (r->hasArg("r") && r->hasArg("g") && r->hasArg("b"))
                   {
                       int red = r->arg("r").toInt();

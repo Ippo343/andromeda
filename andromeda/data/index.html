@@ -562,15 +562,25 @@
             }
 
             sendColor(r, g, b) {
-                fetch('/color', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `r=${r}&g=${g}&b=${b}`
-                }).catch(console.error);
+                // Throttle to avoid overwhelming ESP32
+                const now = Date.now();
+                if (!this.lastSend || now - this.lastSend > 50) {
+                    this.lastSend = now;
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({type: 'color', r, g, b}));
+                    }
+                }
             }
         }
+
+        // WebSocket setup
+        let ws = null;
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+            ws.onclose = () => setTimeout(connectWebSocket, 2000);
+        }
+        connectWebSocket();
 
         document.addEventListener('DOMContentLoaded', function() {
             const h1 = document.getElementById("logo");
@@ -643,13 +653,13 @@
             brightnessSlider.addEventListener('input', function() {
                 updateSliderThumb(this);
 
-                fetch('/brightness', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: 'value=' + this.value
-                }).catch(console.error);
+                // Throttle brightness updates
+                clearTimeout(this.throttle);
+                this.throttle = setTimeout(() => {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({type: 'brightness', value: parseInt(this.value)}));
+                    }
+                }, 50);
             });
 
             // Button ripple effects
