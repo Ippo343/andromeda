@@ -302,6 +302,18 @@
             border: none;
         }
 
+        .legal-footer {
+            margin-top: 3rem;
+            margin-bottom: 1rem;
+            padding: 0 1rem;
+            font-size: 0.65rem;
+            color: rgba(255, 255, 255, 0.25); /* Faded to be non-intrusive */
+            text-align: center;
+            width: 100%;
+            font-family: sans-serif;
+            line-height: 1.4;
+        }
+
         @media (max-width: 480px) {
             .button-grid {
                 grid-template-columns: 1fr;
@@ -396,6 +408,10 @@
             </div>
         </div>
     </div>
+    <footer class="legal-footer">
+        OSS Credits: FastLED/ArduinoLog (MIT); Arduino/ESPAsync (LGPL); ESP-IDF (Apache).
+        Proprietary code reserved. LGPL source/object files available upon request.
+    </footer>
 
     <script>
         // Navigate to WiFi setup (handles captive portal issues)
