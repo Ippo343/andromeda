@@ -562,13 +562,8 @@
             }
 
             sendColor(r, g, b) {
-                // Throttle to avoid overwhelming ESP32
-                const now = Date.now();
-                if (!this.lastSend || now - this.lastSend > 50) {
-                    this.lastSend = now;
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify({type: 'color', r, g, b}));
-                    }
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({type: 'color', r, g, b}));
                 }
             }
         }
@@ -652,14 +647,9 @@
 
             brightnessSlider.addEventListener('input', function() {
                 updateSliderThumb(this);
-
-                // Throttle brightness updates
-                clearTimeout(this.throttle);
-                this.throttle = setTimeout(() => {
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify({type: 'brightness', value: parseInt(this.value)}));
-                    }
-                }, 50);
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({type: 'brightness', value: parseInt(this.value)}));
+                }
             });
 
             // Button ripple effects
