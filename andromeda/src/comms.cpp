@@ -245,7 +245,7 @@ void Comms::setupRoutes()
         {
             if (isAPMode && request->host() != WiFi.softAPIP().toString())
             {
-                request->redirect("http://" + WiFi.softAPIP().toString() + "/setup");
+                request->redirect("http://" + WiFi.softAPIP().toString() + "/");
             }
             else { request->send(404, "text/plain", "Not Found"); }
         });
