@@ -124,11 +124,10 @@ class Geometry
     inline unsigned short getScreenHalfHeight() const { return getScreenHeight() / 2; }
     inline unsigned short getScreenHalfWidth() const { return getScreenWidth() / 2; }
 
-    inline unsigned short getScreenRadius() const {
+    inline unsigned short getScreenRadius() const
+    {
         static unsigned short screenRadius = 0;
-        if (screenRadius == 0) {
-            screenRadius = max(getScreenHalfHeight(), getScreenHalfWidth());
-        }
+        if (screenRadius == 0) { screenRadius = max(getScreenHalfHeight(), getScreenHalfWidth()); }
         return screenRadius;
     }
 

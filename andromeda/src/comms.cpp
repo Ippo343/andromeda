@@ -5,11 +5,9 @@
 
 // AP mode configuration
 constexpr const char* AP_SSID = "Andromeda-Setup";
-constexpr const char* AP_PASSWORD = "";  // Open network for easier setup
+constexpr const char* AP_PASSWORD = "";
 constexpr int DNS_PORT = 53;
-
 constexpr const char* PREFERENCES_NAMESPACE = "wifi";
-
 
 Comms::Comms()
     : server(80),
@@ -32,25 +30,21 @@ bool Comms::setup()
     String storedPassword = preferences.getString("password", "");
     preferences.end();
 
-    bool connectionSuccess = false;
-
-    // Stored credentials, try to reconnect
     if (storedSSID.length() > 0)
     {
         Log.noticeln("Found stored WiFi credentials for: %s", storedSSID.c_str());
-        connectionSuccess = connectToWiFi(storedSSID.c_str(), storedPassword.c_str());
-    }
-    else { Log.noticeln("No stored WiFi credentials found"); }
-
-    // Either no credentials found or connection failed:
-    // start the AP for configuration
-    if (!connectionSuccess)
-    {
-        Log.noticeln("Starting AP mode for WiFi configuration");
-        return startAPMode();
+        if (connectToWiFi(storedSSID.c_str(), storedPassword.c_str()))
+        {
+            return startStationMode();
+        }
+        else
+        {
+            Log.warningln("Failed to connect to %s with stored credentials", storedSSID.c_str());
+        }
     }
 
-    return startStationMode();
+    Log.noticeln("Starting AP mode for WiFi configuration");
+    return startAPMode();
 }
 
 bool Comms::connectToWiFi(const char* ssid, const char* password)
@@ -58,21 +52,16 @@ bool Comms::connectToWiFi(const char* ssid, const char* password)
     WiFi.mode(WIFI_STA);
     WiFi.setHostname("Andromeda");
 
-    // Configure static IP for ESP32
+    // Configure static IP
+    // TODO: this should be configurable
     IPAddress local_IP(192, 168, 1, 232);
     IPAddress gateway(192, 168, 1, 1);
     IPAddress subnet(255, 255, 255, 0);
     if (!WiFi.config(local_IP, gateway, subnet)) { Log.errorln("Failed to configure static IP"); }
 
-    // Enable auto reconnect
     WiFi.setAutoReconnect(true);
-
-    // Disable WiFi persistence:
-    // that's because we are manually persisting the credentials
-    // using Preferences, and this is a less-controllable duplicate.
     WiFi.persistent(false);
 
-    // Attach WiFi event handler for reconnection
     WiFi.onEvent(
         [](WiFiEvent_t event, WiFiEventInfo_t info)
         {
@@ -92,57 +81,37 @@ bool Comms::connectToWiFi(const char* ssid, const char* password)
 
     WiFi.begin(ssid, password);
 
-    // Wait for connection with 15 second timeout
     unsigned long startTime = millis();
-    unsigned long connectTimeout = 15000;  // 15 seconds
-
-    while (WiFi.status() != WL_CONNECTED && millis() - startTime < connectTimeout)
-    {
-        delay(100);  // Check every 100ms
-    }
+    while (WiFi.status() != WL_CONNECTED && millis() - startTime < 15000) { delay(100); }
 
     status = WiFi.status();
-
-    if (status != WL_CONNECTED)
-    {
-        Log.errorln("Could not connect to %s", ssid);
-        return false;
-    }
-
-    return true;
+    return status == WL_CONNECTED;
 }
 
 bool Comms::startAPMode()
 {
     isAPMode = true;
-
-    // Stop any existing WiFi connection
     WiFi.disconnect();
-
-    // Start Access Point
     WiFi.mode(WIFI_AP);
     WiFi.softAP(AP_SSID, AP_PASSWORD);
 
-    // Get the AP IP address
     IPAddress apIP = WiFi.softAPIP();
-    Log.noticeln("AP Mode started. SSID: %s, IP: %s", AP_SSID, apIP.toString().c_str());
+    Log.noticeln("AP Mode started. IP: %s", apIP.toString().c_str());
 
-    // Start DNS server for captive portal
     dnsServer = new DNSServer();
-    dnsServer->start(DNS_PORT, "*", apIP);  // Redirect all DNS queries to our IP
+    dnsServer->start(DNS_PORT, "*", apIP);
 
     createWebServerTask();
 
-    // Start an initial WiFi scan in the background
-    // Delay it slightly to let the AP mode stabilize
+    // Background scan for setup UI
     xTaskCreate(
-        [](void* param)
+        [](void* p)
         {
             vTaskDelay(2000 / portTICK_PERIOD_MS);
             Comms::Instance().startAsyncScan();
             vTaskDelete(NULL);
         },
-        "InitialScan", 2048, nullptr, 1, nullptr);
+        "InitScan", 2048, nullptr, 1, nullptr);
 
     return true;
 }
@@ -150,610 +119,208 @@ bool Comms::startAPMode()
 bool Comms::startStationMode()
 {
     isAPMode = false;
-
-    // Enable Multicast-DNS
-    if (!MDNS.begin("andromeda")) { Log.errorln("MDNS failed to start"); }
-
+    if (!MDNS.begin("andromeda")) { Log.errorln("MDNS failed"); }
     createWebServerTask();
     printWifiStatus();
-
     return true;
 }
 
-inline void Comms::createWebServerTask()
+void Comms::createWebServerTask()
 {
-    xTaskCreatePinnedToCore(webServerTask,         // Function to implement the task
-                            "WebServer",           // Name of the task
-                            8192,                  // Stack size in bytes
-                            this,                  // Task input parameter
-                            1,                     // Priority
-                            &webServerTaskHandle,  // Task handle
-                            0                      // Core 0
-    );
+    xTaskCreatePinnedToCore(webServerTask, "WebServer", 8192, this, 1, &webServerTaskHandle, 0);
 }
 
-// This is the code for the RTOS task that keeps the server alive
 void Comms::webServerTask(void* parameter)
 {
     Comms* comms = static_cast<Comms*>(parameter);
-
     comms->setupRoutes();
     comms->server.begin();
     Log.noticeln("Web server started on Core %d", xPortGetCoreID());
 
     while (true)
     {
-        // Handle DNS requests for captive portal in AP mode
         if (comms->isAPMode && comms->dnsServer) { comms->dnsServer->processNextRequest(); }
-
-        vTaskDelay(10 / portTICK_PERIOD_MS);  // Reduced delay for DNS processing
+        vTaskDelay(10 / portTICK_PERIOD_MS);
     }
-}
-
-// Quick helper to reply to a request with a status code and message
-inline void replyWithStatus(AsyncWebServerRequest* request, int statusCode,
-                            const String& message = "OK")
-{
-    request->send(statusCode, "text/plain", message);
 }
 
 void Comms::setupRoutes()
 {
-    server.on("/common.css", HTTP_GET, [](AsyncWebServerRequest* request)
-              { request->send(LittleFS, "/common.css", "text/css"); });
-
-    if (isAPMode) { setupAPRoutes(); }
-    else { setupStationRoutes(); }
-}
-
-void Comms::setupAPRoutes()
-{
-    // Main control page - serve index.html as the default
-    server.on("/", HTTP_GET, [this](AsyncWebServerRequest* request)
-              { request->send(LittleFS, "/index.html", "text/html"); });
-
-    // WiFi setup page - accessible via multiple paths for captive portal compatibility
-    server.on("/setup", HTTP_GET,
-              [this](AsyncWebServerRequest* request) { serveSetupPage(request); });
-
-    server.on("/wifi", HTTP_GET,
-              [this](AsyncWebServerRequest* request) { serveSetupPage(request); });
-
-    server.on("/wifi-setup.html", HTTP_GET,
-              [this](AsyncWebServerRequest* request) { serveSetupPage(request); });
-
-    // Captive portal detection URLs - redirect to main page
-    server.on("/generate_204", HTTP_GET, [this](AsyncWebServerRequest* request)
-              { request->redirect("http://" + WiFi.softAPIP().toString() + "/"); });
-
-    server.on("/gen_204", HTTP_GET, [this](AsyncWebServerRequest* request)
-              { request->redirect("http://" + WiFi.softAPIP().toString() + "/"); });
-
-    server.on("/hotspot-detect.html", HTTP_GET, [this](AsyncWebServerRequest* request)
-              { request->redirect("http://" + WiFi.softAPIP().toString() + "/"); });
-
-    server.on("/canonical.html", HTTP_GET, [this](AsyncWebServerRequest* request)
-              { request->redirect("http://" + WiFi.softAPIP().toString() + "/"); });
-
-    server.on("/success.txt", HTTP_GET, [this](AsyncWebServerRequest* request)
-              { request->send(200, "text/plain", "success"); });
-
-    server.on("/ncsi.txt", HTTP_GET, [this](AsyncWebServerRequest* request)
-              { request->send(200, "text/plain", "Microsoft NCSI"); });
-
-    // Command routes (same as station mode)
-    server.on("/N", HTTP_POST,
-              [this](AsyncWebServerRequest* request)
-              {
-                  MissionControl::Instance().queueWebCommand(Command::NEXT);
-                  replyWithStatus(request, 200);
-              });
-
-    server.on("/H", HTTP_POST,
-              [this](AsyncWebServerRequest* request)
-              {
-                  MissionControl::Instance().queueWebCommand(Command::HOLD);
-                  replyWithStatus(request, 200);
-              });
-
-    server.on("/D", HTTP_POST,
-              [this](AsyncWebServerRequest* request)
-              {
-                  MissionControl::Instance().queueWebCommand(Command::POWER_OFF);
-                  replyWithStatus(request, 200);
-              });
-
-    server.on("/W", HTTP_POST,
-              [this](AsyncWebServerRequest* request)
-              {
-                  MissionControl::Instance().queueWebCommand(Command::WHITE);
-                  replyWithStatus(request, 200);
-              });
-
-    server.on("/fps", HTTP_GET, [](AsyncWebServerRequest* request)
-              { request->send(200, "text/plain", String(PerformanceMonitor::Instance().fps())); });
-
-    server.on("/brightness", HTTP_GET,
-              [this](AsyncWebServerRequest* request)
-              {
-                  Log.noticeln("GET brightness: %d", MissionControl::Instance().getMaxBrightness());
-                  request->send(200, "text/plain",
-                                String(MissionControl::Instance().getMaxBrightness()));
-              });
-
-    server.on("/brightness", HTTP_POST,
-              [this](AsyncWebServerRequest* request)
-              {
-                  int brightness = request->arg("value").toInt();
-                  if (brightness >= 0 && brightness <= 255)
-                  {
-                      MissionControl::Instance().setMaxBrightness(brightness);
-                      Log.noticeln("POST brightness: %d", brightness);
-                      request->send(200, "text/plain", "OK");
-                  }
-                  else { request->send(400, "text/plain", "Invalid range"); }
-              });
-
-    // WiFi scan endpoint
-    server.on("/scan", HTTP_GET,
-              [this](AsyncWebServerRequest* request)
-              {
-                  String json = scanWiFiNetworks();
-                  request->send(200, "application/json", json);
-              });
-
-    // Save WiFi credentials (form POST)
-    server.on(
-        "/save", HTTP_POST,
-        [this](AsyncWebServerRequest* request)
-        {
-            Log.noticeln("Received POST to /save with %d params", request->params());
-
-            Log.noticeln("Headers:");
-            int headers = request->headers();
-            for (size_t i = 0; i < headers; i++)
-            {
-                AsyncWebHeader* h = request->getHeader(i);
-                Log.noticeln("  %s: %s", h->name().c_str(), h->value().c_str());
-            }
-
-            if (request->hasParam("plain", true))
-            {
-                String body = request->getParam("plain", true)->value();
-                Log.noticeln("Raw body (plain): %s", body.c_str());
-            }
-
-            // Extract SSID and password from form args
-            String ssid = request->arg("ssid");
-            String password = request->arg("password");
-
-            ssid.trim();
-            password.trim();
-
-            Log.noticeln("Parsed from form - SSID: '%s', Password length: %d", ssid.c_str(),
-                         password.length());
-
-            if (ssid.length() == 0)
-            {
-                request->send(
-                    400, "text/html",
-                    "<html><body style='font-family:Arial;text-align:center;margin-top:50px;'>"
-                    "<h2>Missing Information</h2>"
-                    "<p>Please provide a network name (SSID) and try again.</p>"
-                    "<a href='/setup'>Go Back</a>"
-                    "</body></html>");
-                return;
-            }
-
-            if (processWiFiCredentials(request, ssid, password))
-            {
-                return;  // processed successfully (either saved + restart or failed to connect)
-            }
-
-            // fallback in case processWiFiCredentials did not handle the request
-            request->send(
-                500, "text/html",
-                "<html><body style='font-family:Arial;text-align:center;margin-top:50px;'>"
-                "<h2>Internal Error</h2>"
-                "<p>Could not process the request.</p>"
-                "<a href='/setup'>Go Back</a>"
-                "</body></html>");
-        });
-
-    // Reset credentials (for debugging/recovery)
-    server.on("/reset", HTTP_POST,
-              [this](AsyncWebServerRequest* request)
-              {
-                  preferences.begin(PREFERENCES_NAMESPACE, false);
-                  preferences.clear();
-                  preferences.end();
-                  request->send(
-                      200, "text/html",
-                      "<html><body style='font-family:Arial;text-align:center;margin-top:50px;'>"
-                      "<h2>Credentials Cleared</h2>"
-                      "<p>Device will restart in AP mode.</p>"
-                      "</body></html>");
-
-                  xTaskCreatePinnedToCore(
-                      [](void*)
-                      {
-                          vTaskDelay(3000 / portTICK_PERIOD_MS);
-                          ESP.restart();
-                      },
-                      "RestartTask", 2048, nullptr, 1, nullptr, 0);
-              });
-
-    // Captive portal - redirect to main page
-    server.onNotFound(
-        [this](AsyncWebServerRequest* request)
-        {
-            String url = request->url();
-            Log.noticeln("404: %s", url.c_str());
-
-            // Check if this is a captive portal detection request
-            String host = request->host();
-            if (host != WiFi.softAPIP().toString() && host != "andromeda.local")
-            {
-                // Redirect to our main control page with explicit IP
-                Log.noticeln("Captive portal redirect from host: %s", host.c_str());
-                request->redirect("http://" + WiFi.softAPIP().toString() + "/");
-                return;
-            }
-
-            // For other 404s, serve main page
-            request->send(LittleFS, "/index.html", "text/html");
-        });
-}
-
-void Comms::setupStationRoutes()
-{
-    // Main page
+    // Global static files
     server.on("/", HTTP_GET,
-              [this](AsyncWebServerRequest* request)
-              {
-                  unsigned long start = millis();
-                  request->send(LittleFS, "/index.html", "text/html");
-                  Log.noticeln("Main page served in %lu ms", millis() - start);
-              });
+              [](AsyncWebServerRequest* r) { r->send(LittleFS, "/index.html", "text/html"); });
+    server.on("/common.css", HTTP_GET,
+              [](AsyncWebServerRequest* r) { r->send(LittleFS, "/common.css", "text/css"); });
+    server.on("/setup", HTTP_GET,
+              [](AsyncWebServerRequest* r) { r->send(LittleFS, "/wifi-setup.html", "text/html"); });
 
-    // Command routes (POST only, return minimal response)
+    // Shared Command routes
     server.on("/N", HTTP_POST,
-              [this](AsyncWebServerRequest* request)
+              [](AsyncWebServerRequest* r)
               {
                   MissionControl::Instance().queueWebCommand(Command::NEXT);
-                  replyWithStatus(request, 200);
+                  r->send(200);
               });
-
     server.on("/H", HTTP_POST,
-              [this](AsyncWebServerRequest* request)
+              [](AsyncWebServerRequest* r)
               {
                   MissionControl::Instance().queueWebCommand(Command::HOLD);
-                  replyWithStatus(request, 200);
+                  r->send(200);
               });
-
     server.on("/D", HTTP_POST,
-              [this](AsyncWebServerRequest* request)
+              [](AsyncWebServerRequest* r)
               {
                   MissionControl::Instance().queueWebCommand(Command::POWER_OFF);
-                  replyWithStatus(request, 200);
+                  r->send(200);
               });
-
     server.on("/W", HTTP_POST,
-              [this](AsyncWebServerRequest* request)
+              [](AsyncWebServerRequest* r)
               {
                   MissionControl::Instance().queueWebCommand(Command::WHITE);
-                  replyWithStatus(request, 200);
+                  r->send(200);
               });
 
-    server.on("/fps", HTTP_GET, [](AsyncWebServerRequest* request)
-              { request->send(200, "text/plain", String(PerformanceMonitor::Instance().fps())); });
+    // Shared Config & Monitoring
+    server.on("/fps", HTTP_GET, [](AsyncWebServerRequest* r)
+              { r->send(200, "text/plain", String(PerformanceMonitor::Instance().fps())); });
+    server.on(
+        "/brightness", HTTP_GET, [](AsyncWebServerRequest* r)
+        { r->send(200, "text/plain", String(MissionControl::Instance().getMaxBrightness())); });
+    server.on("/brightness", HTTP_POST,
+              [](AsyncWebServerRequest* r)
+              {
+                  int val = r->arg("value").toInt();
+                  if (val >= 0 && val <= 255)
+                  {
+                      MissionControl::Instance().setMaxBrightness(val);
+                      r->send(200);
+                  }
+                  else { r->send(400); }
+              });
 
-    // WiFi reset endpoint (for reconfiguration)
-    server.on("/wifi-reset", HTTP_GET,
-              [this](AsyncWebServerRequest* request)
+    // WiFi functionality
+    server.on("/scan", HTTP_GET, [this](AsyncWebServerRequest* r)
+              { r->send(200, "application/json", scanWiFiNetworks()); });
+    server.on("/save", HTTP_POST, [this](AsyncWebServerRequest* r)
+              { processWiFiCredentials(r, r->arg("ssid"), r->arg("password")); });
+    server.on("/reset", HTTP_POST,
+              [this](AsyncWebServerRequest* r)
               {
                   preferences.begin(PREFERENCES_NAMESPACE, false);
                   preferences.clear();
                   preferences.end();
-                  request->send(200, "text/plain",
-                                "WiFi credentials cleared. Device will restart in AP mode.");
-
-                  // Restart on a separate task after 3s
-                  xTaskCreatePinnedToCore(
+                  r->send(200, "text/plain", "Credentials cleared. Restarting...");
+                  xTaskCreate(
                       [](void*)
                       {
-                          vTaskDelay(3000 / portTICK_PERIOD_MS);
+                          vTaskDelay(2000 / portTICK_PERIOD_MS);
                           ESP.restart();
                       },
-                      "RestartTask", 2048, nullptr, 1, nullptr, 0);
+                      "Restart", 2048, NULL, 1, NULL);
               });
 
-    server.on("/logs", HTTP_GET,
-              [this](AsyncWebServerRequest* request)
-              {
-                  request->send(LittleFS, LOG_FILE_OLD, "text/plain");
-                  request->send(LittleFS, LOG_FILE_CUR, "text/plain");
-              });
+    // Captive Portal Detection
+    server.on("/generate_204", HTTP_GET, [this](AsyncWebServerRequest* r) { r->redirect("/"); });
+    server.on("/hotspot-detect.html", HTTP_GET,
+              [this](AsyncWebServerRequest* r) { r->redirect("/"); });
 
-    server.on("/brightness", HTTP_GET,
-              [this](AsyncWebServerRequest* request)
-              {
-                  Log.noticeln("GET brightness: %d", MissionControl::Instance().getMaxBrightness());
-                  request->send(200, "text/plain",
-                                String(MissionControl::Instance().getMaxBrightness()));
-              });
-
-    server.on("/brightness", HTTP_POST,
-              [this](AsyncWebServerRequest* request)
-              {
-                  int brightness = request->arg("value").toInt();
-                  if (brightness >= 0 && brightness <= 255)
-                  {
-                      MissionControl::Instance().setMaxBrightness(brightness);
-                      Log.noticeln("POST brightness: %d", brightness);
-                      request->send(200, "text/plain", "OK");
-                  }
-                  else { request->send(400, "text/plain", "Invalid range"); }
-              });
-
-    // Fallback for 404 errors
     server.onNotFound(
         [this](AsyncWebServerRequest* request)
         {
-            Log.warningln("404 Not Found: %s", request->url().c_str());
-            replyWithStatus(request, 404, "Not Found");
+            if (isAPMode && request->host() != WiFi.softAPIP().toString())
+            {
+                request->redirect("http://" + WiFi.softAPIP().toString() + "/setup");
+            }
+            else { request->send(404, "text/plain", "Not Found"); }
         });
-}
-
-void Comms::serveSetupPage(AsyncWebServerRequest* request)
-{
-    request->send(LittleFS, "/wifi-setup.html", "text/html");
 }
 
 void Comms::onWiFiScanComplete(int networksFound)
 {
-    Comms& instance = Comms::Instance();
-
-    Log.noticeln("WiFi scan complete, found %d networks", networksFound);
-
     String json = "{\"networks\":[";
-
     for (size_t i = 0; i < networksFound; i++)
     {
         if (i > 0) json += ",";
-
-        String encryption = "none";
-        switch (WiFi.encryptionType(i))
-        {
-            case WIFI_AUTH_WEP:
-                encryption = "WEP";
-                break;
-            case WIFI_AUTH_WPA_PSK:
-                encryption = "WPA";
-                break;
-            case WIFI_AUTH_WPA2_PSK:
-                encryption = "WPA2";
-                break;
-            case WIFI_AUTH_WPA_WPA2_PSK:
-                encryption = "WPA/WPA2";
-                break;
-            case WIFI_AUTH_WPA2_ENTERPRISE:
-                encryption = "WPA2-Enterprise";
-                break;
-            default:
-                encryption = "none";
-                break;
-        }
-
-        json += "{";
-        json += "\"ssid\":\"" + WiFi.SSID(i) + "\",";
-        json += "\"rssi\":" + String(WiFi.RSSI(i)) + ",";
-        json += "\"encryption\":\"" + encryption + "\"";
-        json += "}";
+        json += "{\"ssid\":\"" + WiFi.SSID(i) + "\",\"rssi\":" + String(WiFi.RSSI(i)) + "}";
     }
-
     json += "]}";
-
-    instance.scanResults = json;
-    instance.scanComplete = true;
-    instance.scanInProgress = false;
-    instance.lastScanTime = millis();
-
-    WiFi.scanDelete();  // Clean up
+    scanResults = json;
+    scanComplete = true;
+    scanInProgress = false;
+    lastScanTime = millis();
+    WiFi.scanDelete();
 }
 
 void Comms::startAsyncScan()
 {
-    if (scanInProgress)
-    {
-        Log.noticeln("Scan already in progress, skipping");
-        return;
-    }
-
-    Log.noticeln("Starting async WiFi scan");
+    if (scanInProgress) return;
     scanInProgress = true;
     scanComplete = false;
-
-    // Start async scan - this returns immediately
-    WiFi.scanNetworks(true, false, false, 300U, 0U, nullptr, nullptr);
-
-    // Register callback for scan completion
+    WiFi.scanNetworks(true);
     WiFi.onEvent(
-        [](WiFiEvent_t event, WiFiEventInfo_t info)
+        [](WiFiEvent_t e, WiFiEventInfo_t i)
         {
-            if (event == ARDUINO_EVENT_WIFI_SCAN_DONE)
+            if (e == ARDUINO_EVENT_WIFI_SCAN_DONE)
             {
-                int networksFound = WiFi.scanComplete();
-                if (networksFound >= 0) { Comms::onWiFiScanComplete(networksFound); }
-                else if (networksFound == WIFI_SCAN_FAILED)
-                {
-                    Comms& instance = Comms::Instance();
-                    instance.scanResults = "{\"networks\":[],\"error\":\"Scan failed\"}";
-                    instance.scanComplete = true;
-                    instance.scanInProgress = false;
-                    Log.errorln("WiFi scan failed");
-                }
+                int n = WiFi.scanComplete();
+                if (n >= 0) Comms::Instance().onWiFiScanComplete(n);
             }
         });
 }
 
 String Comms::scanWiFiNetworks()
 {
-    unsigned long now = millis();
-
-    // Return cached results if they're fresh (less than 30 seconds old)
-    if (scanComplete && (now - lastScanTime < SCAN_CACHE_MS))
-    {
-        Log.noticeln("Returning cached scan results");
-        return scanResults;
-    }
-
-    // If scan is in progress, return status
-    if (scanInProgress)
-    {
-        Log.noticeln("Scan in progress");
-        return "{\"networks\":[],\"status\":\"scanning\"}";
-    }
-
-    // If we have stale cached results, return them but trigger a new scan
-    if (scanComplete && scanResults.length() > 0)
-    {
-        Log.noticeln("Returning stale results and triggering new scan");
-        startAsyncScan();
-        return scanResults;
-    }
-
-    // No cached results, start a scan and return empty for now
-    Log.noticeln("No cached results, starting new scan");
-    startAsyncScan();
-    return "{\"networks\":[],\"status\":\"scanning\"}";
-}
-
-String Comms::urlDecode(String str)
-{
-    String decoded = "";
-    char temp[] = "0x00";
-    unsigned int len = str.length();
-    unsigned int i = 0;
-
-    while (i < len)
-    {
-        char decodedChar;
-        char encodedChar = str.charAt(i++);
-
-        if ((encodedChar == '%') && (i + 1 < len))
-        {
-            temp[2] = str.charAt(i++);
-            temp[3] = str.charAt(i++);
-            decodedChar = strtol(temp, NULL, 16);
-        }
-        else if (encodedChar == '+') { decodedChar = ' '; }
-        else { decodedChar = encodedChar; }
-
-        decoded += decodedChar;
-    }
-
-    return decoded;
+    if (scanComplete && (millis() - lastScanTime < SCAN_CACHE_MS)) return scanResults;
+    if (!scanInProgress) startAsyncScan();
+    return scanInProgress ? "{\"networks\":[],\"status\":\"scanning\"}" : scanResults;
 }
 
 bool Comms::testWiFiConnection(const char* ssid, const char* password)
 {
-    // Temporarily switch to station mode to test connection
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
-
-    // Wait up to 10 seconds for connection
     int attempts = 0;
     while (WiFi.status() != WL_CONNECTED && attempts < 40)
     {
         delay(250);
         attempts++;
     }
-
-    bool connected = (WiFi.status() == WL_CONNECTED);
-
-    if (connected)
-    {
-        Log.noticeln("Test connection successful to %s", ssid);
-        WiFi.disconnect();  // Disconnect the test connection
-    }
-    else { Log.errorln("Test connection failed to %s", ssid); }
-
-    // Switch back to AP mode
+    bool ok = (WiFi.status() == WL_CONNECTED);
     WiFi.mode(WIFI_AP);
     WiFi.softAP(AP_SSID, AP_PASSWORD);
-
-    return connected;
-}
-
-void Comms::printWifiStatus()
-{
-    Log.noticeln("Connected to %s with IP %s (%d dBm)", WiFi.SSID().c_str(),
-                 WiFi.localIP().toString().c_str(), WiFi.RSSI());
+    return ok;
 }
 
 bool Comms::processWiFiCredentials(AsyncWebServerRequest* request, const String& ssid,
                                    const String& password)
 {
-    if (ssid.length() > 0)
+    if (ssid.length() == 0)
     {
-        Log.noticeln("Attempting to connect to: %s", ssid.c_str());
-
-        // Test the connection
-        if (testWiFiConnection(ssid.c_str(), password.c_str()))
-        {
-            // Save credentials
-            preferences.begin(PREFERENCES_NAMESPACE, false);
-            preferences.putString("ssid", ssid);
-            preferences.putString("password", password);
-            preferences.end();
-
-            request->send(
-                200, "text/html",
-                "<html><body style='font-family:Arial;text-align:center;margin-top:50px;'>"
-                "<h2>WiFi Credentials Saved!</h2>"
-                "<p>Device will restart and connect to your network.</p>"
-                "<p>You can now access it at <strong>andromeda.local</strong> or "
-                "<strong>192.168.1.232</strong></p>"
-                "</body></html>");
-
-            // Restart on a separate task after 3s
-            // Note: you need a separate task here because this code is running
-            // inside the web request handler. If we delay() here we block the request,
-            // so we delay and restart without ever completing the request and the browser
-            // never receives the success response.
-            xTaskCreatePinnedToCore(
-                [](void*)
-                {
-                    vTaskDelay(3000 / portTICK_PERIOD_MS);
-                    ESP.restart();
-                },
-                "RestartTask", 2048, nullptr, 1, nullptr, 0);
-
-            return true;
-        }
-        else
-        {
-            request->send(
-                400, "text/html",
-                "<html><body style='font-family:Arial;text-align:center;margin-top:50px;'>"
-                "<h2>Connection Failed</h2>"
-                "<p>Could not connect to the specified network. Please check your credentials and "
-                "try again.</p>"
-                "<a href='/setup'>Go Back</a>"
-                "</body></html>");
-            return true;
-        }
-    }
-    else
-    {
-        Log.errorln("SSID is empty");
-        request->send(400, "text/html",
-                      "<html><body style='font-family:Arial;text-align:center;margin-top:50px;'>"
-                      "<h2>Missing Information</h2>"
-                      "<p>Please provide a network name (SSID) and try again.</p>"
-                      "<a href='/setup'>Go Back</a>"
-                      "</body></html>");
+        request->send(400, "text/plain", "SSID required");
         return true;
     }
+    if (testWiFiConnection(ssid.c_str(), password.c_str()))
+    {
+        preferences.begin(PREFERENCES_NAMESPACE, false);
+        preferences.putString("ssid", ssid);
+        preferences.putString("password", password);
+        preferences.end();
+        request->send(200, "text/html", "<h2>Success</h2><p>Restarting...</p>");
+        xTaskCreate(
+            [](void*)
+            {
+                vTaskDelay(3000 / portTICK_PERIOD_MS);
+                ESP.restart();
+            },
+            "Restart", 2048, NULL, 1, NULL);
+        return true;
+    }
+    request->send(400, "text/plain", "Connection failed");
+    return true;
+}
+
+void Comms::printWifiStatus()
+{
+    Log.noticeln("Connected to %s | IP: %s", WiFi.SSID().c_str(),
+                 WiFi.localIP().toString().c_str());
 }
