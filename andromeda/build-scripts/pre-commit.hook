@@ -1,0 +1,36 @@
+#!/bin/sh
+
+# Get the root of the git repository
+GIT_ROOT=$(git rev-parse --show-toplevel)
+
+# Navigate to the andromeda directory
+cd "$GIT_ROOT/andromeda" || exit
+
+# 1. Get names of staged files (added or modified)
+# 2. Filter for .cpp and .h files
+# 3. Ensure we only pass files that actually exist (avoids errors on deletions)
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMRT | grep -E '\.(cpp|h)$')
+
+# If no C++ files are staged, exit early
+if [ -z "$STAGED_FILES" ]; then
+    exit 0
+fi
+
+echo "Formatting staged files in andromeda/..."
+
+# Format each staged file
+# We use the full path from GIT_ROOT to ensure clang-format finds them
+for FILE in $STAGED_FILES; do
+    # Only run if the file is inside the andromeda directory
+    if [[ $FILE == andromeda/* ]]; then
+        # Strip the 'andromeda/' prefix because we already 'cd'ed into it
+        RELATIVE_FILE=${FILE#andromeda/}
+        
+        if [ -f "$RELATIVE_FILE" ]; then
+            clang-format.exe -i "$RELATIVE_FILE"
+            git add "$RELATIVE_FILE"
+        fi
+    fi
+done
+
+echo "Formatting complete."
