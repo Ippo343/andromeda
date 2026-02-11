@@ -75,7 +75,7 @@ class ElectricSparks : public AbstractEffect
         updatePalette();
     }
 
-    inline int avg38(int a, int b, int c) { return (a + b + c) / 3; }
+    inline uint8_t avg38(int a, int b, int c) { return constrain((a + b + c) / 3, 0, 255); }
 
     void updatePalette()
     {
@@ -107,20 +107,18 @@ class ElectricSparks : public AbstractEffect
             updatePalette();
         }
 
+        // Value diffusion between neighbouring LEDs:
+        // each LED becomes the average of its neighbours (poor man's heat conduction),
+        // taking the value from the previous buffer so that the new buffer is computed
+        // correctly
+        // TODO: solve the heat conduction partial differential equation (LOL)
         FOR_EACH_STRIP
         {
-            // Value diffusion between neighbouring LEDs:
-            // each LED becomes the average of its neighbours (poor man's heat conduction),
-            // taking the value from the previous buffer so that the new buffer is computed
-            // correctly
-            // TODO: solve the heat conduction partial differential equation (LOL)
-
-            size_t stripLen = GEOMETRY.getStrip(iStrip).num_leds;
-            for (size_t iLed = 0; iLed < stripLen; iLed++)
+            FOR_EACH_LED(iStrip)
             {
                 newValues[iStrip][iLed] =
-                    avg38(preValues[iStrip][LI(iLed - 1)], preValues[iStrip][iLed],
-                          preValues[iStrip][LI(iLed + 1)]);
+                    avg38(py_get(preValues[iStrip], iLed - 1), preValues[iStrip][iLed],
+                          py_get(preValues[iStrip], iLed + 1));
             }
         }
     }
@@ -138,8 +136,8 @@ class ElectricSparks : public AbstractEffect
             // Now light up the pixel and its neighbours up to the defined width
             for (size_t w = 0; w < width; w++)
             {
-                newValues[strip->idx][LI(led->idx + w)] = 255;
-                newValues[strip->idx][LI(led->idx - w)] = 255;
+                py_get(newValues[strip->idx], led->idx + w) = 255;
+                py_get(newValues[strip->idx], led->idx - w) = 255;
             }
         }
 

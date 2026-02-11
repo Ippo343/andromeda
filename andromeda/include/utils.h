@@ -12,10 +12,14 @@
 #define SECONDS *1000
 #define MINUTES *60 SECONDS
 
-// Looping Index macro: keeps the index always within the strip
-// simplifying code that needs to access consecutive LEDs.
-// Basically python's array[-1] but for C
-#define LI(idx) ((idx + GEOMETRY.getStrip(idx).num_leds) % GEOMETRY.getStrip(idx).num_leds)
+// This is a helper to allow negative indexing in vectors, like in Python.
+template <typename T>
+inline auto& py_get(T& container, int index)
+{
+    int size = static_cast<int>(container.size());
+    int idx = (index % size + size) % size;
+    return container[idx];
+}
 
 void seedRNGs();
 
