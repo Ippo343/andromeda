@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <FastLED.h>
 
 // Forward declarations
 struct CartesianCoordinates;
@@ -49,4 +50,9 @@ struct ModelConfig
 
     // Coordinate data stored as flat arrays
     const CartesianCoordinates* cartesian_data;
+
+    // Maximum CPU frequency for this model
+    // Predefined as the actual CPU's default, but it can be overwritten per model.
+    // The main example of this is the L10, which still runs at 400fps even at 80MHz.
+    uint8_t max_cpu_freq_mhz = F_CPU_MHZ;
 };

@@ -44,16 +44,31 @@ class MissionControl
     inline uint8_t getMaxBrightness() const { return maxBrightness; }
     inline void setMaxBrightness(uint8_t b) { maxBrightness = b; }
 
-    inline void lowerCpuFrequency()
+    // 80 MHz seems to be the minimum frequency for the WiFi and LED drivers to work,
+    // at least on the C3 where I tried messing with it. At 40MHz nothing works lol.
+    const uint32_t MIN_CPU_FREQ_MHZ = 80;
+    // The max is instead a FastLED macro that adjusts for each chipset.
+    uint32_t MAX_CPU_FREQ_MHZ = F_CPU_MHZ;
+
+    inline void setMinCpuFrequency()
     {
-        Log.noticeln("Lowering CPU frequency to 80 MHz");
-        setCpuFrequencyMhz(80);
+        Log.noticeln("Lowering CPU frequency to %d MHz", MIN_CPU_FREQ_MHZ);
+        setCpuFrequencyMhz(MIN_CPU_FREQ_MHZ);
     }
 
-    inline void raiseCpuFrequency()
+    // With an argument, it both sets the frequency and updates the freq cap
+    inline void setMaxCpuFrequency(uint32_t freq)
     {
-        Log.noticeln("Raising CPU frequency to %d MHz", F_CPU_MHZ);
-        setCpuFrequencyMhz(F_CPU_MHZ);
+        Log.noticeln("Capping max CPU frequency to %d MHz", freq);
+        MAX_CPU_FREQ_MHZ = freq;
+        setCpuFrequencyMhz(MAX_CPU_FREQ_MHZ);
+    }
+
+    // Without an argument, it just sets the frequency to the current cap
+    inline void setMaxCpuFrequency()
+    {
+        Log.noticeln("Raising CPU frequency to %d MHz", MAX_CPU_FREQ_MHZ);
+        setCpuFrequencyMhz(MAX_CPU_FREQ_MHZ);
     }
 
    private:
