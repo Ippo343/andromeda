@@ -169,7 +169,8 @@ void Comms::setupRoutes()
                         if (r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255)
                         {
                             MissionControl::Instance().staticColor = CRGB(r, g, b);
-                            MissionControl::Instance().queueWebCommand(Command::COLOR);
+                            if (!MissionControl::Instance().isInStaticColorMode)
+                                MissionControl::Instance().queueWebCommand(Command::COLOR);
                         }
                     }
                     else if (msg.indexOf("\"type\":\"brightness\"") >= 0)

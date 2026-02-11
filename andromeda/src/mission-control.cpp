@@ -33,21 +33,7 @@ void MissionControl::processWebCommands()
                 powerOff();
                 break;
             case Command::COLOR:
-                // If we are not already in StaticColor mode, transition to it. Otherwise, just
-                // update the color.
-                if (effect == nullptr) break;
-                if (strcmp(effect->GetName(), "Static Color") != 0) { transitionToStaticColor(); }
-                else
-                {
-                    // Update the color of the current StaticColor effect
-                    StaticColor* staticEffect = static_cast<StaticColor*>(effect);
-                    if (staticEffect)
-                    {
-                        staticEffect->targetColor = staticColor;
-                        Log.noticeln("Updated static targetColor to: R=%d, G=%d, B=%d",
-                                     staticColor.r, staticColor.g, staticColor.b);
-                    }
-                }
+                if (!isInStaticColorMode) transitionToStaticColor();
                 break;
             default:
                 Log.warningln("Unknown web command: %c", static_cast<char>(command));
@@ -167,6 +153,10 @@ void MissionControl::handleTransition(AbstractEffect* nextEffect, bool playAnima
     else
         effect = getRandomEffect();
 
+    // Keep track of whether we are in static color mode to allow the web commands
+    // to bypass the command queue entirely
+    isInStaticColorMode = (strcmp(effect->GetName(), "Static Color") == 0);
+
     Log.noticeln("Picked new effect: %s", effect->GetName());
 
     if (effect->controlHints & ControlHints::ROTATE_SPACE)
@@ -204,6 +194,14 @@ void MissionControl::update(milliseconds_t t)
     processWebCommands();
 
     if (!ON) return;
+
+    // TODO: I don't like how "special" the StaticColor has to be.
+    // The problem is that there is no good way for the web UI to update the effects directly
+    if (isInStaticColorMode)
+    {
+        StaticColor* staticEffect = static_cast<StaticColor*>(effect);
+        staticEffect->targetColor = staticColor;
+    }
 
     Energy::set(slowSin(millis(), 0.5, 0, 255));
 

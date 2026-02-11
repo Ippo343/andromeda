@@ -46,6 +46,7 @@ class MissionControl
     inline void setMaxBrightness(uint8_t b) { maxBrightness = b; }
 
     CRGB staticColor = CRGB::White;
+    bool isInStaticColorMode = false;
 
     // 80 MHz seems to be the minimum frequency for the WiFi and LED drivers to work,
     // at least on the C3 where I tried messing with it. At 40MHz nothing works lol.
