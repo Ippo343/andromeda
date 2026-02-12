@@ -12,11 +12,21 @@ namespace SingleStripTestDevice
 {
 extern const ModelConfig CONFIG;
 }
+namespace L70_MK1
+{
+extern const ModelConfig CONFIG;
+}
+namespace L10_MK1
+{
+extern const ModelConfig CONFIG;
+}
 
 // Global registry of all available models
 const ModelConfig* MODEL_REGISTRY[] = {
     &AndromedaMk1::CONFIG,
     &SingleStripTestDevice::CONFIG,
+    &L70_MK1::CONFIG,
+    &L10_MK1::CONFIG,
 };
 
 const size_t NUM_MODELS = sizeof(MODEL_REGISTRY) / sizeof(MODEL_REGISTRY[0]);
