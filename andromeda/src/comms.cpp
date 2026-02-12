@@ -181,6 +181,17 @@ void Comms::setupRoutes()
                             MissionControl::Instance().setMaxBrightness(val);
                         }
                     }
+                    else if (msg.indexOf("\"type\":\"model\"") >= 0)
+                    {
+                        int idKeyPos = msg.indexOf("\"id\":");
+                        if (idKeyPos != -1)
+                        {
+                            int valueStart = msg.indexOf(":", idKeyPos) + 1;
+                            int model = msg.substring(valueStart).toInt();
+                            FactoryConfig::setModelId(static_cast<ModelId>(model));
+                        }
+                    }
+                    else if (msg.indexOf("\"type\":\"reboot\"") >= 0) { esp_restart(); }
                 }
             }
         });
