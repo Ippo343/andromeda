@@ -70,7 +70,6 @@ def interpolate_strip(strip_center_px, first_led_px, last_led_px):
         # as they will be stored as integers in the arduino anyway
         abs_coords_n = np.round(abs_coords_n)
 
-        # TODO: what format is best to output to include in arduino?
         yield abs_coords_n
 
 
@@ -127,12 +126,25 @@ def main():
         lasts_px[i] -= centres_px[i]
 
     all_leds_flat = []
+
+    # Calculate all coordinates
     for strip_data in zip(centres_px, firsts_px, lasts_px):
         strip_coords = list(interpolate_strip(*strip_data))
         all_leds_flat.extend(strip_coords)
 
-    # Output: 7 rows of 23 coordinates
-    led_utils.print_arduino_header(all_leds_flat, row_size=LEDS_PER_STRIP)
+    # --- UPDATED OUTPUT LOGIC ---
+
+    # Define the row counts: 7 strips, each with 23 LEDs
+    strip_counts = [LEDS_PER_STRIP] * len(centres_px)
+
+    # Use the updated utility function with row_counts
+    # We assign a specific variable name for clarity in the firmware
+    led_utils.print_arduino_header(
+        all_leds_flat,
+        variable_name="coords_Andromeda",
+        row_counts=strip_counts
+    )
+
     led_utils.print_bounding_box(all_leds_flat)
 
 
