@@ -2,7 +2,7 @@
 # -*- coding: utf8 -*-
 
 """
-This is a utility that estimates the physical coordinates of each LED in the structure.
+This is a utility that estimates the physical coordinates of each LED in the structure of Andromeda MK1.
 
 Knowing the position is required to write 2D effects that use the whole structure.
 Since there are (7 * 23) LEDs in total, obviously I wasn't going to measure each of them individually
@@ -32,7 +32,6 @@ base_height_mm = 592
 mm_per_px = base_height_mm / base_height_px
 
 cartesian_header = "const PROGMEM CartesianCoordinates relative_led_coordinates[NUM_STRIPS][LEDS_PER_STRIP] = {"
-polar_header = "const PROGMEM PolarCoordinates polar_led_coordinates[NUM_STRIPS][LEDS_PER_STRIP] = {"
 footer = "};"
 
 
@@ -40,26 +39,8 @@ def fmt_coord_cartesian(v):
     return f"{{ {int(v[0]):>4}, {int(v[1]):>4} }}"
 
 
-def fmt_coord_polar(v):
-    return f"{{ {v[0]:>4}, {v[1]:>5} }}"
-
-
 def fmt_strip_cartesian(coords):
     return "  { " + ", ".join(map(fmt_coord_cartesian, coords)) + " },"
-
-
-def fmt_strip_polar(coords):
-    return "  { " + ", ".join(map(fmt_coord_polar, coords)) + " },"
-
-
-def cartesian_to_polar(coordinates):
-    x, y = coordinates
-    r = round(np.sqrt(x**2 + y**2))
-    theta = np.arctan2(y, x)
-    theta = np.degrees(theta)
-    theta *= 100    # measured in centi-degrees so we can use ints in the controller
-    theta = round(theta) % (360 * 100)
-    return r, round(theta)
 
 
 def interpolate_strip(strip_center_px, first_led_px, last_led_px):
@@ -175,14 +156,6 @@ def main():
         max_led_y = max(max_led_y, max(ys))
 
         print(fmt_strip_cartesian(cartesian_coordinates))
-    print(footer)
-
-    print()
-    print(polar_header)
-    for strip_data in zip(centres_px, firsts_px, lasts_px):
-        cartesian_coordinates = list(interpolate_strip(*strip_data))
-        polar_coordinates = list(map(cartesian_to_polar, cartesian_coordinates))
-        print(fmt_strip_polar(polar_coordinates))
     print(footer)
 
     print()
