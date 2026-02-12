@@ -55,38 +55,17 @@
             margin-bottom: 0;
         }
 
-        /* Color Picker Styles */
-        .color-picker-container {
-            margin-top: 1.5rem;
+        /* Brightness slider section */
+        .brightness-section {
+            margin-top: 1rem;
             width: 100%;
         }
 
+        /* Color Picker Styles */
         .color-picker-toggle {
             background: linear-gradient(135deg,
                 #ff0000 0%, #ffff00 16.66%, #00ff00 33.33%,
                 #00ffff 50%, #0000ff 66.66%, #ff00ff 83.33%, #ff0000 100%);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 12px;
-            padding: 1.2rem 1rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            color: white;
-            font-size: 1.1rem;
-            font-weight: bold;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-            position: relative;
-            overflow: hidden;
-            user-select: none;
-        }
-
-        .color-picker-toggle:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
-            border-color: rgba(255, 255, 255, 0.5);
-        }
-
-        .color-picker-toggle:active {
-            transform: translateY(0);
         }
 
         .color-wheel-drawer {
@@ -123,29 +102,7 @@
             border-radius: 50%;
             cursor: crosshair;
             position: relative;
-            background: conic-gradient(
-                from 0deg,
-                #ff0000 0deg,
-                #ffff00 60deg,
-                #00ff00 120deg,
-                #00ffff 180deg,
-                #0000ff 240deg,
-                #ff00ff 300deg,
-                #ff0000 360deg
-            );
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        }
-
-        .color-wheel::before {
-            content: '';
-            position: absolute;
-            top: 5%;
-            left: 5%;
-            right: 5%;
-            bottom: 5%;
-            border-radius: 50%;
-            background: radial-gradient(circle, white 0%, transparent 70%);
-            pointer-events: none;
         }
 
         .color-selector {
@@ -334,6 +291,11 @@
             line-height: 1.4;
         }
 
+        @keyframes shine-move {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+
         @media (max-width: 480px) {
             .button-grid {
                 grid-template-columns: 1fr;
@@ -355,12 +317,19 @@
             }
 
             .color-wheel-wrapper {
-                width: 200px;
-                height: 200px;
+                width: 85vw;
+                height: 85vw;
+                max-width: 350px;
+                max-height: 350px;
+                margin: 0 auto 1.5rem auto;
             }
 
             .color-wheel-drawer.expanded {
-                max-height: 360px;
+                max-height: 600px;
+            }
+
+            .brightness-section {
+                margin-top: 0.75rem;
             }
         }
     </style>
@@ -382,22 +351,33 @@
             <button class="btn next"  data-cmd="/N">Next</button>
             <button class="btn hold"  data-cmd="/H">Hold</button>
             <button class="btn off"   data-cmd="/D">Off</button>
+            <button class="btn color-picker-toggle" id="colorPickerToggle">Color</button>
         </div>
 
-        <!-- Color Picker Section -->
-        <div class="color-picker-container">
-            <div class="color-picker-toggle" id="colorPickerToggle">
-                Color
-            </div>
-            <div class="color-wheel-drawer" id="colorWheelDrawer">
-                <div class="color-wheel-content">
-                    <div class="color-wheel-wrapper">
-                        <canvas class="color-wheel" id="colorWheel" width="240" height="240"></canvas>
-                        <div class="color-selector" id="colorSelector"></div>
-                    </div>
-                    <div class="color-preview" id="colorPreview"></div>
-                    <div class="color-info" id="colorInfo">RGB: 255, 255, 255</div>
+        <!-- Color Wheel Drawer -->
+        <div class="color-wheel-drawer" id="colorWheelDrawer">
+            <div class="color-wheel-content">
+                <div class="color-wheel-wrapper">
+                    <canvas class="color-wheel" id="colorWheel"></canvas>
+                    <div class="color-selector" id="colorSelector"></div>
                 </div>
+                <div class="color-preview" id="colorPreview"></div>
+                <div class="color-info" id="colorInfo">RGB: 255, 255, 255</div>
+            </div>
+        </div>
+
+        <!-- Brightness Slider -->
+        <div class="brightness-section">
+            <div class="slider-container">
+                <label class="slider-label" for="brightnessSlider">Brightness</label>
+                <input
+                    type="range"
+                    id="brightnessSlider"
+                    class="brightness-slider"
+                    min="0"
+                    max="255"
+                    value="128"
+                >
             </div>
         </div>
 
@@ -410,17 +390,6 @@
             </div>
             <div class="settings-drawer" id="settingsDrawer">
                 <div class="settings-content">
-                    <div class="slider-container">
-                        <label class="slider-label" for="brightnessSlider">Brightness</label>
-                        <input
-                            type="range"
-                            id="brightnessSlider"
-                            class="brightness-slider"
-                            min="0"
-                            max="255"
-                            value="128"
-                        >
-                    </div>
                     <button class="btn" onclick="goToWifiSetup()" style="margin-top: 1rem;">
                         WiFi Setup
                     </button>
@@ -494,9 +463,8 @@
         }
 
         // Color Wheel Implementation
-        // TODO: have Claude replace this with a proper HSV wheel.
-        // This one has issues: the colors on the edge are not fully saturated,
-        // and you can drag outside of the area (to get full green, for the record)
+        // Proper HSV color wheel with V fixed at maximum
+        // Pure white at center (S=0), fully saturated colors at edge (S=100%, V=100%)
         class ColorWheel {
             constructor(canvasId, selectorId, previewId, infoId) {
                 this.canvas = document.getElementById(canvasId);
@@ -505,9 +473,18 @@
                 this.preview = document.getElementById(previewId);
                 this.info = document.getElementById(infoId);
 
+                // Determine canvas size based on wrapper size for responsive support
+                const wrapper = this.canvas.parentElement;
+                const wrapperSize = Math.min(wrapper.clientWidth, wrapper.clientHeight);
+
+                // Set canvas internal resolution to match display size
+                this.canvas.width = wrapperSize;
+                this.canvas.height = wrapperSize;
+
                 this.centerX = this.canvas.width / 2;
                 this.centerY = this.canvas.height / 2;
-                this.radius = this.canvas.width / 2;
+                // Draw the wheel with significant padding to avoid edge artifacts
+                this.radius = this.canvas.width / 2 - 15;
 
                 this.currentColor = { r: 255, g: 255, b: 255 };
                 this.isDragging = false;
@@ -518,35 +495,82 @@
             }
 
             drawWheel() {
-                // Draw the color wheel with saturation gradient
-                for (let angle = 0; angle < 360; angle += 1) {
-                    const startAngle = (angle - 90) * Math.PI / 180;
-                    const endAngle = (angle - 89) * Math.PI / 180;
+                // Draw HSV color wheel pixel by pixel
+                // V is fixed at maximum (100%), so we only vary H and S
+                const imageData = this.ctx.createImageData(this.canvas.width, this.canvas.height);
+                const data = imageData.data;
 
-                    const gradient = this.ctx.createRadialGradient(
-                        this.centerX, this.centerY, 0,
-                        this.centerX, this.centerY, this.radius
-                    );
+                for (let y = 0; y < this.canvas.height; y++) {
+                    for (let x = 0; x < this.canvas.width; x++) {
+                        const dx = x - this.centerX;
+                        const dy = y - this.centerY;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
 
-                    const hue = angle;
-                    gradient.addColorStop(0, 'white');
-                    gradient.addColorStop(0.7, `hsl(${hue}, 100%, 50%)`);
-                    gradient.addColorStop(1, `hsl(${hue}, 100%, 50%)`);
+                        if (distance <= this.radius) {
+                            // Calculate hue from angle (0-360 degrees)
+                            const angle = Math.atan2(dy, dx);
+                            const hue = (angle * 180 / Math.PI + 360) % 360;
 
-                    this.ctx.fillStyle = gradient;
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(this.centerX, this.centerY);
-                    this.ctx.arc(this.centerX, this.centerY, this.radius, startAngle, endAngle);
-                    this.ctx.closePath();
-                    this.ctx.fill();
+                            // Calculate saturation from distance (0 at center, 100 at edge)
+                            // Clamp to 99% to avoid any black at the very edge
+                            const saturation = Math.min(99, (distance / this.radius) * 100);
+
+                            // V is fixed at 100%
+                            const value = 100;
+
+                            // Convert HSV to RGB
+                            const rgb = this.hsvToRgb(hue, saturation, value);
+
+                            const index = (y * this.canvas.width + x) * 4;
+                            data[index] = rgb.r;
+                            data[index + 1] = rgb.g;
+                            data[index + 2] = rgb.b;
+                            data[index + 3] = 255;
+                        }
+                    }
                 }
+
+                this.ctx.putImageData(imageData, 0, 0);
+            }
+
+            hsvToRgb(h, s, v) {
+                // h: 0-360, s: 0-100, v: 0-100
+                // returns: {r: 0-255, g: 0-255, b: 0-255}
+                s = s / 100;
+                v = v / 100;
+
+                const c = v * s;
+                const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+                const m = v - c;
+
+                let r, g, b;
+
+                if (h >= 0 && h < 60) {
+                    r = c; g = x; b = 0;
+                } else if (h >= 60 && h < 120) {
+                    r = x; g = c; b = 0;
+                } else if (h >= 120 && h < 180) {
+                    r = 0; g = c; b = x;
+                } else if (h >= 180 && h < 240) {
+                    r = 0; g = x; b = c;
+                } else if (h >= 240 && h < 300) {
+                    r = x; g = 0; b = c;
+                } else {
+                    r = c; g = 0; b = x;
+                }
+
+                return {
+                    r: Math.round((r + m) * 255),
+                    g: Math.round((g + m) * 255),
+                    b: Math.round((b + m) * 255)
+                };
             }
 
             setupEvents() {
+                // Use document-level listeners for mouse to prevent detachment when dragging outside
                 this.canvas.addEventListener('mousedown', (e) => this.onStart(e));
-                this.canvas.addEventListener('mousemove', (e) => this.onMove(e));
-                this.canvas.addEventListener('mouseup', () => this.onEnd());
-                this.canvas.addEventListener('mouseleave', () => this.onEnd());
+                document.addEventListener('mousemove', (e) => this.onMove(e));
+                document.addEventListener('mouseup', () => this.onEnd());
 
                 this.canvas.addEventListener('touchstart', (e) => this.onStart(e.touches[0]));
                 this.canvas.addEventListener('touchmove', (e) => {
@@ -573,38 +597,72 @@
 
             updateFromEvent(e) {
                 const rect = this.canvas.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
+                let x = e.clientX - rect.left;
+                let y = e.clientY - rect.top;
 
-                // Constrain to circle
+                // Scale coordinates to canvas size
+                x = x * (this.canvas.width / rect.width);
+                y = y * (this.canvas.height / rect.height);
+
+                // Calculate distance from center
                 const dx = x - this.centerX;
                 const dy = y - this.centerY;
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
-                if (distance <= this.radius) {
-                    this.updateColor(x, y);
+                // Constrain to circle - if outside, project to edge
+                if (distance > this.radius) {
+                    const angle = Math.atan2(dy, dx);
+                    x = this.centerX + Math.cos(angle) * this.radius;
+                    y = this.centerY + Math.sin(angle) * this.radius;
                 }
+
+                this.updateColor(x, y);
             }
 
             updateColor(x, y) {
-                // Get color from canvas
-                const imageData = this.ctx.getImageData(x, y, 1, 1);
-                const [r, g, b] = imageData.data;
+                // 1. Calculate Color (Math-based to prevent black edges)
+                const dx = x - this.centerX;
+                const dy = y - this.centerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                const hue = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+                const saturation = Math.min(100, (distance / this.radius) * 100);
+                const value = 100;
+
+                const rgb = this.hsvToRgb(hue, saturation, value);
+                const { r, g, b } = rgb;
 
                 this.currentColor = { r, g, b };
+                const colorString = `rgb(${r}, ${g}, ${b})`;
 
-                // Update UI
+                // 2. Update UI Elements (Selector & Preview)
                 this.selector.style.left = x + 'px';
                 this.selector.style.top = y + 'px';
-                this.selector.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+                this.selector.style.backgroundColor = colorString;
+                this.preview.style.backgroundColor = colorString;
 
-                this.preview.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
-                this.info.textContent = `RGB: ${r}, ${g}, ${b}`;
+                // 3. Update Text Label (Colored Numbers)
+                // We use lighter hex colors for the text so it pops against the dark background
+                this.info.innerHTML =
+                    `<span style="color: #ff6b6b">${r}</span>, ` +
+                    `<span style="color: #6bff6b">${g}</span>, ` +
+                    `<span style="color: #6b6bff">${b}</span>`;
 
-                // Update the logo color to match the wheel selection. You are a genius, Annalisa!
-                document.getElementById('logo').style.webkitTextFillColor = `rgb(${r}, ${g}, ${b})`;
+                // 4. Update Logo (Sexy Shine Animation)
+                const logo = document.getElementById('logo');
+                // Create a gradient: Color -> White -> Color
+                const shineGradient = `linear-gradient(135deg,
+                    ${colorString} 40%,
+                    white 50%,
+                    ${colorString} 60%)`;
 
-                // Send color to server
+                logo.style.backgroundImage = shineGradient;
+                logo.style.backgroundSize = '200% auto'; // Make it wide enough to slide
+                logo.style.animation = 'shine-move 3s linear infinite'; // Move it!
+                logo.style.webkitBackgroundClip = 'text';
+                logo.style.webkitTextFillColor = 'transparent';
+
+                // 5. Send to Server
                 this.sendColor(r, g, b);
             }
 
@@ -731,8 +789,13 @@
                         logo.style.webkitTextFillColor = 'black';
                     }
                     else if (this.classList.contains('next')) {
-                        // Reset to gradient: generate a new one and make text transparent
+                        // Reset to random gradient
                         logo.style.setProperty('--grad', randomGradient());
+
+                        // IMPORTANT: Clear the manual overrides we added in the color picker
+                        logo.style.backgroundImage = '';
+                        logo.style.animation = '';
+
                         logo.style.webkitTextFillColor = 'transparent';
                     }
 
