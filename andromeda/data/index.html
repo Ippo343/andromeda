@@ -314,6 +314,71 @@
             background-color: rgba(255, 255, 255, 0.1);
         }
 
+        .model-row {
+            display: flex;
+            align-items: stretch;
+            width: 100%;
+            gap: 0.5rem;
+        }
+
+        .model-row .model-select {
+            flex: 1;
+            margin-bottom: 0;
+            min-height: 45px;
+            border-radius: 8px;
+            transition: border-radius 0.3s ease;
+        }
+
+        /* The Reboot Button: Hidden by default */
+        .reboot-btn {
+            /* Layout & Size */
+            display: flex;
+            align-items: center; /* Vertically center the text */
+            justify-content: center;
+            padding: 0; /* Padding is handled by the width transition */
+
+            /* Animation Properties */
+            max-width: 0;
+            margin-left: 0;
+            opacity: 0;
+            overflow: hidden;
+
+            /* Styling */
+            background: rgba(255, 59, 48, 0.15);
+            border: 1px solid rgba(255, 59, 48, 0.5);
+            color: #ff3b30;
+            border-radius: 8px;
+            cursor: pointer;
+            white-space: nowrap;
+            font-weight: bold;
+            font-family: inherit;
+
+            transition: all 0.3s cubic-bezier(0.215, 0.610, 0.355, 1);
+        }
+
+        /* The "Visible" State */
+        .reboot-btn.visible {
+            max-width: 100px; /* Open up */
+            padding: 0 1.2rem;
+            margin-left: 0.8rem;
+            opacity: 1;
+        }
+
+        .reboot-btn:hover {
+            background: rgba(255, 59, 48, 0.4);
+            box-shadow: 0 0 15px rgba(255, 59, 48, 0.3);
+        }
+
+        /* Optional: round the corners differently when they are side-by-side */
+        .model-row.has-reboot .model-select {
+            border-top-right-radius: 4px;
+            border-bottom-right-radius: 4px;
+        }
+        .model-row.has-reboot .reboot-btn {
+            border-top-left-radius: 4px;
+            border-bottom-left-radius: 4px;
+        }
+
         #logo {
             transition: filter 0.1s ease, color 0.3s ease;
             filter: brightness(var(--logo-filt, 1));
@@ -421,12 +486,18 @@
                     <div class="slider-container">
                         <label class="slider-label">Model Selection</label>
                         <!-- The values here must match the MODEL_ID values in model_config.h -->
-                        <select class="model-select" id="modelSelect">
-                            <option value="769">L10</option>
-                            <option value="768">L70</option>
-                            <option value="512">Andromeda</option>
-                            <option value="256">Test rig</option>
-                        </select>
+                        <div class="model-row" id="modelRow">
+                            <select class="model-select" id="modelSelect">
+                                <option value="769">L10</option>
+                                <option value="768">L70</option>
+                                <option value="512">Andromeda</option>
+                                <option value="256">Test rig</option>
+                            </select>
+
+                            <button id="rebootBtn" class="reboot-btn" title="Reboot Device">
+                                Reboot
+                            </button>
+                        </div>
                     </div>
                     <button class="btn" onclick="goToWifiSetup()" style="margin-top: 0.5rem; width: 100%;">
                         WiFi Setup
@@ -808,7 +879,6 @@
                 }
             });
 
-
             const modelSelect = document.getElementById('modelSelect');
             const logo = document.getElementById('logo');
 
@@ -828,6 +898,23 @@
                         id: modelId
                     }));
                 }
+                // Reveal the reboot button
+                rebootBtn.classList.add('visible');
+                modelRow.classList.add('has-reboot');
+
+            });
+
+            rebootBtn.addEventListener('click', function() {
+                // Visual feedback
+                this.innerHTML = "Rebooting...";
+                this.style.opacity = "0.5";
+
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'reboot' }));
+                }
+
+                // Optional: Reload page after a delay to reconnect
+                setTimeout(() => location.reload(), 4000);
             });
 
             // Button ripple effects
