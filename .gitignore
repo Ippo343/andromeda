@@ -7,3 +7,5 @@
 andromeda/secrets.h
 andromeda/include/version.h
 venv/
+__pycache__/
+

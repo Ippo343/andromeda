@@ -17,6 +17,8 @@ and estimate all of their positions.
 import math
 import numpy as np
 
+import led_utils
+
 LEDS_PER_STRIP = 23
 
 # measured from the reference image
@@ -30,17 +32,6 @@ base_height_mm = 592
 # conversion factor to transform between pixels and meters,
 # estimated using the dimensions of the base
 mm_per_px = base_height_mm / base_height_px
-
-cartesian_header = "const PROGMEM CartesianCoordinates relative_led_coordinates[NUM_STRIPS][LEDS_PER_STRIP] = {"
-footer = "};"
-
-
-def fmt_coord_cartesian(v):
-    return f"{{ {int(v[0]):>4}, {int(v[1]):>4} }}"
-
-
-def fmt_strip_cartesian(coords):
-    return "  { " + ", ".join(map(fmt_coord_cartesian, coords)) + " },"
 
 
 def interpolate_strip(strip_center_px, first_led_px, last_led_px):
@@ -135,32 +126,14 @@ def main():
         firsts_px[i] -= centres_px[i]
         lasts_px[i] -= centres_px[i]
 
-    # Also output the min and max found for all the coordinates
-    # (essentially to find the screen's bounding box)
-    min_led_x = math.inf
-    min_led_y = math.inf
-    max_led_x = -math.inf
-    max_led_y = -math.inf
-
-    print(cartesian_header)
+    all_leds_flat = []
     for strip_data in zip(centres_px, firsts_px, lasts_px):
-        cartesian_coordinates = list(interpolate_strip(*strip_data))
+        strip_coords = list(interpolate_strip(*strip_data))
+        all_leds_flat.extend(strip_coords)
 
-        xs = [c[0] for c in cartesian_coordinates]
-        ys = [c[1] for c in cartesian_coordinates]
-
-        # Update screen's bounding box
-        min_led_x = min(min_led_x, min(xs))
-        min_led_y = min(min_led_y, min(ys))
-        max_led_x = max(max_led_x, max(xs))
-        max_led_y = max(max_led_y, max(ys))
-
-        print(fmt_strip_cartesian(cartesian_coordinates))
-    print(footer)
-
-    print()
-    print(f"Bounding box: {(min_led_x, min_led_y)} - {(max_led_x, max_led_y)}")
-    print(f"Screen size: {max_led_x - min_led_x} by {max_led_y - min_led_y}")
+    # Output: 7 rows of 23 coordinates
+    led_utils.print_arduino_header(all_leds_flat, row_size=LEDS_PER_STRIP)
+    led_utils.print_bounding_box(all_leds_flat)
 
 
 if __name__ == "__main__":
