@@ -271,7 +271,7 @@ void setModelId(ModelId model_id)
     prefs.putUShort(MODEL_ID_KEY, (uint16_t)model_id);
     prefs.end();
 
-    Log.noticeln("Factory config: Set model ID to %d (%s)", (uint8_t)model_id,
+    Log.noticeln("Factory config: Set model ID to %d (%s)", (uint16_t)model_id,
                  getModelName(model_id));
 }
 
