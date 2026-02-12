@@ -291,6 +291,34 @@
             line-height: 1.4;
         }
 
+        .model-select {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: white;
+            padding: 0.8rem;
+            font-family: inherit;
+            font-size: 0.9rem;
+            outline: none;
+            cursor: pointer;
+            appearance: none; /* Removes default arrow */
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3e%3cpath d='M7 10l5 5 5-5z'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 0.8rem center;
+            background-size: 1.2rem;
+        }
+
+        .model-select:focus {
+            border-color: rgba(255, 255, 255, 0.3);
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        #logo {
+            transition: filter 0.1s ease, color 0.3s ease;
+            filter: brightness(var(--logo-filt, 1));
+        }
+
         @keyframes shine-move {
             0% { background-position: 0% 50%; }
             100% { background-position: 200% 50%; }
@@ -390,7 +418,17 @@
             </div>
             <div class="settings-drawer" id="settingsDrawer">
                 <div class="settings-content">
-                    <button class="btn" onclick="goToWifiSetup()" style="margin-top: 1rem;">
+                    <div class="slider-container">
+                        <label class="slider-label">Model Selection</label>
+                        <!-- The values here must match the MODEL_ID values in model_config.h -->
+                        <select class="model-select" id="modelSelect">
+                            <option value="769">L10</option>
+                            <option value="768">L70</option>
+                            <option value="512">Andromeda</option>
+                            <option value="256">Test rig</option>
+                        </select>
+                    </div>
+                    <button class="btn" onclick="goToWifiSetup()" style="margin-top: 0.5rem; width: 100%;">
                         WiFi Setup
                     </button>
                 </div>
@@ -453,13 +491,26 @@
             return `repeating-linear-gradient(to bottom right, ${stops})`;
         }
 
+        function easeOutCubic(t) {
+            return 1 - Math.pow(1 - t, 3);
+        }
+
         // Update slider thumb color based on value
         function updateSliderThumb(slider) {
             const value = parseInt(slider.value);
             const percentage = value / 255;
+
+            // Update thumb color
             const grayValue = Math.round(percentage * 255);
             const thumbColor = `rgb(${grayValue}, ${grayValue}, ${grayValue})`;
             slider.style.setProperty('--thumb-color', thumbColor);
+
+            const easedValue = easeOutCubic(percentage);
+
+            // Apply brightness to logo using CSS filter (0.0 to 1.0)
+            // We use a minimum of 0.1 so the logo is never fully invisible unless "Off" is clicked
+            const logoBrightness = Math.max(0.1, easedValue);
+            document.getElementById('logo').style.setProperty('--logo-filt', logoBrightness);
         }
 
         // Color Wheel Implementation
@@ -757,6 +808,28 @@
                 }
             });
 
+
+            const modelSelect = document.getElementById('modelSelect');
+            const logo = document.getElementById('logo');
+
+            // Model Selection Listener
+            modelSelect.addEventListener('change', function() {
+                const modelId = parseInt(this.value);
+
+                // Visual feedback: Flash the border to show it's "sending"
+                this.style.borderColor = 'rgba(255, 255, 255, 0.8)';
+                setTimeout(() => {
+                    this.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                }, 400);
+
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'model',
+                        id: modelId
+                    }));
+                }
+            });
+
             // Button ripple effects
             document.querySelectorAll('.btn').forEach(btn => {
                 btn.addEventListener('click', function(e) {
@@ -783,20 +856,22 @@
                     setTimeout(() => ripple.remove(), 600);
 
                     // Switch off the logo gradient when "Off" is clicked, and restore it when "Next" is clicked
-                    const logo = document.getElementById('logo');
                     if (this.classList.contains('off')) {
-                        // Turn logo black
-                        logo.style.webkitTextFillColor = 'black';
+                        // Instead of black, use a "Standby" white shine on a dark base
+                        logo.style.backgroundImage = `linear-gradient(135deg, #111 40%, #fff 50%, #111 60%)`;
+                        logo.style.animation = 'shine-move 4s linear infinite'; // Slightly slower shine
+                        logo.style.webkitTextFillColor = 'transparent';
+                        document.getElementById('logo').style.setProperty('--logo-filt', 0.1);
                     }
                     else if (this.classList.contains('next')) {
-                        // Reset to random gradient
+                        // Restore colorful gradient
                         logo.style.setProperty('--grad', randomGradient());
-
-                        // IMPORTANT: Clear the manual overrides we added in the color picker
                         logo.style.backgroundImage = '';
                         logo.style.animation = '';
-
                         logo.style.webkitTextFillColor = 'transparent';
+
+                        // Re-sync brightness filter
+                        updateSliderThumb(brightnessSlider);
                     }
 
                     fetch(this.dataset.cmd, { method: 'POST' });
