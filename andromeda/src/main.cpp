@@ -17,7 +17,7 @@ void setup()
 
     // Wait a little bit to allow the PC to start the serial monitor before we start spamming it
     // with logs
-    delay(50);
+    delay(100);
 
     LittleFS.begin();
     setupLoggers();
