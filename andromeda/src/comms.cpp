@@ -202,7 +202,7 @@ void Comms::setupRoutes()
               [](AsyncWebServerRequest* r) { r->send(LittleFS, "/index.html", "text/html"); });
     server.on("/common.css", HTTP_GET,
               [](AsyncWebServerRequest* r) { r->send(LittleFS, "/common.css", "text/css"); });
-    server.on("/setup", HTTP_GET,
+    server.on("/wifi", HTTP_GET,
               [](AsyncWebServerRequest* r) { r->send(LittleFS, "/wifi-setup.html", "text/html"); });
 
     // Shared Command routes
