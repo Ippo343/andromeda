@@ -28,6 +28,13 @@ body {
     margin: 20px auto;
 }
 
+@font-face {
+  font-family: 'Cinzel Decorative';
+  src: url('/cinzel-decorative-bold-logo.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+}
+
 /* Logo Styles */
 .logo {
     background-image: var(--grad);
