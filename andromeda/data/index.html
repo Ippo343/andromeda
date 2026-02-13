@@ -262,8 +262,8 @@
             margin-top: 3rem;
             margin-bottom: 1rem;
             padding: 0 1rem;
-            font-size: 0.65rem;
-            color: rgba(255, 255, 255, 0.25);
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.3);
             text-align: center;
             width: 100%;
             font-family: sans-serif;
@@ -275,6 +275,7 @@
             text-decoration: underline;
             transition: color 0.2s ease;
             user-select: none;
+            font-size: 0.7rem;
         }
 
         .legal-footer summary::-webkit-details-marker {
@@ -282,12 +283,59 @@
         }
 
         .legal-footer summary:hover {
-            color: rgba(255, 255, 255, 0.5);
+            color: rgba(255, 255, 255, 0.6);
         }
 
         .legal-content {
-            margin-top: 0.5rem;
-            line-height: 1.4;
+            margin-top: 1rem;
+            padding: 1rem 1.5rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 0.8rem;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.7);
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            text-align: left;
+        }
+
+        .legal-content h4 {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.9);
+            margin: 0 0 0.8rem 0;
+            font-weight: 600;
+        }
+
+        .legal-content ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .legal-content li {
+            margin-bottom: 0.6rem;
+            padding-left: 1.2rem;
+            position: relative;
+        }
+
+        .legal-content li::before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: rgba(255, 255, 255, 0.5);
+            font-weight: bold;
+        }
+
+        .legal-content a {
+            color: rgba(100, 150, 255, 0.9);
+            text-decoration: none;
+        }
+
+        .legal-content a:hover {
+            color: rgba(150, 180, 255, 1);
+            text-decoration: underline;
         }
 
         .model-select {
@@ -509,10 +557,19 @@
     </div>
     <footer class="legal-footer">
         <details>
-            <summary>Legal notice</summary>
+            <summary>Licenses</summary>
             <div class="legal-content">
-                OSS Credits: FastLED/ArduinoLog (MIT); Arduino/ESPAsync (LGPL); ESP-IDF (Apache).
-                Proprietary code reserved. LGPL source/object files available upon request.
+                <h4>Third-Party Software</h4>
+                <ul>
+                    <li>FastLED (<a href="https://github.com/FastLED/FastLED/blob/master/LICENSE" target="_blank">MIT License</a>)</li>
+                    <li>ArduinoLog (<a href="https://github.com/thijse/Arduino-Log/blob/master/LICENSE.md" target="_blank">MIT License</a>)</li>
+                    <li>ESPAsyncWebServer (<a href="https://github.com/ESP32Async/ESPAsyncWebServer/blob/main/LICENSE" target="_blank">LGPL-3.0</a>)</li>
+                    <li>ESP-IDF (<a href="https://github.com/espressif/esp-idf/blob/master/LICENSE" target="_blank">Apache-2.0</a>)</li>
+                    <li>Cinzel Decorative (<a href="https://fonts.google.com/specimen/Cinzel+Decorative/license" target="_blank">SIL Open Font License 1.1</a>)</li>
+                </ul>
+                <p style="margin-top: 1rem; font-size: 0.75rem; color: rgba(255, 255, 255, 0.5);">
+                    Proprietary code reserved. LGPL source/object files available upon request.
+                </p>
             </div>
         </details>
     </footer>
