@@ -26,8 +26,6 @@ void setup()
     Log.noticeln("====================================");
 
     // Load model ID
-    // TODO: selection via web UI, currently hardcoded to SINGLE_STRIP_TEST_DEVICE for testing
-    // purposes
     ModelId model;
     if (FactoryConfig::isConfigured())
     {

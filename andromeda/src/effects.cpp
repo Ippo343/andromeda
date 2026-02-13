@@ -107,11 +107,6 @@ class ElectricSparks : public AbstractEffect
             updatePalette();
         }
 
-        // Value diffusion between neighbouring LEDs:
-        // each LED becomes the average of its neighbours (poor man's heat conduction),
-        // taking the value from the previous buffer so that the new buffer is computed
-        // correctly
-        // TODO: solve the heat conduction partial differential equation (LOL)
         FOR_EACH_STRIP
         {
             FOR_EACH_LED(iStrip)
@@ -257,9 +252,7 @@ class NinjaStar : public AbstractEffect
 
     CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
     {
-        // TODO: great opportunity for an additional set of coordinates stored in the LED
-        // This would allow effects to precompute scaled LED coordinates
-        // Might have to be local to the effect in case of performance issues
+        // TODO: precompute the mapping of the LEDs during the constructor
         uint8_t theta = map((led->polar.cdegrees * beams) % FULL_CIRCLE, 0, FULL_CIRCLE, 0, 255);
 
         // TODO: this is a great opportunity for a LUT

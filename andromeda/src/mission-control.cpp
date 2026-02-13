@@ -214,18 +214,7 @@ void MissionControl::update(milliseconds_t t)
     FastLED.setBrightness(calcBrightness(t));
 
     effect->precompute(t);
-
-    // TODO: Update based on your effect signature
-    // Option A: If effects expect LedStrip array pointer:
-    // effect->render(STRIPS, t);
-    // You'll need to update effects to use GEOMETRY.getStrip() internally
-    //
-    // Option B: If you update effect signatures to not need strips parameter:
-    // effect->render(t);
-    //
-    // For now, keeping original pattern - see EFFECTS_MIGRATION.md for details
     effect->render(t);
-
     effect->postprocess(t);
 
     FASTLED_SHOW();
