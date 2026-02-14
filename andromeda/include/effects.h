@@ -18,7 +18,7 @@ class ErrorEffect : public AbstractEffect
    public:
     virtual const char* GetName() { return "ErrorEffect"; }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
+    CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
     {
         if (strip->idx == 0)
             return CRGB::Red;
@@ -41,7 +41,10 @@ class StaticColor : public AbstractEffect
         currentColor = CRGB::blend(currentColor, targetColor, 1);
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override { return currentColor; }
+    CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
+    {
+        return currentColor;
+    }
 
     StaticColor(CRGB c) : targetColor(c) {}
     StaticColor() : StaticColor(CRGB(255, 255, 170)) {}

@@ -25,7 +25,9 @@ class AbstractEffect
     virtual void precompute(milliseconds_t t) { return; }
 
     // Evaluates the effect on each led
-    virtual CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) = 0;
+    // The led index is not stored in the led anymore, instead the loop counter is passed as an
+    // argument This is because removing the index from the struct allows us to align to cache lines
+    virtual CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) = 0;
 
     // Called when all the led's have been evaluated
     // to allow postprocess effects like blurring and fading
@@ -39,7 +41,7 @@ class AbstractEffect
             FOR_EACH_LED(iStrip)
             {
                 GEOMETRY.getStrip(iStrip).buffer[iLed] = this->evaluate(
-                    &GEOMETRY.getStrip(iStrip), &GEOMETRY.getStrip(iStrip).leds[iLed], t);
+                    &GEOMETRY.getStrip(iStrip), &GEOMETRY.getStrip(iStrip).leds[iLed], iLed, t);
             }
         }
     }

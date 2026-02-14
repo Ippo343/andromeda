@@ -19,11 +19,7 @@ void LedStrip::allocate(size_t count)
     leds = new Led[count];
     buffer = new CRGB[count];
 
-    for (size_t i = 0; i < count; i++)
-    {
-        leds[i].idx = i;
-        buffer[i] = CRGB::Black;
-    }
+    for (size_t i = 0; i < count; i++) { buffer[i] = CRGB::Black; }
 
     Log.verboseln("Strip %d: allocated %d LEDs", idx, count);
 }

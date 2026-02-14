@@ -59,12 +59,13 @@ struct PolarCoordinates
 class Led
 {
    public:
-    size_t idx;                           // Index in the strip that contains it
     CartesianCoordinates fixedCartesian;  // Physical location, never changes
     PolarCoordinates fixedPolar;          // Physical location (polar), never changes
     CartesianCoordinates cartesian;       // Transformed coordinates (for effects)
     PolarCoordinates polar;               // Transformed polar coordinates (for effects)
 };
+
+static_assert(sizeof(Led) == 16, "2 Leds should fit in a 32 byte cache line for optimal access");
 
 // Data related to a single strip
 // Contains geometry info and color buffer for rendering

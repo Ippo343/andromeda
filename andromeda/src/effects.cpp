@@ -23,7 +23,7 @@ class IndividualStripMoodlight : public AbstractEffect
         FOR_EACH_STRIP { colors[iStrip] = moodlights[iStrip].evaluate(); }
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
+    CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
     {
         return colors[strip->idx];
     }
@@ -118,7 +118,7 @@ class ElectricSparks : public AbstractEffect
         }
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
+    CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
     {
         // Random injection of new spikes
         if (random(DICE_LIMIT) < sparkChance)
@@ -131,12 +131,12 @@ class ElectricSparks : public AbstractEffect
             // Now light up the pixel and its neighbours up to the defined width
             for (size_t w = 0; w < width; w++)
             {
-                py_get(newValues[strip->idx], led->idx + w) = 255;
-                py_get(newValues[strip->idx], led->idx - w) = 255;
+                py_get(newValues[strip->idx], led_idx + w) = 255;
+                py_get(newValues[strip->idx], led_idx - w) = 255;
             }
         }
 
-        return ColorFromPalette(palette, preValues[strip->idx][led->idx]);
+        return ColorFromPalette(palette, preValues[strip->idx][led_idx]);
     }
 
     void postprocess(milliseconds_t t) override
@@ -197,7 +197,7 @@ class SaturationGlow : public AbstractEffect
         }
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
+    CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
     {
         return color[strip->idx];
     }
@@ -219,7 +219,7 @@ class PaletteWave : public AbstractEffect
         UpscalePalette(palette16, palette);
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
+    CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
     {
         int v = (led->cartesian.x + led->cartesian.y) / (int)scale;
         uint8_t value = beatsin8(bpm, 0, 255, 0, v);
@@ -250,7 +250,7 @@ class NinjaStar : public AbstractEffect
         offset = map((flip * t) % duration, 0, duration, 0, 255);
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
+    CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
     {
         // TODO: precompute the mapping of the LEDs during the constructor
         uint8_t theta = map((led->polar.cdegrees * beams) % FULL_CIRCLE, 0, FULL_CIRCLE, 0, 255);
@@ -317,7 +317,7 @@ class PolarSwipe : public AbstractEffect
             return map(D, 0, bandWidth, 255, 0);
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
+    CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
     {
         // The central strip is excluded because honestly it just looks weird,
         // it adds a sort of sudden "pop" that looks ugly
@@ -338,7 +338,7 @@ class PolarMoodlight : public AbstractEffect
     RandSine<1, 15> green;
     RandSine<1, 15> blue;
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
+    CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
     {
         uint8_t R = red.evaluate(led->polar.radius);
         uint8_t G = green.evaluate(led->polar.radius);
@@ -401,7 +401,7 @@ class RGBodyProblem : public AbstractEffect
         }
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
+    CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
     {
         if (emittersCount == 1)
         {
@@ -466,7 +466,7 @@ class HexagonalRippleGalaxy : public AbstractEffect
         baseHue = t >> static_cast<uint8_t>(hueShift);
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
+    CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
     {
         // Get position in millimeters
         float x = led->cartesian.x;
@@ -566,7 +566,7 @@ class IndividualStripDrift : public AbstractEffect
         }
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
+    CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
     {
         return currentColors[strip->idx];
     }
@@ -646,7 +646,7 @@ class CartesianMoodlight : public AbstractEffect
         memset(sinPowerLUT, 0xFF, 256);
     }
 
-    CRGB evaluate(LedStrip* strip, Led* led, milliseconds_t t) override
+    CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
     {
         // Compute dot products: direction · position
         // Results are in units of (mm * 256), divide by 256 for final distance
