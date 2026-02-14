@@ -9,6 +9,10 @@ constexpr const char* AP_PASSWORD = "";
 constexpr int DNS_PORT = 53;
 constexpr const char* PREFERENCES_NAMESPACE = "wifi";
 
+#define STATIC_FILE_ROUTE(path, contentType) \
+    server.on(path, HTTP_GET,                \
+              [](AsyncWebServerRequest* request) { request->send(LittleFS, path, contentType); })
+
 Comms::Comms()
     : server(80),
       webServerTaskHandle(nullptr),
@@ -200,10 +204,19 @@ void Comms::setupRoutes()
     // Global static files
     server.on("/", HTTP_GET,
               [](AsyncWebServerRequest* r) { r->send(LittleFS, "/index.html", "text/html"); });
-    server.on("/common.css", HTTP_GET,
-              [](AsyncWebServerRequest* r) { r->send(LittleFS, "/common.css", "text/css"); });
-    server.on("/cinzel-decorative-bold-logo.woff2", HTTP_GET, [](AsyncWebServerRequest* request)
-              { request->send(LittleFS, "/cinzel-decorative-bold-logo.woff2", "font/woff2"); });
+
+    // TODO: I am confident there must exist a better way.
+    // Virtually certain the ESPAsyncWebServer can serve directly from LittleFS with the correct
+    // content type
+    STATIC_FILE_ROUTE("/index.html", "text/html");
+    STATIC_FILE_ROUTE("/wifi-setup.html", "text/html");
+    STATIC_FILE_ROUTE("/fonts/cinzel.woff2", "font/woff2");
+    STATIC_FILE_ROUTE("/js/utils.js", "application/javascript");
+    STATIC_FILE_ROUTE("/js/controls.js", "application/javascript");
+    STATIC_FILE_ROUTE("/js/wifi.js", "application/javascript");
+    STATIC_FILE_ROUTE("/css/common.css", "text/css");
+    STATIC_FILE_ROUTE("/css/controls.css", "text/css");
+    STATIC_FILE_ROUTE("/css/wifi.css", "text/css");
 
     server.on("/wifi", HTTP_GET,
               [](AsyncWebServerRequest* r) { r->send(LittleFS, "/wifi-setup.html", "text/html"); });
