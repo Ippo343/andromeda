@@ -59,13 +59,11 @@ struct PolarCoordinates
 class Led
 {
    public:
-    CartesianCoordinates fixedCartesian;  // Physical location, never changes
-    PolarCoordinates fixedPolar;          // Physical location (polar), never changes
-    CartesianCoordinates cartesian;       // Transformed coordinates (for effects)
-    PolarCoordinates polar;               // Transformed polar coordinates (for effects)
+    CartesianCoordinates cartesian;  // Transformed coordinates (for effects)
+    PolarCoordinates polar;          // Transformed polar coordinates (for effects)
 };
 
-static_assert(sizeof(Led) == 16, "2 Leds should fit in a 32 byte cache line for optimal access");
+static_assert(sizeof(Led) == 8, "4 Leds should fit in a 32 byte cache line for optimal access");
 
 // Data related to a single strip
 // Contains geometry info and color buffer for rendering
@@ -81,7 +79,7 @@ class LedStrip
     ~LedStrip();
 
     // Allocate memory for LEDs and buffer
-    void allocate(size_t count);
+    void allocate(size_t count, bool allocate_color_buffer);
 
     // Free allocated memory
     void deallocate();
@@ -93,7 +91,13 @@ class Geometry
 {
    private:
     const ModelConfig* config;
-    LedStrip* strips;
+
+    // A copy of the original strip data loaded from PROGMEM, used for resetting transforms.
+    // This is done to improve cache locality during the effects calculations,
+    // since the original coordinates are only used to apply and reset transforms.
+    // These strips are a shadow copy without a color buffer
+    LedStrip* _fixedStrips;
+    LedStrip* strips;  // The actual strips used for math and rendering
 
     // Load model coordinates from PROGMEM into RAM
     void loadCoordinates();

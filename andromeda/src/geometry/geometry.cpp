@@ -11,17 +11,26 @@ LedStrip::LedStrip() : idx(0), num_leds(0), leds(nullptr), buffer(nullptr) {}
 
 LedStrip::~LedStrip() { deallocate(); }
 
-void LedStrip::allocate(size_t count)
+void LedStrip::allocate(size_t count, bool allocate_color_buffer)
 {
     deallocate();
 
     num_leds = count;
     leds = new Led[count];
-    buffer = new CRGB[count];
 
-    for (size_t i = 0; i < count; i++) { buffer[i] = CRGB::Black; }
-
-    Log.verboseln("Strip %d: allocated %d LEDs", idx, count);
+    // The color buffer is only required for the strips used for rendering, not the fixed coordinate
+    // backup strips
+    if (allocate_color_buffer)
+    {
+        buffer = new CRGB[count];
+        for (size_t i = 0; i < count; i++) { buffer[i] = CRGB::Black; }
+        Log.verboseln("Strip %d: allocated %d LEDs", idx, count);
+    }
+    else
+    {
+        buffer = nullptr;
+        Log.verboseln("Strip %d: allocated %d LEDs (no buffer)", idx, count);
+    }
 }
 
 void LedStrip::deallocate()
@@ -158,13 +167,18 @@ void Geometry::initialize(ModelId model_id)
 
     // Allocate strip array
     strips = new LedStrip[config->num_strips];
+    _fixedStrips = new LedStrip[config->num_strips];
 
     // Initialize each strip
     for (size_t i = 0; i < config->num_strips; i++)
     {
         strips[i].idx = i;
+        _fixedStrips[i].idx = i;
+
         size_t strip_length = pgm_read_byte(&config->strip_lengths[i]);
-        strips[i].allocate(strip_length);
+
+        strips[i].allocate(strip_length, true);
+        _fixedStrips[i].allocate(strip_length, false);
     }
 
     // Load coordinates from PROGMEM
@@ -198,11 +212,11 @@ void Geometry::loadCoordinates()
             // Copy Cartesian data from PROGMEM
             CartesianCoordinates cart;
             memcpy_P(&cart, &config->cartesian_data[data_index], sizeof(CartesianCoordinates));
-            strips[iStrip].leds[iLed].fixedCartesian = cart;
+            _fixedStrips[iStrip].leds[iLed].cartesian = cart;
             strips[iStrip].leds[iLed].cartesian = cart;
 
-            strips[iStrip].leds[iLed].fixedPolar = PolarCoordinates(cart);  // polar;
-            strips[iStrip].leds[iLed].polar = strips[iStrip].leds[iLed].fixedPolar;
+            _fixedStrips[iStrip].leds[iLed].polar = PolarCoordinates(cart);
+            strips[iStrip].leds[iLed].polar = _fixedStrips[iStrip].leds[iLed].polar;
         }
 
         // After finishing a strip, move the offset forward by the length of that strip
@@ -230,7 +244,7 @@ void Geometry::applyGlobalRandomRotation()
         FOR_EACH_LED(iStrip)
         {
             // Real physical coordinates of the LED
-            CartesianCoordinates r = strips[iStrip].leds[iLed].fixedCartesian;
+            CartesianCoordinates r = _fixedStrips[iStrip].leds[iLed].cartesian;
 
             // Apply inverse rotation matrix
             strips[iStrip].leds[iLed].cartesian.x = (short)(r.x * cosT + r.y * sinT);
@@ -238,7 +252,7 @@ void Geometry::applyGlobalRandomRotation()
 
             // Update polar angle
             strips[iStrip].leds[iLed].polar.cdegrees =
-                ((int)strips[iStrip].leds[iLed].fixedPolar.cdegrees - tcDeg) % FULL_CIRCLE;
+                ((int)_fixedStrips[iStrip].leds[iLed].polar.cdegrees - tcDeg) % FULL_CIRCLE;
         }
     }
 }
@@ -251,8 +265,8 @@ void Geometry::resetGlobalTransform()
     {
         FOR_EACH_LED(iStrip)
         {
-            strips[iStrip].leds[iLed].cartesian = strips[iStrip].leds[iLed].fixedCartesian;
-            strips[iStrip].leds[iLed].polar = strips[iStrip].leds[iLed].fixedPolar;
+            strips[iStrip].leds[iLed].cartesian = _fixedStrips[iStrip].leds[iLed].cartesian;
+            strips[iStrip].leds[iLed].polar = _fixedStrips[iStrip].leds[iLed].polar;
         }
     }
 }
