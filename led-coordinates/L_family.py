@@ -1,108 +1,158 @@
 import numpy as np
 import led_utils
 
-CORNER_BUFFER = 5  # 5mm gap at corners
+class Segment:
+    def __init__(self, name, start_coord, end_coord, led_count):
+        """
+        Define a segment by its endpoints and LED count.
 
-class Rect:
-    def __init__(self, name, width_cm, height_cm, led_per_m, origin_offset=(0,0)):
+        Args:
+            name: Descriptive name for this segment
+            start_coord: (x, y) tuple in mm for first LED
+            end_coord: (x, y) tuple in mm for last LED
+            led_count: Total number of LEDs in this segment
+        """
         self.name = name
-        self.width_mm = width_cm * 10.0
-        self.height_mm = height_cm * 10.0
-        self.pitch = 1000.0 / led_per_m
-        self.offset = np.array(origin_offset)
+        self.start = np.array(start_coord, dtype=float)
+        self.end = np.array(end_coord, dtype=float)
+        self.led_count = led_count
 
-        # Calculate LED counts based on physical length
-        # We assume the strip covers the length minus the corner buffers
-        # Rounding to nearest int to match physical LED strip cutting points
-        self.leds_x = int(round(self.width_mm * (led_per_m / 1000.0)))
-        self.leds_y = int(round(self.height_mm * (led_per_m / 1000.0)))
-
-        # For the L10 specifically, we want to preserve the legacy count if it differs
-        if name == "L10":
-            self.leds_x = 13
-            self.leds_y = 13
+        # Calculate pitch (distance between LEDs)
+        self.length = np.linalg.norm(self.end - self.start)
+        if led_count > 1:
+            self.pitch = self.length / (led_count - 1)
+        else:
+            self.pitch = 0.0
 
     def generate(self):
         """
-        Generates coordinates for a generic rectangle.
-        Returns: (flat_coordinates, segment_counts)
+        Generate LED coordinates for this segment.
+        Returns: numpy array of shape (led_count, 2)
         """
-        # Physical width/height used for coordinate placement
-        # We calculate exact start/end points based on pitch and count to center the strip
-        span_x = (self.leds_x - 1) * self.pitch
-        span_y = (self.leds_y - 1) * self.pitch
+        if self.led_count == 1:
+            return np.array([self.start])
+        return np.linspace(self.start, self.end, self.led_count)
 
-        half_w = span_x / 2 + CORNER_BUFFER
-        half_h = span_y / 2 + CORNER_BUFFER
+    def print_info(self):
+        """Print segment information including computed pitch."""
+        print(f"  Segment: {self.name}")
+        print(f"    Start: ({self.start[0]:.2f}, {self.start[1]:.2f}) mm")
+        print(f"    End:   ({self.end[0]:.2f}, {self.end[1]:.2f}) mm")
+        print(f"    LEDs:  {self.led_count}")
+        print(f"    Length: {self.length:.2f} mm")
+        print(f"    Pitch:  {self.pitch:.3f} mm ({1000.0/self.pitch:.1f} LED/m)" if self.pitch > 0 else "    Pitch: N/A (single LED)")
 
-        # Top (Right->Left), Left (Top->Bottom), Bottom (Left->Right), Right (Bottom->Top)
-        # We define (Start, End) for each side
-        sides_defs = [
-            # Top: y is constant positive, x changes
-            ((half_w - CORNER_BUFFER, half_h), (-half_w + CORNER_BUFFER, half_h), self.leds_x),
-            # Left: x is constant negative, y changes
-            ((-half_w, half_h - CORNER_BUFFER), (-half_w, -half_h + CORNER_BUFFER), self.leds_y),
-            # Bottom: y is constant negative, x changes
-            ((-half_w + CORNER_BUFFER, -half_h), (half_w - CORNER_BUFFER, -half_h), self.leds_x),
-            # Right: x is constant positive, y changes
-            ((half_w, -half_h + CORNER_BUFFER), (half_w, half_h - CORNER_BUFFER), self.leds_y),
-        ]
 
+class Model:
+    def __init__(self, name, segments):
+        """
+        Define a model as a collection of segments.
+
+        Args:
+            name: Model name (e.g., "L10", "L25")
+            segments: List of Segment objects
+        """
+        self.name = name
+        self.segments = segments
+
+    def generate(self):
+        """
+        Generate all LED coordinates for this model.
+        Returns: (coordinates array, list of LED counts per segment)
+        """
         all_coords = []
         counts = []
 
-        for start, end, count in sides_defs:
-            # Generate points
-            segment = np.linspace(start, end, count)
-            # Apply global offset (for nested rectangles)
-            segment = segment + self.offset
-            all_coords.append(segment)
-            counts.append(count)
+        for segment in self.segments:
+            coords = segment.generate()
+            all_coords.extend(coords)
+            counts.append(segment.led_count)
 
-        return np.vstack(all_coords), counts
+        return all_coords, counts
+
+    def print_info(self):
+        """Print model information including all segment details."""
+        print(f"Model: {self.name}")
+        print(f"Total segments: {len(self.segments)}")
+        print(f"Total LEDs: {sum(s.led_count for s in self.segments)}")
+        print()
+
+        for segment in self.segments:
+            segment.print_info()
+            print()
+
 
 def main():
     # --- Configuration ---
 
-    # 1. L10: Original 10cm Square (144 LED/m)
-    l10 = Rect("L10", width_cm=10, height_cm=10, led_per_m=144)
+    # Example: L10 - 10cm square with 13 LEDs per side (144 LED/m)
+    # Coordinates are approximate, pitch should be ~6.944mm for 144 LED/m
+    l10_segments = [
+        Segment("Top",    start_coord=(55, 55),   end_coord=(-55, 55),   led_count=13),
+        Segment("Left",   start_coord=(-55, 55),  end_coord=(-55, -55),  led_count=13),
+        Segment("Bottom", start_coord=(-55, -55), end_coord=(55, -55),   led_count=13),
+        Segment("Right",  start_coord=(55, -55),  end_coord=(55, 55),    led_count=13),
+    ]
 
-    # 2. L25: 25cm Square (60 LED/m)
-    l25 = Rect("L25", width_cm=25, height_cm=25, led_per_m=60)
+    # Example: L25 - 25cm square with 15 LEDs per side (60 LED/m)
+    # Pitch should be ~16.667mm for 60 LED/m
+    l25_segments = [
+        Segment("Top",    start_coord=(130, 130),   end_coord=(-130, 130),   led_count=15),
+        Segment("Left",   start_coord=(-130, 130),  end_coord=(-130, -130),  led_count=15),
+        Segment("Bottom", start_coord=(-130, -130), end_coord=(130, -130),   led_count=15),
+        Segment("Right",  start_coord=(130, -130),  end_coord=(130, 130),    led_count=15),
+    ]
 
-    # 3. L70: Composite of two rectangles (Outer 50x70, Inner 40x60)
-    # Both 60 LED/m. Inner is centered (0,0).
-    l70_outer = Rect("L70_Outer", width_cm=70, height_cm=50, led_per_m=60)
-    l70_inner = Rect("L70_Inner", width_cm=60, height_cm=40, led_per_m=60)
+    # Example: L70 - Composite with outer and inner rectangles (60 LED/m)
+    # Pitch should be ~16.667mm for 60 LED/m
+    l70_segments = [
+        # Outer rectangle: 70cm x 50cm
+        Segment("Outer_Top",    start_coord=(355, 255),   end_coord=(-355, 255),   led_count=42),
+        Segment("Outer_Left",   start_coord=(-355, 255),  end_coord=(-355, -255),  led_count=30),
+        Segment("Outer_Bottom", start_coord=(-355, -255), end_coord=(355, -255),   led_count=42),
+        Segment("Outer_Right",  start_coord=(355, -255),  end_coord=(355, 255),    led_count=30),
+        # Inner rectangle: 60cm x 40cm
+        Segment("Inner_Top",    start_coord=(305, 205),   end_coord=(-305, 205),   led_count=36),
+        Segment("Inner_Left",   start_coord=(-305, 205),  end_coord=(-305, -205),  led_count=24),
+        Segment("Inner_Bottom", start_coord=(-305, -205), end_coord=(305, -205),   led_count=36),
+        Segment("Inner_Right",  start_coord=(305, -205),  end_coord=(305, 205),    led_count=24),
+    ]
 
-    models = {
-        "L10": [l10],
-        "L25": [l25],
-        "L70": [l70_outer, l70_inner] # Processed in order: Outer ring first, then Inner
-    }
+    models = [
+        Model("L10", l10_segments),
+        Model("L25", l25_segments),
+        Model("L70", l70_segments),
+    ]
 
     # --- Generation & Printing ---
 
+    print("="*60)
+    print("LED SEGMENT ANALYSIS")
+    print("="*60)
+    print()
+
+    for model in models:
+        model.print_info()
+        print("-"*60)
+        print()
+
+    print("\n" + "="*60)
+    print("ARDUINO COORDINATE OUTPUT")
+    print("="*60)
+    print()
     print("// Auto-generated LED coordinates for L-Family")
     print("// Generated by L_family.py\n")
 
-    for model_name, rects in models.items():
-        print(f"// --- Model: {model_name} ---")
+    for model in models:
+        print(f"// --- Model: {model.name} ---")
 
-        full_coords = []
-        full_counts = []
+        coords, counts = model.generate()
+        var_name = f"coords_{model.name}"
 
-        for r in rects:
-            coords, counts = r.generate()
-            full_coords.extend(coords)
-            full_counts.extend(counts)
-
-        # variable name e.g., "coords_L70"
-        var_name = f"coords_{model_name}"
-
-        led_utils.print_arduino_header(full_coords, variable_name=var_name, row_counts=full_counts)
-        led_utils.print_bounding_box(full_coords)
+        led_utils.print_arduino_header(coords, variable_name=var_name, row_counts=counts)
+        led_utils.print_bounding_box(coords)
         print("\n" + "-"*40 + "\n")
+
 
 if __name__ == "__main__":
     main()
