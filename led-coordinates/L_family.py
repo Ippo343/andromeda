@@ -44,20 +44,30 @@ class Segment:
 
 
 class Model:
-    def __init__(self, name, segments):
+    def __init__(self, name, segments, flip_x=False, flip_y=False, frame_width_mm=None, frame_height_mm=None):
         """
         Define a model as a collection of segments.
 
         Args:
             name: Model name (e.g., "L10", "L25")
             segments: List of Segment objects
+            flip_x: If True, flip the X axis (multiply all X coordinates by -1)
+            flip_y: If True, flip the Y axis (multiply all Y coordinates by -1)
+            frame_width_mm: Frame width in mm. If provided with frame_height_mm,
+                           coordinates will be recentered to frame center
+            frame_height_mm: Frame height in mm
         """
         self.name = name
         self.segments = segments
+        self.flip_x = flip_x
+        self.flip_y = flip_y
+        self.frame_width_mm = frame_width_mm
+        self.frame_height_mm = frame_height_mm
 
     def generate(self):
         """
         Generate all LED coordinates for this model.
+        Applies transformations: flip_x and flip_y, then recenter to frame.
         Returns: (coordinates array, list of LED counts per segment)
         """
         all_coords = []
@@ -68,6 +78,22 @@ class Model:
             all_coords.extend(coords)
             counts.append(segment.led_count)
 
+        # Convert to numpy array for transformation
+        all_coords = np.array(all_coords)
+
+        # Apply recentering to frame if dimensions are provided
+        if self.frame_width_mm is not None and self.frame_height_mm is not None:
+            # Current coordinates are from corner (0,0)
+            # Shift so that frame center is at (0,0)
+            all_coords[:, 0] -= self.frame_width_mm / 2.0
+            all_coords[:, 1] -= self.frame_height_mm / 2.0
+
+        # Apply flip transformations
+        if self.flip_x:
+            all_coords[:, 0] = -all_coords[:, 0]
+        if self.flip_y:
+            all_coords[:, 1] = -all_coords[:, 1]
+
         return all_coords, counts
 
     def print_info(self):
@@ -75,6 +101,20 @@ class Model:
         print(f"Model: {self.name}")
         print(f"Total segments: {len(self.segments)}")
         print(f"Total LEDs: {sum(s.led_count for s in self.segments)}")
+
+        # Print transformation settings
+        transformations = []
+        if self.flip_x:
+            transformations.append("X-axis flipped")
+        if self.flip_y:
+            transformations.append("Y-axis flipped")
+        if transformations:
+            print(f"Transformations: {', '.join(transformations)}")
+
+        if self.frame_width_mm is not None and self.frame_height_mm is not None:
+            print(f"Frame dimensions: {self.frame_width_mm} x {self.frame_height_mm} mm")
+            print(f"Coordinates recentered to frame center")
+
         print()
 
         for segment in self.segments:
@@ -83,10 +123,9 @@ class Model:
 
 
 def main():
-    # --- Configuration ---
-
-    # Example: L10 - 10cm square with 13 LEDs per side (144 LED/m)
+    # L10 - 10cm square with 13 LEDs per side (144 LED/m)
     # Coordinates are approximate, pitch should be ~6.944mm for 144 LED/m
+    # Measured from bottom-right corner, X going left
     l10_segments = [
         Segment("Top",    start_coord=(55, 55),   end_coord=(-55, 55),   led_count=13),
         Segment("Left",   start_coord=(-55, 55),  end_coord=(-55, -55),  led_count=13),
@@ -94,34 +133,25 @@ def main():
         Segment("Right",  start_coord=(55, -55),  end_coord=(55, 55),    led_count=13),
     ]
 
-    # Example: L25 - 25cm square with 15 LEDs per side (60 LED/m)
+    # L70 - Composite with outer and inner rectangles (60 LED/m)
     # Pitch should be ~16.667mm for 60 LED/m
-    l25_segments = [
-        Segment("Top",    start_coord=(130, 130),   end_coord=(-130, 130),   led_count=15),
-        Segment("Left",   start_coord=(-130, 130),  end_coord=(-130, -130),  led_count=15),
-        Segment("Bottom", start_coord=(-130, -130), end_coord=(130, -130),   led_count=15),
-        Segment("Right",  start_coord=(130, -130),  end_coord=(130, 130),    led_count=15),
-    ]
-
-    # Example: L70 - Composite with outer and inner rectangles (60 LED/m)
-    # Pitch should be ~16.667mm for 60 LED/m
+    # Normal orientation (X right, Y up), 720x520mm frame
     l70_segments = [
-        # Outer rectangle: 70cm x 50cm
-        Segment("Outer_Top",    start_coord=(355, 255),   end_coord=(-355, 255),   led_count=42),
-        Segment("Outer_Left",   start_coord=(-355, 255),  end_coord=(-355, -255),  led_count=30),
-        Segment("Outer_Bottom", start_coord=(-355, -255), end_coord=(355, -255),   led_count=42),
-        Segment("Outer_Right",  start_coord=(355, -255),  end_coord=(355, 255),    led_count=30),
-        # Inner rectangle: 60cm x 40cm
-        Segment("Inner_Top",    start_coord=(305, 205),   end_coord=(-305, 205),   led_count=36),
-        Segment("Inner_Left",   start_coord=(-305, 205),  end_coord=(-305, -205),  led_count=24),
-        Segment("Inner_Bottom", start_coord=(-305, -205), end_coord=(305, -205),   led_count=36),
-        Segment("Inner_Right",  start_coord=(305, -205),  end_coord=(305, 205),    led_count=24),
+        # Front rectangle: 70cm x 50cm
+        Segment("Front_Right",  start_coord=(20, 35),   end_coord=(20, 495),   led_count=29),
+        Segment("Front_Top",    start_coord=(20, 500),  end_coord=(695, 500),  led_count=42),
+        Segment("Front_Left",   start_coord=(700, 500), end_coord=(700, 25),   led_count=30),
+        Segment("Front_Bottom", start_coord=(700, 20),  end_coord=(35, 20),    led_count=41),
+        # Back rectangle: 60cm x 40cm
+        Segment("Back_Bottom",  start_coord=(50, 30),   end_coord=(667, 30),   led_count=38),
+        Segment("Back_Right",   start_coord=(690, 60),  end_coord=(690, 455),  led_count=25),
+        Segment("Back_Top",     start_coord=(665, 483), end_coord=(67, 483),   led_count=37),
+        Segment("Back_Left",    start_coord=(40, 453),  end_coord=(37, 56),    led_count=25),
     ]
 
     models = [
         Model("L10", l10_segments),
-        Model("L25", l25_segments),
-        Model("L70", l70_segments),
+        Model("L70", l70_segments, flip_x=True, frame_width_mm=720, frame_height_mm=520),  # Just recenter
     ]
 
     # --- Generation & Printing ---

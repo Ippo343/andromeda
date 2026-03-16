@@ -82,6 +82,12 @@ void addLedsToPin(uint8_t pin, CRGB* buffer, int count)
         case 15:
             FastLED.addLeds<WS2812B, 15, GRB>(buffer, count);
             break;
+        case 16:
+            FastLED.addLeds<WS2812B, 16, GRB>(buffer, count);
+            break;
+        case 17:
+            FastLED.addLeds<WS2812B, 17, GRB>(buffer, count);
+            break;
         case 18:
             FastLED.addLeds<WS2812B, 18, GRB>(buffer, count);
             break;
