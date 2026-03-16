@@ -21,7 +21,6 @@ enum class FamilyID : uint8_t
 // Unique identifier for each model
 enum class ModelId : uint16_t
 {
-
     UNKNOWN = 0,  // For error handling purposes
 
     // That ridiculous little thing that I brought to Eindhoven to replicate an L10
@@ -55,4 +54,6 @@ struct ModelConfig
     // Predefined as the actual CPU's default, but it can be overwritten per model.
     // The main example of this is the L10, which still runs at 400fps even at 80MHz.
     uint8_t max_cpu_freq_mhz = F_CPU_MHZ;
+
+    bool isInFamily(FamilyID family) const { return ((uint16_t)id >> 8) == ((uint16_t)family); }
 };

@@ -319,9 +319,10 @@ class PolarSwipe : public AbstractEffect
 
     CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
     {
-        // The central strip is excluded because honestly it just looks weird,
-        // it adds a sort of sudden "pop" that looks ugly
-        if (strip->idx == 0) return CRGB::Black;
+        // The central strip is excluded on the Andromeda mirror because honestly it just looks
+        // weird, it adds a sort of sudden "pop" that looks ugly.
+        if (GEOMETRY.getConfig()->isInFamily(FamilyID::ANDROMEDA) && strip->idx == 0)
+            return CRGB::Black;
 
         return color % getBrightness(led);
     }
