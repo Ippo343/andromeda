@@ -69,6 +69,12 @@ class MissionControl
         setCpuFrequencyMhz(MAX_CPU_FREQ_MHZ);
     }
 
+    inline void setFrameDurationCap(milliseconds_t duration)
+    {
+        Log.noticeln("Capping min frame duration to %d ms", duration);
+        MIN_FRAME_DURATION_MS = duration;
+    }
+
     // Without an argument, it just sets the frequency to the current cap
     inline void setMaxCpuFrequency()
     {
@@ -93,6 +99,7 @@ class MissionControl
     milliseconds_t FADE_OUT_DURATION = 5000;
     milliseconds_t MIN_EFFECT_DURATION = 2 MINUTES;
     milliseconds_t MAX_EFFECT_DURATION = 10 MINUTES;
+    milliseconds_t MIN_FRAME_DURATION_MS = 0;
 
     // These contain the actual timestamps to plan the fade in/out and the transition to the next
     // effect

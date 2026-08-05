@@ -55,5 +55,8 @@ struct ModelConfig
     // The main example of this is the L10, which still runs at 400fps even at 80MHz.
     uint8_t max_cpu_freq_mhz = F_CPU_MHZ;
 
+    // Minimum frame duration in milliseconds (for fps capping)
+    uint8_t min_frame_duration_ms = 0;
+
     bool isInFamily(FamilyID family) const { return ((uint16_t)id >> 8) == ((uint16_t)family); }
 };

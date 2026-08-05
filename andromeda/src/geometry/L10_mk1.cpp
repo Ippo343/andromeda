@@ -33,6 +33,8 @@ extern const ModelConfig CONFIG = {
     .cartesian_data = (const CartesianCoordinates*)coords_L10,
 
     .max_cpu_freq_mhz = 80,
+
+    .min_frame_duration_ms = 7,  // 7ms = ~142fps
 };
 
 }  // namespace L10_MK1

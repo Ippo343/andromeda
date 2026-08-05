@@ -65,6 +65,7 @@ void setup()
     MissionControl::Instance().setMaxBrightness(64);
 
     MissionControl::Instance().setMaxCpuFrequency(config->max_cpu_freq_mhz);
+    MissionControl::Instance().setFrameDurationCap(config->min_frame_duration_ms);
 }
 
 void loop() { MissionControl::Instance().update(millis()); }

@@ -224,6 +224,8 @@ void MissionControl::update(milliseconds_t t)
         return;
     }
 
+    milliseconds_t frameStart = millis();
+
     FastLED.setBrightness(calcBrightness(t));
 
     effect->precompute(t);
@@ -231,6 +233,14 @@ void MissionControl::update(milliseconds_t t)
     effect->postprocess(t);
 
     FASTLED_SHOW();
+
+    milliseconds_t frameEnd = millis();
+
+    if (frameEnd - frameStart < MIN_FRAME_DURATION_MS)
+    {
+        milliseconds_t delayTime = MIN_FRAME_DURATION_MS - (frameEnd - frameStart);
+        vTaskDelay(pdMS_TO_TICKS(delayTime));
+    }
 }
 
 void MissionControl::transitionToStaticColor()
