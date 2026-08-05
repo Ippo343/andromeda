@@ -202,7 +202,11 @@ void MissionControl::update(milliseconds_t t)
 {
     processWebCommands();
 
-    if (!ON) return;
+    if (!ON)
+    {
+        vTaskDelay(pdMS_TO_TICKS(10));
+        return;
+    }
 
     // TODO: I don't like how "special" the StaticColor has to be.
     // The problem is that there is no good way for the web UI to update the effects directly
