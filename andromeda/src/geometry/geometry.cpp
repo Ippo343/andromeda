@@ -211,11 +211,17 @@ void Geometry::loadCoordinates()
 
             // Copy Cartesian data from PROGMEM
             CartesianCoordinates cart;
-            memcpy_P(&cart, &config->cartesian_data[data_index], sizeof(CartesianCoordinates));
+            const CartesianCoordinates* progmem_ptr =
+                (const CartesianCoordinates*)pgm_read_ptr(&config->cartesian_data);
+            memcpy_P(&cart, &progmem_ptr[data_index], sizeof(CartesianCoordinates));
+
             _fixedStrips[iStrip].leds[iLed].cartesian = cart;
             strips[iStrip].leds[iLed].cartesian = cart;
 
             _fixedStrips[iStrip].leds[iLed].polar = PolarCoordinates(cart);
+            Log.verboseln("Strip %d, LED %d: Cartesian(%d, %d), Polar(%d, %d)", iStrip, iLed,
+                          cart.x, cart.y, _fixedStrips[iStrip].leds[iLed].polar.radius,
+                          _fixedStrips[iStrip].leds[iLed].polar.cdegrees);
             strips[iStrip].leds[iLed].polar = _fixedStrips[iStrip].leds[iLed].polar;
         }
 

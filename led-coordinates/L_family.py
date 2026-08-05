@@ -124,13 +124,14 @@ class Model:
 
 def main():
     # L10 - 10cm square with 13 LEDs per side (144 LED/m)
-    # Coordinates are approximate, pitch should be ~6.944mm for 144 LED/m
-    # Measured from bottom-right corner, X going left
+    # 13 LEDs at 6.944mm pitch → span = 12 * 6.944 = 83.333mm → half = 41.667mm
+    # Start: top-right corner, anticlockwise: Top→Left→Bottom→Right
+    H = 41.667
     l10_segments = [
-        Segment("Top",    start_coord=(55, 55),   end_coord=(-55, 55),   led_count=13),
-        Segment("Left",   start_coord=(-55, 55),  end_coord=(-55, -55),  led_count=13),
-        Segment("Bottom", start_coord=(-55, -55), end_coord=(55, -55),   led_count=13),
-        Segment("Right",  start_coord=(55, -55),  end_coord=(55, 55),    led_count=13),
+        Segment("Top",    start_coord=( H,  H), end_coord=(-H,  H), led_count=13),
+        Segment("Left",   start_coord=(-H,  H), end_coord=(-H, -H), led_count=13),
+        Segment("Bottom", start_coord=(-H, -H), end_coord=( H, -H), led_count=13),
+        Segment("Right",  start_coord=( H, -H), end_coord=( H,  H), led_count=13),
     ]
 
     # L70 - Composite with outer and inner rectangles (60 LED/m)
