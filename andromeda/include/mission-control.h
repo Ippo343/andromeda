@@ -19,6 +19,7 @@ enum class Command
     NEXT = 'N',
     HOLD = 'H',
     POWER_OFF = 'D',
+    POWER_ON = 'P',
     COLOR = 'C'
 };
 
@@ -121,6 +122,7 @@ class MissionControl
 
     // Power off the LEDs and wait
     void powerOff();
+    void powerOn();
 
     // Switch to a static color and hold forever (lamp mode)
     void transitionToStaticColor();

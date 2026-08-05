@@ -240,6 +240,12 @@ void Comms::setupRoutes()
                   MissionControl::Instance().queueWebCommand(Command::POWER_OFF);
                   r->send(200);
               });
+    server.on("/P", HTTP_POST,
+              [](AsyncWebServerRequest* r)
+              {
+                  MissionControl::Instance().queueWebCommand(Command::POWER_ON);
+                  r->send(200);
+              });
 
     // Shared Config & Monitoring
     server.on("/fps", HTTP_GET, [](AsyncWebServerRequest* r)

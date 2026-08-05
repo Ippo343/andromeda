@@ -316,6 +316,9 @@ function initControlsPage() {
         setTimeout(() => location.reload(), 4000);
     });
 
+    // Power button toggle state
+    let deviceIsOn = true;
+
     // Button ripple effects
     document.querySelectorAll('.btn').forEach(btn => {
         btn.addEventListener('click', function(e) {
@@ -357,6 +360,24 @@ function initControlsPage() {
             }
 
             fetch(this.dataset.cmd, { method: 'POST' });
+
+            // Power button: toggle AFTER fetch so the correct cmd was sent
+            if (this.id === 'powerBtn') {
+                deviceIsOn = !deviceIsOn;
+                if (deviceIsOn) {
+                    // Device is now ON — button should offer to turn it Off
+                    this.textContent = 'Off';
+                    this.dataset.cmd = '/D';
+                    this.classList.remove('on');
+                    this.classList.add('off');
+                } else {
+                    // Device is now OFF — button should offer to turn it On
+                    this.textContent = 'On';
+                    this.dataset.cmd = '/P';
+                    this.classList.remove('off');
+                    this.classList.add('on');
+                }
+            }
         });
     });
 

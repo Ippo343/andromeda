@@ -32,6 +32,9 @@ void MissionControl::processWebCommands()
             case Command::POWER_OFF:
                 powerOff();
                 break;
+            case Command::POWER_ON:
+                powerOn();
+                break;
             case Command::COLOR:
                 if (!isInStaticColorMode) transitionToStaticColor();
                 break;
@@ -187,6 +190,12 @@ void MissionControl::powerOff()
     ON = false;
     setMinCpuFrequency();
     PerformanceMonitor::Instance().stop();
+}
+
+void MissionControl::powerOn()
+{
+    ON = true;
+    setMaxCpuFrequency();
 }
 
 void MissionControl::update(milliseconds_t t)
