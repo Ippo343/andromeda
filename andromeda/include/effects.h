@@ -32,6 +32,9 @@ class StaticColor : public AbstractEffect
    public:
     const char* GetName() override { return "Static Color"; }
 
+    bool wantsLiveColorUpdates() const override { return true; }
+    void setColor(CRGB c) override { targetColor = c; }
+
     CRGB targetColor;   // the color selected by the user, which we will blend towards
     CRGB currentColor;  // the color we are currently displaying, which will blend towards the
                         // targetColor

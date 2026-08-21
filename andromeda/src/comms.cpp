@@ -260,7 +260,7 @@ size_t Comms::buildCurrentStateJson(char* outBuffer, size_t outBufferSize)
         .colorR = mc.staticColor.r,
         .colorG = mc.staticColor.g,
         .colorB = mc.staticColor.b,
-        .colorActive = mc.isInStaticColorMode,
+        .colorActive = mc.isColorActive(),
         .effectName = mc.getEffectName(),
         .runningModel = {static_cast<uint16_t>(runningConfig->id), runningConfig->name},
         .configuredModel = {static_cast<uint16_t>(configuredId),

@@ -41,7 +41,7 @@ void MissionControl::processWebCommands()
                 break;
             case CommandType::COLOR:
                 staticColor = CRGB(command.r, command.g, command.b);
-                if (!isInStaticColorMode) transitionToStaticColor();
+                if (!isColorActive()) transitionToStaticColor();
                 stateDirty = true;
                 break;
             case CommandType::BRIGHTNESS:
@@ -170,10 +170,6 @@ void MissionControl::handleTransition(AbstractEffect* nextEffect, bool playAnima
     else
         effect = getRandomEffect();
 
-    // Keep track of whether we are in static color mode so update() can sync
-    // staticColor onto the live StaticColor effect each frame
-    isInStaticColorMode = (strcmp(effect->GetName(), "Static Color") == 0);
-
     Log.noticeln("Picked new effect: %s", effect->GetName());
 
     if (effect->controlHints & ControlHints::ROTATE_SPACE)
@@ -225,13 +221,11 @@ void MissionControl::update(milliseconds_t t)
         return;
     }
 
-    // TODO: I don't like how "special" the StaticColor has to be.
-    // The problem is that there is no good way for the web UI to update the effects directly
-    if (isInStaticColorMode)
-    {
-        StaticColor* staticEffect = static_cast<StaticColor*>(effect);
-        staticEffect->targetColor = staticColor;
-    }
+    // Sync any pending web-requested color into the live effect each frame.
+    // Only effects that opt in via wantsLiveColorUpdates() receive this - see
+    // AbstractEffect::setColor in effects-base.h for the breadcrumb on using
+    // this same seam for palette-reference colors in a future effect.
+    if (effect && effect->wantsLiveColorUpdates()) effect->setColor(staticColor);
 
     Energy::set(slowSin(millis(), 0.5, 0, 255));
 

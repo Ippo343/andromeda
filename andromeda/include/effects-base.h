@@ -33,6 +33,19 @@ class AbstractEffect
     // to allow postprocess effects like blurring and fading
     virtual void postprocess(milliseconds_t t) { return; }
 
+    // Whether this effect accepts a live color pushed in from the web UI while
+    // it is running (bypassing the normal transition/rotation flow). Most
+    // effects don't. StaticColor opts in because a web COLOR command must take
+    // effect immediately, without waiting for a transition.
+    //
+    // Breadcrumb for later: today an effect that opts in treats the color as
+    // its entire output (see StaticColor::setColor). If we ever want an effect
+    // to instead use an externally-pushed color as a palette/accent reference
+    // alongside its own generated pattern, this is the seam to extend -
+    // likely by giving setColor's caller more context than just CRGB.
+    virtual bool wantsLiveColorUpdates() const { return false; }
+    virtual void setColor(CRGB c) {}
+
     // Computes the function over all the strips
     void render(milliseconds_t t)
     {

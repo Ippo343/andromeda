@@ -60,6 +60,11 @@ class MissionControlTestAccess
         if (mc.effect) delete mc.effect;
         mc.effect = e;
     }
+    static AbstractEffect* getEffect(MissionControl& mc) { return mc.effect; }
+    static void setNextTransitionValue(MissionControl& mc, milliseconds_t t)
+    {
+        mc.nextTransition = t;
+    }
 };
 
 void setUp()
@@ -221,6 +226,24 @@ void test_queue_web_command_fills_and_rejects_when_full()
                   : 0);
 }
 
+// Reproduces the real startup path: main.cpp's setup() never calls
+// handleTransition() before the loop starts, so the very first update(millis())
+// call can see a null effect. update() must not dereference it before the
+// t >= nextTransition check has a chance to run handleTransition() and set one.
+void test_update_does_not_dereference_null_effect_before_first_transition()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setEffect(mc, nullptr);
+    // Mirrors the real boot state: nextTransition defaults to 0, so the very
+    // first update(t) call reaches the live-color-update line with a null
+    // effect before the t >= nextTransition branch runs handleTransition().
+    MissionControlTestAccess::setNextTransitionValue(mc, 0);
+
+    mc.update(0);
+
+    TEST_ASSERT_NOT_NULL(MissionControlTestAccess::getEffect(mc));
+}
+
 void test_power_off_and_on_toggle_state()
 {
     MissionControl& mc = MissionControl::Instance();
@@ -236,12 +259,11 @@ void test_queue_color_command_sets_static_color_and_enters_static_mode()
 {
     MissionControl& mc = MissionControl::Instance();
     MissionControlTestAccess::setEffect(mc, new ElectricSparks());
-    mc.isInStaticColorMode = false;
 
     TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Color(10, 20, 30)));
     mc.update(0);
 
-    TEST_ASSERT_TRUE(mc.isInStaticColorMode);
+    TEST_ASSERT_TRUE(mc.isColorActive());
     TEST_ASSERT_EQUAL_UINT8(10, mc.staticColor.r);
     TEST_ASSERT_EQUAL_UINT8(20, mc.staticColor.g);
     TEST_ASSERT_EQUAL_UINT8(30, mc.staticColor.b);
@@ -251,12 +273,11 @@ void test_queue_color_command_while_already_in_static_mode_updates_color()
 {
     MissionControl& mc = MissionControl::Instance();
     MissionControlTestAccess::setEffect(mc, new StaticColor());
-    mc.isInStaticColorMode = true;
 
     TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Color(40, 50, 60)));
     mc.update(0);
 
-    TEST_ASSERT_TRUE(mc.isInStaticColorMode);
+    TEST_ASSERT_TRUE(mc.isColorActive());
     TEST_ASSERT_EQUAL_UINT8(40, mc.staticColor.r);
     TEST_ASSERT_EQUAL_UINT8(50, mc.staticColor.g);
     TEST_ASSERT_EQUAL_UINT8(60, mc.staticColor.b);
@@ -290,14 +311,13 @@ void test_ws_json_color_command_flows_through_to_static_color()
 {
     MissionControl& mc = MissionControl::Instance();
     MissionControlTestAccess::setEffect(mc, new ElectricSparks());
-    mc.isInStaticColorMode = false;
 
     Command cmd;
     TEST_ASSERT_TRUE(WsCommandParser::parse("{\"type\":\"color\",\"r\":5,\"g\":6,\"b\":7}", cmd));
     TEST_ASSERT_TRUE(mc.queueWebCommand(cmd));
     mc.update(0);
 
-    TEST_ASSERT_TRUE(mc.isInStaticColorMode);
+    TEST_ASSERT_TRUE(mc.isColorActive());
     TEST_ASSERT_EQUAL_UINT8(5, mc.staticColor.r);
     TEST_ASSERT_EQUAL_UINT8(6, mc.staticColor.g);
     TEST_ASSERT_EQUAL_UINT8(7, mc.staticColor.b);
@@ -317,6 +337,7 @@ int main(int argc, char** argv)
 
     RUN_TEST(test_queue_web_command_and_process_hold);
     RUN_TEST(test_queue_web_command_fills_and_rejects_when_full);
+    RUN_TEST(test_update_does_not_dereference_null_effect_before_first_transition);
     RUN_TEST(test_power_off_and_on_toggle_state);
     RUN_TEST(test_queue_color_command_sets_static_color_and_enters_static_mode);
     RUN_TEST(test_queue_color_command_while_already_in_static_mode_updates_color);

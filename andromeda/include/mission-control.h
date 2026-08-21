@@ -105,7 +105,8 @@ class MissionControl
     }
 
     CRGB staticColor = CRGB::White;
-    bool isInStaticColorMode = false;
+
+    inline bool isColorActive() const { return effect && effect->wantsLiveColorUpdates(); }
 
     // 80 MHz seems to be the minimum frequency for the WiFi and LED drivers to work,
     // at least on the C3 where I tried messing with it. At 40MHz nothing works lol.
@@ -142,7 +143,7 @@ class MissionControl
 
    private:
     // The effect that is currently running
-    AbstractEffect* effect;
+    AbstractEffect* effect = nullptr;
 
     // Main ON/OFF switch. If OFF, power down and do nothing.
     bool ON = true;
