@@ -1,5 +1,9 @@
 #include "mission-control.h"
 
+#ifndef UNIT_TEST
+#include <esp_system.h>  // esp_restart()
+#endif
+
 // Initialize the web command queue
 void MissionControl::initWebQueue()
 {
@@ -16,30 +20,37 @@ void MissionControl::processWebCommands()
         return;
     }
 
-    Command command(Command::NEXT);
+    Command command;
     while (xQueueReceive(webCommandQueue, &command, 0) == pdTRUE)
     {
-        Log.noticeln("Processing web command: %c", static_cast<char>(command));
+        Log.noticeln("Processing web command: %d", static_cast<int>(command.type));
 
-        switch (command)
+        switch (command.type)
         {
-            case Command::NEXT:
+            case CommandType::NEXT:
                 handleTransition();
                 break;
-            case Command::HOLD:
+            case CommandType::HOLD:
                 holdEffect();
                 break;
-            case Command::POWER_OFF:
+            case CommandType::POWER_OFF:
                 powerOff();
                 break;
-            case Command::POWER_ON:
+            case CommandType::POWER_ON:
                 powerOn();
                 break;
-            case Command::COLOR:
+            case CommandType::COLOR:
+                staticColor = CRGB(command.r, command.g, command.b);
                 if (!isInStaticColorMode) transitionToStaticColor();
                 break;
-            default:
-                Log.warningln("Unknown web command: %c", static_cast<char>(command));
+            case CommandType::BRIGHTNESS:
+                setMaxBrightness(command.brightness);
+                break;
+            case CommandType::MODEL:
+                FactoryConfig::setModelId(static_cast<ModelId>(command.modelId));
+                break;
+            case CommandType::REBOOT:
+                esp_restart();
                 break;
         }
     }
@@ -57,7 +68,8 @@ bool MissionControl::queueWebCommand(Command command)
     if (xQueueSend(webCommandQueue, &command, 0) == pdTRUE) { return true; }
     else
     {
-        Log.warningln("Web command queue full, dropping command: %c", static_cast<char>(command));
+        Log.warningln("Web command queue full, dropping command: %d",
+                      static_cast<int>(command.type));
         return false;
     }
 }
@@ -156,8 +168,8 @@ void MissionControl::handleTransition(AbstractEffect* nextEffect, bool playAnima
     else
         effect = getRandomEffect();
 
-    // Keep track of whether we are in static color mode to allow the web commands
-    // to bypass the command queue entirely
+    // Keep track of whether we are in static color mode so update() can sync
+    // staticColor onto the live StaticColor effect each frame
     isInStaticColorMode = (strcmp(effect->GetName(), "Static Color") == 0);
 
     Log.noticeln("Picked new effect: %s", effect->GetName());

@@ -13,14 +13,55 @@
 #include "perf-monitor.h"
 #include "utils.h"
 
-// Web command enum for the web server
-enum class Command
+// Web command types, dispatched by MissionControl::processWebCommands()
+enum class CommandType : uint8_t
 {
-    NEXT = 'N',
-    HOLD = 'H',
-    POWER_OFF = 'D',
-    POWER_ON = 'P',
-    COLOR = 'C'
+    NEXT,
+    HOLD,
+    POWER_OFF,
+    POWER_ON,
+    COLOR,
+    BRIGHTNESS,
+    MODEL,
+    REBOOT
+};
+
+// Payload-carrying command sent from a web client into the render task's
+// command queue. Flat POD (no union) so FreeRTOS's byte-copy queue
+// semantics and CRGB's non-trivial ctor don't fight each other; the unused
+// fields per command are a few wasted bytes at WEB_QUEUE_SIZE=10.
+struct Command
+{
+    CommandType type;
+    uint8_t r = 0, g = 0, b = 0;  // COLOR
+    uint8_t brightness = 0;       // BRIGHTNESS
+    uint16_t modelId = 0;         // MODEL
+
+    static Command Next() { return {CommandType::NEXT}; }
+    static Command Hold() { return {CommandType::HOLD}; }
+    static Command PowerOff() { return {CommandType::POWER_OFF}; }
+    static Command PowerOn() { return {CommandType::POWER_ON}; }
+    static Command Reboot() { return {CommandType::REBOOT}; }
+    static Command Color(uint8_t r, uint8_t g, uint8_t b)
+    {
+        Command c{CommandType::COLOR};
+        c.r = r;
+        c.g = g;
+        c.b = b;
+        return c;
+    }
+    static Command Brightness(uint8_t v)
+    {
+        Command c{CommandType::BRIGHTNESS};
+        c.brightness = v;
+        return c;
+    }
+    static Command Model(uint16_t id)
+    {
+        Command c{CommandType::MODEL};
+        c.modelId = id;
+        return c;
+    }
 };
 
 class MissionControl

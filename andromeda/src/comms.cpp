@@ -3,6 +3,8 @@
 #include <DNSServer.h>
 #include <Preferences.h>
 
+#include "ws-command-parser.h"
+
 // AP mode configuration
 constexpr const char* AP_SSID = "Andromeda-Setup";
 constexpr const char* AP_PASSWORD = "";
@@ -162,40 +164,11 @@ void Comms::setupRoutes()
                 if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT)
                 {
                     data[len] = 0;
-                    String msg = String((char*)data);
-
-                    // Parse simple JSON
-                    if (msg.indexOf("\"type\":\"color\"") >= 0)
-                    {
-                        int r = msg.substring(msg.indexOf("\"r\":") + 4).toInt();
-                        int g = msg.substring(msg.indexOf("\"g\":") + 4).toInt();
-                        int b = msg.substring(msg.indexOf("\"b\":") + 4).toInt();
-                        if (r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255)
-                        {
-                            MissionControl::Instance().staticColor = CRGB(r, g, b);
-                            if (!MissionControl::Instance().isInStaticColorMode)
-                                MissionControl::Instance().queueWebCommand(Command::COLOR);
-                        }
-                    }
-                    else if (msg.indexOf("\"type\":\"brightness\"") >= 0)
-                    {
-                        int val = msg.substring(msg.indexOf("\"value\":") + 8).toInt();
-                        if (val >= 0 && val <= 255)
-                        {
-                            MissionControl::Instance().setMaxBrightness(val);
-                        }
-                    }
-                    else if (msg.indexOf("\"type\":\"model\"") >= 0)
-                    {
-                        int idKeyPos = msg.indexOf("\"id\":");
-                        if (idKeyPos != -1)
-                        {
-                            int valueStart = msg.indexOf(":", idKeyPos) + 1;
-                            int model = msg.substring(valueStart).toInt();
-                            FactoryConfig::setModelId(static_cast<ModelId>(model));
-                        }
-                    }
-                    else if (msg.indexOf("\"type\":\"reboot\"") >= 0) { esp_restart(); }
+                    Command command;
+                    if (WsCommandParser::parse(reinterpret_cast<const char*>(data), command))
+                        MissionControl::Instance().queueWebCommand(command);
+                    else
+                        Log.warningln("Unrecognized WS command message: %s", (char*)data);
                 }
             }
         });
@@ -220,32 +193,6 @@ void Comms::setupRoutes()
 
     server.on("/wifi", HTTP_GET,
               [](AsyncWebServerRequest* r) { r->send(LittleFS, "/wifi-setup.html", "text/html"); });
-
-    // Shared Command routes
-    server.on("/N", HTTP_POST,
-              [](AsyncWebServerRequest* r)
-              {
-                  MissionControl::Instance().queueWebCommand(Command::NEXT);
-                  r->send(200);
-              });
-    server.on("/H", HTTP_POST,
-              [](AsyncWebServerRequest* r)
-              {
-                  MissionControl::Instance().queueWebCommand(Command::HOLD);
-                  r->send(200);
-              });
-    server.on("/D", HTTP_POST,
-              [](AsyncWebServerRequest* r)
-              {
-                  MissionControl::Instance().queueWebCommand(Command::POWER_OFF);
-                  r->send(200);
-              });
-    server.on("/P", HTTP_POST,
-              [](AsyncWebServerRequest* r)
-              {
-                  MissionControl::Instance().queueWebCommand(Command::POWER_ON);
-                  r->send(200);
-              });
 
     // Shared Config & Monitoring
     server.on("/fps", HTTP_GET, [](AsyncWebServerRequest* r)

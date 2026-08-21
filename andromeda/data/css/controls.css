@@ -464,3 +464,12 @@
     color: rgba(150, 180, 255, 1);
     text-decoration: underline;
 }
+
+/* All commands go over the WebSocket now - make it visible when it's down
+   instead of leaving controls clickable but silently inert. */
+.ws-disconnected .btn,
+.ws-disconnected input,
+.ws-disconnected select {
+    pointer-events: none;
+    opacity: 0.5;
+}

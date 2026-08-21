@@ -1,0 +1,90 @@
+#pragma once
+
+#include <cstdlib>
+#include <cstring>
+
+#include "mission-control.h"
+
+// Pure, dependency-free (no Arduino String, no ArduinoJson) parser for the
+// hand-rolled JSON messages the WS client sends. Deliberately free of
+// Arduino/WiFi includes so it's natively unit-testable, mirroring
+// comms-utils.h's isScanCacheValid extraction (comms.cpp itself stays
+// excluded from native builds - see platformio.ini [env:native]).
+
+namespace WsCommandParser
+{
+
+// `json` must be NUL-terminated (matches AsyncWebSocket's `data[len] = 0`
+// convention at the call site). Returns true and fills `out` on a
+// recognized, well-formed command message; false otherwise (unknown type,
+// missing field, or out-of-range field).
+inline bool findField(const char* json, const char* key, long& outValue)
+{
+    const char* p = strstr(json, key);
+    if (!p) return false;
+    outValue = strtol(p + strlen(key), nullptr, 10);
+    return true;
+}
+
+inline bool parse(const char* json, Command& out)
+{
+    if (strstr(json, "\"type\":\"next\""))
+    {
+        out = Command::Next();
+        return true;
+    }
+    if (strstr(json, "\"type\":\"hold\""))
+    {
+        out = Command::Hold();
+        return true;
+    }
+    if (strstr(json, "\"type\":\"power_off\""))
+    {
+        out = Command::PowerOff();
+        return true;
+    }
+    if (strstr(json, "\"type\":\"power_on\""))
+    {
+        out = Command::PowerOn();
+        return true;
+    }
+    if (strstr(json, "\"type\":\"reboot\""))
+    {
+        out = Command::Reboot();
+        return true;
+    }
+
+    if (strstr(json, "\"type\":\"color\""))
+    {
+        long r, g, b;
+        if (!findField(json, "\"r\":", r) || !findField(json, "\"g\":", g) ||
+            !findField(json, "\"b\":", b))
+            return false;
+        if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255) return false;
+        out = Command::Color(static_cast<uint8_t>(r), static_cast<uint8_t>(g),
+                             static_cast<uint8_t>(b));
+        return true;
+    }
+
+    if (strstr(json, "\"type\":\"brightness\""))
+    {
+        long value;
+        if (!findField(json, "\"value\":", value)) return false;
+        if (value < 0 || value > 255) return false;
+        out = Command::Brightness(static_cast<uint8_t>(value));
+        return true;
+    }
+
+    if (strstr(json, "\"type\":\"model\""))
+    {
+        long id;
+        if (!findField(json, "\"id\":", id)) return false;
+        if (id < 0) return false;
+        out = Command::Model(static_cast<uint16_t>(id));
+        return true;
+    }
+
+    return false;
+}
+
+}  // namespace WsCommandParser

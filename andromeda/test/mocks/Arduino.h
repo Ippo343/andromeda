@@ -86,3 +86,7 @@ inline int analogRead(int) { return std::rand() % 1024; }
 // ESP32 Arduino core HAL function - no-op on the host (there is no real CPU
 // frequency to scale).
 inline void setCpuFrequencyMhz(uint32_t) {}
+
+// ESP-IDF function pulled in by MissionControl::processWebCommands() (REBOOT
+// command) - no-op on the host, there is nothing to restart.
+inline void esp_restart() {}

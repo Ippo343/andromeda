@@ -35,7 +35,7 @@ Core pattern: singletons accessed globally. Main loop: `MissionControl::update(m
 
 **Animations** — State machines managing effect selection & transitions. Decide which effect to render with what parameters.
 
-**Comms** — WiFi + web server. HTTP endpoints queue commands (NEXT, HOLD, POWER_OFF, POWER_ON, COLOR) to MissionControl.
+**Comms** — WiFi + web server. All runtime commands (NEXT, HOLD, POWER_OFF, POWER_ON, COLOR, BRIGHTNESS, MODEL, REBOOT) go over a single persistent WebSocket (`/ws`), parsed and queued to MissionControl. HTTP is only used for static files and one-shot provisioning (`/save`, `/reset`) and reads (`/fps`, `/brightness`).
 
 ## Constraints
 
@@ -56,4 +56,6 @@ Use glob/grep to explore live: `include/` (headers), `src/` (implementations), `
 
 ## Testing
 
-Native (host) unit tests run via `pio test -e native` — compiled and run on the dev machine's GCC toolchain, not on real hardware, using FastLED's own native/stub platform. Covers utils, geometry math, effects, MissionControl's pure logic, and perf-monitor. `comms.cpp` and `animations.cpp` are excluded (real-time/network-bound, no small seam exists). `test/mocks/` provides minimal Arduino/ArduinoLog/Preferences/FreeRTOS stand-ins for the native build; `-DUNIT_TEST` gates a few test-only `friend` accessors into otherwise-private class internals. Requires a host GCC toolchain on `PATH` (MSYS2 on Windows — not bundled by PlatformIO). CI runs this plus a build-only check of all 3 hardware envs, see `.github/workflows/test.yml`.
+Native (host) unit tests run via `pio test -e native` — compiled and run on the dev machine's GCC toolchain, not on real hardware, using FastLED's own native/stub platform. Covers utils, geometry math, effects, MissionControl's pure logic, and perf-monitor. `comms.cpp` and `animations.cpp` are excluded (real-time/network-bound); logic worth testing there (e.g. WS message parsing) gets extracted into a pure, dependency-free header instead — see `include/comms-utils.h` and `include/ws-command-parser.h` for the pattern. `test/mocks/` provides minimal Arduino/ArduinoLog/Preferences/FreeRTOS stand-ins for the native build; `-DUNIT_TEST` gates a few test-only `friend` accessors into otherwise-private class internals. Requires a host GCC toolchain on `PATH` (MSYS2 on Windows — not bundled by PlatformIO). CI runs this plus a build-only check of all 3 hardware envs, see `.github/workflows/test.yml`.
+
+**Running `pio` on Windows:** PlatformIO's CLI usually isn't on `PATH` even after install. Its real location is `%USERPROFILE%\.platformio\penv\Scripts\pio.exe` — call that full path (e.g. from PowerShell: `& "$env:USERPROFILE\.platformio\penv\Scripts\pio.exe" test -e native`) instead of trying bare `pio` first.

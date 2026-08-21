@@ -202,7 +202,11 @@ let ws = null;
 function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-    ws.onclose = () => setTimeout(connectWebSocket, 2000);
+    ws.onopen = () => document.body.classList.remove('ws-disconnected');
+    ws.onclose = () => {
+        document.body.classList.add('ws-disconnected');
+        setTimeout(connectWebSocket, 2000);
+    };
 }
 
 // Initialize page
@@ -359,21 +363,23 @@ function initControlsPage() {
                 updateSliderThumb(brightnessSlider);
             }
 
-            fetch(this.dataset.cmd, { method: 'POST' });
+            if (this.dataset.cmd && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: this.dataset.cmd }));
+            }
 
-            // Power button: toggle AFTER fetch so the correct cmd was sent
+            // Power button: toggle AFTER send so the correct cmd was sent
             if (this.id === 'powerBtn') {
                 deviceIsOn = !deviceIsOn;
                 if (deviceIsOn) {
                     // Device is now ON — button should offer to turn it Off
                     this.textContent = 'Off';
-                    this.dataset.cmd = '/D';
+                    this.dataset.cmd = 'power_off';
                     this.classList.remove('on');
                     this.classList.add('off');
                 } else {
                     // Device is now OFF — button should offer to turn it On
                     this.textContent = 'On';
-                    this.dataset.cmd = '/P';
+                    this.dataset.cmd = 'power_on';
                     this.classList.remove('off');
                     this.classList.add('on');
                 }
@@ -396,6 +402,7 @@ function initControlsPage() {
 
 // Start everything when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
+    document.body.classList.add('ws-disconnected');
     connectWebSocket();
     initControlsPage();
 });

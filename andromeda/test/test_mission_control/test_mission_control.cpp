@@ -185,7 +185,7 @@ void test_set_next_transition_orders_timestamps_correctly()
 void test_queue_web_command_and_process_hold()
 {
     MissionControl& mc = MissionControl::Instance();
-    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::HOLD));
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Hold()));
 
     MissionControlTestAccess::setNextTransition(mc);
     milliseconds_t before = MissionControlTestAccess::nextTransition(mc);
@@ -208,7 +208,7 @@ void test_queue_web_command_fills_and_rejects_when_full()
     int accepted = 0;
     for (int i = 0; i < 20; i++)
     {
-        if (mc.queueWebCommand(Command::HOLD)) accepted++;
+        if (mc.queueWebCommand(Command::Hold())) accepted++;
     }
     // The queue capacity is WEB_QUEUE_SIZE (10); sending 20 items must reject some.
     TEST_ASSERT_TRUE(accepted <= 10);
@@ -224,11 +224,51 @@ void test_power_off_and_on_toggle_state()
 {
     MissionControl& mc = MissionControl::Instance();
 
-    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::POWER_OFF));
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::PowerOff()));
     mc.update(0);  // ON is now false; update() should take the early-return path
 
-    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::POWER_ON));
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::PowerOn()));
     mc.update(0);  // processWebCommands() still runs even while OFF, turning it back ON
+}
+
+void test_queue_color_command_sets_static_color_and_enters_static_mode()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setEffect(mc, new ElectricSparks());
+    mc.isInStaticColorMode = false;
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Color(10, 20, 30)));
+    mc.update(0);
+
+    TEST_ASSERT_TRUE(mc.isInStaticColorMode);
+    TEST_ASSERT_EQUAL_UINT8(10, mc.staticColor.r);
+    TEST_ASSERT_EQUAL_UINT8(20, mc.staticColor.g);
+    TEST_ASSERT_EQUAL_UINT8(30, mc.staticColor.b);
+}
+
+void test_queue_color_command_while_already_in_static_mode_updates_color()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setEffect(mc, new StaticColor());
+    mc.isInStaticColorMode = true;
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Color(40, 50, 60)));
+    mc.update(0);
+
+    TEST_ASSERT_TRUE(mc.isInStaticColorMode);
+    TEST_ASSERT_EQUAL_UINT8(40, mc.staticColor.r);
+    TEST_ASSERT_EQUAL_UINT8(50, mc.staticColor.g);
+    TEST_ASSERT_EQUAL_UINT8(60, mc.staticColor.b);
+}
+
+void test_queue_brightness_command_updates_max_brightness()
+{
+    MissionControl& mc = MissionControl::Instance();
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Brightness(77)));
+    mc.update(0);
+
+    TEST_ASSERT_EQUAL_UINT8(77, mc.getMaxBrightness());
 }
 
 int main(int argc, char** argv)
@@ -246,6 +286,9 @@ int main(int argc, char** argv)
     RUN_TEST(test_queue_web_command_and_process_hold);
     RUN_TEST(test_queue_web_command_fills_and_rejects_when_full);
     RUN_TEST(test_power_off_and_on_toggle_state);
+    RUN_TEST(test_queue_color_command_sets_static_color_and_enters_static_mode);
+    RUN_TEST(test_queue_color_command_while_already_in_static_mode_updates_color);
+    RUN_TEST(test_queue_brightness_command_updates_max_brightness);
 
     return UNITY_END();
 }
