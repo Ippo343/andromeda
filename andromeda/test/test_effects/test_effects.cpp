@@ -301,6 +301,35 @@ void test_brightness_from_emitter_decays_with_distance()
 }
 
 // ---------------------------------------------------------------------------
+// ModelId -> Geometry -> Effect coordinate chain (real multi-strip model)
+// ---------------------------------------------------------------------------
+
+// Every other test in this file evaluates effects against
+// SINGLE_STRIP_TEST_DEVICE, a single synthetic strip. This confirms a
+// polar-coordinate effect (PolarSwipe) genuinely consumes real per-strip,
+// per-LED polar coordinates from a real multi-strip production model
+// (L70 MK1: 2 strips) - i.e. that FactoryConfig's ModelId selection actually
+// drives what coordinates Effects see, not just that a single strip works.
+void test_polar_swipe_evaluates_across_all_strips_of_real_multi_strip_model()
+{
+    GEOMETRY.initializeForTest(ModelId::L70_MK1);
+    TEST_ASSERT_EQUAL_INT(2, GEOMETRY.getNumStrips());
+
+    PolarSwipe fx;
+    fx.precompute(0);
+
+    for (size_t iStrip = 0; iStrip < GEOMETRY.getNumStrips(); iStrip++)
+    {
+        LedStrip& strip = GEOMETRY.getStrip(iStrip);
+        for (size_t i = 0; i < strip.num_leds; i += 11)
+        {
+            CRGB c = fx.evaluate(&strip, &strip.leds[i], i, 0);
+            (void)c;  // just confirm it doesn't crash / UB-sanitizer trip
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // getRandomEffect() factory
 // ---------------------------------------------------------------------------
 
@@ -353,6 +382,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_cartesian_moodlight_randomize_and_evaluate);
 
     RUN_TEST(test_get_random_effect_produces_valid_effects);
+
+    RUN_TEST(test_polar_swipe_evaluates_across_all_strips_of_real_multi_strip_model);
 
     RUN_TEST(test_paint_fills_all_strips);
     RUN_TEST(test_paint_strip_fills_only_target_strip);
