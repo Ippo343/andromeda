@@ -1,5 +1,7 @@
 #include "animations.h"
 
+#include "animation-utils.h"
+
 // ============================================================================
 // SweepStrips - Internal Animation Class
 // ============================================================================
@@ -87,8 +89,8 @@ class BaseSweep : public AbstractAnimation
    private:
     void colorSweep(CRGB color)
     {
-        short coordLead = 0;  // The coordinate of the leading edge of the ramp
-        short coordTail = 0;  // The coordinate of the trailing edge of the ramp
+        long coordLead = 0;  // The coordinate of the leading edge of the ramp
+        long coordTail = 0;  // The coordinate of the trailing edge of the ramp
         unsigned short maxCoord = getMaxCoordinate();
 
         milliseconds_t start = millis();
@@ -106,61 +108,11 @@ class BaseSweep : public AbstractAnimation
                 {
                     unsigned short coord = getCoordinate(iStrip, iLed);
 
-                    // Range check with boundary handling
-                    bool inRange;
-                    if (coordLead > maxCoord)
+                    SweepRampResult ramp =
+                        computeSweepRamp(coordLead, coordTail, coord, maxCoord, rampWidth);
+                    if (ramp.inRange)
                     {
-                        // Handle overflow at the boundary
-                        if (maxCoord == FULL_CIRCLE)  // Angular case - wraparound
-                        {
-                            inRange = (coord >= coordTail) || (coord <= (coordLead - maxCoord));
-                        }
-                        else  // Radial case - no wraparound
-                        {
-                            inRange = (coord >= coordTail);
-                        }
-                    }
-                    else if (coordTail < 0)
-                    {
-                        // Handle negative tail at the beginning of sweep
-                        if (maxCoord == FULL_CIRCLE)  // Angular case - wraparound
-                        {
-                            inRange = (coord >= (coordTail + maxCoord)) || (coord <= coordLead);
-                        }
-                        else  // Radial case - no wraparound
-                        {
-                            inRange = (coord <= coordLead);
-                        }
-                    }
-                    else
-                    {
-                        // Normal case - no boundary issues
-                        inRange = (coord >= coordTail && coord <= coordLead);
-                    }
-
-                    if (inRange)
-                    {
-                        // Calculate brightness based on distance from leading edge
-                        short rampDistance;
-                        if (maxCoord == FULL_CIRCLE && coordLead > maxCoord &&
-                            coord <= (coordLead - maxCoord))
-                        {
-                            // LED is in the wrapped portion (angular case)
-                            rampDistance = (coordLead - maxCoord) - coord;
-                        }
-                        else if (maxCoord == FULL_CIRCLE && coordTail < 0 &&
-                                 coord >= (coordTail + maxCoord))
-                        {
-                            // LED is in the wrapped portion (negative tail case, angular)
-                            rampDistance = coordLead - (coord - maxCoord);
-                        }
-                        else
-                        {
-                            // Normal case (both angular and radial)
-                            rampDistance = coordLead - coord;
-                        }
-
-                        uint8_t brightness = map(rampDistance, 0, rampWidth, 0, 255);
+                        uint8_t brightness = map(ramp.rampDistance, 0, rampWidth, 0, 255);
                         GEOMETRY.getStrip(iStrip).buffer[iLed] = color % brightness;
                     }
                 }
