@@ -143,16 +143,26 @@ class ColorWheel {
             clientY = e.clientY;
         }
 
-        const x = clientX - rect.left;
-        const y = clientY - rect.top;
+        let x = clientX - rect.left;
+        let y = clientY - rect.top;
 
         const dx = x - this.centerX;
         const dy = y - this.centerY;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
-        if (distance <= this.radius) {
-            this.updateColor(x, y);
+        // Clamp to just inside the rim rather than rejecting: a float
+        // distance can pass while the truncated integer pixel getImageData
+        // actually samples lands just past the drawn circle, in the
+        // untouched (transparent/black) region - the 1px margin keeps the
+        // sampled pixel safely inside regardless of rounding.
+        const maxDistance = this.radius - 1;
+        if (distance > maxDistance) {
+            const scale = maxDistance / distance;
+            x = this.centerX + dx * scale;
+            y = this.centerY + dy * scale;
         }
+
+        this.updateColor(x, y);
     }
 
     updateColor(x, y) {
