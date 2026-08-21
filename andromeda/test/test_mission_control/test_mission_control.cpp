@@ -10,6 +10,7 @@
 // test_effects.cpp doing the same #include independently.
 #include "../../src/effects.cpp"
 #include "animation-base.h"
+#include "ws-command-parser.h"
 
 // AbstractAnimation::GetName()/run() are declared in animation-base.h but
 // never defined anywhere in production code - every real animation
@@ -271,6 +272,37 @@ void test_queue_brightness_command_updates_max_brightness()
     TEST_ASSERT_EQUAL_UINT8(77, mc.getMaxBrightness());
 }
 
+void test_queue_model_command_updates_factory_config()
+{
+    MissionControl& mc = MissionControl::Instance();
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Model(static_cast<uint16_t>(ModelId::L70_MK1))));
+    mc.update(0);
+
+    TEST_ASSERT_EQUAL(ModelId::L70_MK1, FactoryConfig::getModelId());
+}
+
+// ---------------------------------------------------------------------------
+// WsCommandParser -> queueWebCommand -> update() - the full WS message path
+// ---------------------------------------------------------------------------
+
+void test_ws_json_color_command_flows_through_to_static_color()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setEffect(mc, new ElectricSparks());
+    mc.isInStaticColorMode = false;
+
+    Command cmd;
+    TEST_ASSERT_TRUE(WsCommandParser::parse("{\"type\":\"color\",\"r\":5,\"g\":6,\"b\":7}", cmd));
+    TEST_ASSERT_TRUE(mc.queueWebCommand(cmd));
+    mc.update(0);
+
+    TEST_ASSERT_TRUE(mc.isInStaticColorMode);
+    TEST_ASSERT_EQUAL_UINT8(5, mc.staticColor.r);
+    TEST_ASSERT_EQUAL_UINT8(6, mc.staticColor.g);
+    TEST_ASSERT_EQUAL_UINT8(7, mc.staticColor.b);
+}
+
 int main(int argc, char** argv)
 {
     UNITY_BEGIN();
@@ -289,6 +321,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_queue_color_command_sets_static_color_and_enters_static_mode);
     RUN_TEST(test_queue_color_command_while_already_in_static_mode_updates_color);
     RUN_TEST(test_queue_brightness_command_updates_max_brightness);
+    RUN_TEST(test_queue_model_command_updates_factory_config);
+    RUN_TEST(test_ws_json_color_command_flows_through_to_static_color);
 
     return UNITY_END();
 }
