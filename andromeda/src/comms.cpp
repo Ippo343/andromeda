@@ -117,9 +117,13 @@ void Comms::setupRoutes()
                     // commands were queue-only. Everything else stays queued since it mutates
                     // render-task-owned state (allocating effects, etc.).
                     uint8_t brightnessValue;
+                    bool brightnessCommit;
                     Command command;
-                    if (WsCommandParser::parseBrightness(json, brightnessValue))
+                    if (WsCommandParser::parseBrightness(json, brightnessValue, brightnessCommit))
+                    {
                         mc.setMaxBrightness(brightnessValue);
+                        if (brightnessCommit) BrightnessConfig::persist(brightnessValue);
+                    }
                     else if (WsCommandParser::parse(json, command))
                     {
                         if (command.type == CommandType::COLOR && mc.isColorActive())

@@ -61,8 +61,10 @@ void setup()
         error.run();
     }
 
-    // To avoid burning my eyes while working at the Social Hub's desk
-    MissionControl::Instance().setMaxBrightness(64);
+    // Restore the last brightness configured via the web UI. 64 is the
+    // fallback for a never-configured device, to avoid burning my eyes while
+    // working at the Social Hub's desk.
+    MissionControl::Instance().setMaxBrightness(BrightnessConfig::load(64));
 
     MissionControl::Instance().setMaxCpuFrequency(config->max_cpu_freq_mhz);
     MissionControl::Instance().setFrameDurationCap(config->min_frame_duration_ms);

@@ -67,18 +67,31 @@ void test_rejects_color_with_out_of_range_field()
 void test_parses_brightness()
 {
     uint8_t value;
+    bool commit;
     TEST_ASSERT_TRUE(
-        WsCommandParser::parseBrightness("{\"type\":\"brightness\",\"value\":128}", value));
+        WsCommandParser::parseBrightness("{\"type\":\"brightness\",\"value\":128}", value, commit));
     TEST_ASSERT_EQUAL(128, value);
+    TEST_ASSERT_FALSE(commit);
+}
+
+void test_parses_brightness_commit_flag()
+{
+    uint8_t value;
+    bool commit;
+    TEST_ASSERT_TRUE(WsCommandParser::parseBrightness(
+        "{\"type\":\"brightness\",\"value\":200,\"commit\":true}", value, commit));
+    TEST_ASSERT_EQUAL(200, value);
+    TEST_ASSERT_TRUE(commit);
 }
 
 void test_rejects_brightness_out_of_range()
 {
     uint8_t value;
+    bool commit;
     TEST_ASSERT_FALSE(
-        WsCommandParser::parseBrightness("{\"type\":\"brightness\",\"value\":-1}", value));
+        WsCommandParser::parseBrightness("{\"type\":\"brightness\",\"value\":-1}", value, commit));
     TEST_ASSERT_FALSE(
-        WsCommandParser::parseBrightness("{\"type\":\"brightness\",\"value\":256}", value));
+        WsCommandParser::parseBrightness("{\"type\":\"brightness\",\"value\":256}", value, commit));
 }
 
 void test_generic_parse_rejects_brightness()
@@ -130,6 +143,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_rejects_color_with_missing_field);
     RUN_TEST(test_rejects_color_with_out_of_range_field);
     RUN_TEST(test_parses_brightness);
+    RUN_TEST(test_parses_brightness_commit_flag);
     RUN_TEST(test_rejects_brightness_out_of_range);
     RUN_TEST(test_generic_parse_rejects_brightness);
     RUN_TEST(test_parses_model);

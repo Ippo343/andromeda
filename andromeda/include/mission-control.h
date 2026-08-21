@@ -13,6 +13,20 @@
 #include "perf-monitor.h"
 #include "utils.h"
 
+// Persists the user-configured max brightness across reboots (NVS), mirroring
+// FactoryConfig's model-ID storage (geometry.cpp). Kept separate from the
+// per-frame MissionControl::setMaxBrightness()/getMaxBrightness() so the
+// drag-speed WS updates (see comms.cpp) never touch flash - only the single
+// "commit" message sent when a slider drag ends calls persist().
+namespace BrightnessConfig
+{
+// Write the max brightness to persistent storage.
+void persist(uint8_t value);
+
+// Read the previously persisted max brightness, or `fallback` if never set.
+uint8_t load(uint8_t fallback);
+}  // namespace BrightnessConfig
+
 // Web command types, dispatched by MissionControl::processWebCommands().
 // BRIGHTNESS has no entry here: it never touches this queue (see comms.cpp's
 // WS handler) since it's applied directly via setMaxBrightness() - the

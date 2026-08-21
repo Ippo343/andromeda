@@ -1,8 +1,36 @@
 #include "mission-control.h"
 
+#include <Preferences.h>
+
 #ifndef UNIT_TEST
 #include <esp_system.h>  // esp_restart()
 #endif
+
+namespace BrightnessConfig
+{
+static const char* PREFS_NAMESPACE = "device";
+static const char* BRIGHTNESS_KEY = "max_bright";
+
+void persist(uint8_t value)
+{
+    Preferences prefs;
+    prefs.begin(PREFS_NAMESPACE, false);
+    prefs.putUShort(BRIGHTNESS_KEY, value);
+    prefs.end();
+
+    Log.noticeln("Persisted max brightness: %d", value);
+}
+
+uint8_t load(uint8_t fallback)
+{
+    Preferences prefs;
+    prefs.begin(PREFS_NAMESPACE, true);  // read-only
+    uint16_t value = prefs.getUShort(BRIGHTNESS_KEY, fallback);
+    prefs.end();
+
+    return static_cast<uint8_t>(value);
+}
+}  // namespace BrightnessConfig
 
 // Initialize the web command queue
 void MissionControl::initWebQueue()

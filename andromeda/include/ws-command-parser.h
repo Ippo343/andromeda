@@ -82,13 +82,17 @@ inline bool parse(const char* json, Command& out)
 // (setMaxBrightness() re-read every frame by the render loop) rather than
 // carried through Command/CommandType and the render-task command queue -
 // see the queue-overrun/watchdog note on CommandType in mission-control.h.
-inline bool parseBrightness(const char* json, uint8_t& outValue)
+// outCommit is true only for the one message sent when the slider drag ends
+// (see controls.js's stopSliderDrag) - that's the signal to persist the
+// value to NVS, rather than doing so on every drag-speed update.
+inline bool parseBrightness(const char* json, uint8_t& outValue, bool& outCommit)
 {
     if (!strstr(json, "\"type\":\"brightness\"")) return false;
     long value;
     if (!findField(json, "\"value\":", value)) return false;
     if (value < 0 || value > 255) return false;
     outValue = static_cast<uint8_t>(value);
+    outCommit = strstr(json, "\"commit\":true") != nullptr;
     return true;
 }
 

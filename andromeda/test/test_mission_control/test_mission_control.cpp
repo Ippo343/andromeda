@@ -412,6 +412,19 @@ void test_run_random_animation_pushes_black_to_strip_before_each_delay()
 }
 
 // ---------------------------------------------------------------------------
+// BrightnessConfig - persists max brightness across reboots (NVS)
+// ---------------------------------------------------------------------------
+
+void test_brightness_config_persists_and_reloads_value()
+{
+    BrightnessConfig::persist(120);
+    TEST_ASSERT_EQUAL_UINT8(120, BrightnessConfig::load(64));
+
+    BrightnessConfig::persist(30);
+    TEST_ASSERT_EQUAL_UINT8(30, BrightnessConfig::load(64));
+}
+
+// ---------------------------------------------------------------------------
 // WsCommandParser -> queueWebCommand -> update() - the full WS message path
 // ---------------------------------------------------------------------------
 
@@ -454,6 +467,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_queue_model_command_updates_factory_config);
     RUN_TEST(test_run_random_animation_pushes_black_to_strip_before_each_delay);
     RUN_TEST(test_ws_json_color_command_flows_through_to_static_color);
+    RUN_TEST(test_brightness_config_persists_and_reloads_value);
 
     return UNITY_END();
 }
