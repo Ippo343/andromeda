@@ -61,6 +61,9 @@ void MissionControl::processWebCommands()
             case CommandType::HOLD:
                 holdEffect();
                 break;
+            case CommandType::RESUME:
+                resumeEffect();
+                break;
             case CommandType::POWER_OFF:
                 powerOff();
                 break;
@@ -191,7 +194,8 @@ void MissionControl::handleTransition(AbstractEffect* nextEffect, bool playAnima
 {
     Log.noticeln("Handling transition");
 
-    ON = true;  // Ensure the system is ON
+    ON = true;        // Ensure the system is ON
+    holding = false;  // A transition (e.g. NEXT) always leaves hold mode
     setMaxCpuFrequency();
 
     if (playAnimation) runRandomAnimation();
@@ -224,8 +228,31 @@ void MissionControl::holdEffect()
     // Note that using Next from the web UI resets the transition and restarts the cycle.
     nextTransition = ~0UL;
     fadeOutStart = ~0UL;
+    holding = true;
+    stateDirty = true;
 
     Log.noticeln("Holding current effect forever");
+}
+
+// Un-hold: roll a new random effect duration, but subtract however long the
+// effect has already been on screen (effectStart to now, which includes the
+// whole time it spent held) rather than handing it a fresh full MIN..MAX
+// window on top of what it already had. effectStart/fadeInEnd are left
+// untouched so the currently-running effect keeps its plateau brightness
+// instead of restarting its fade-in.
+void MissionControl::resumeEffect()
+{
+    milliseconds_t now = millis();
+    milliseconds_t elapsed = now - effectStart;
+    milliseconds_t duration = random(MIN_EFFECT_DURATION, MAX_EFFECT_DURATION);
+    milliseconds_t remaining = (elapsed < duration) ? (duration - elapsed) : 0;
+
+    fadeOutStart = now + remaining;
+    nextTransition = fadeOutStart + FADE_OUT_DURATION;
+    holding = false;
+    stateDirty = true;
+
+    Log.noticeln("Resuming effect rotation, next transition in %d ms", remaining);
 }
 
 void MissionControl::powerOff()

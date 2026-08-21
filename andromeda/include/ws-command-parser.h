@@ -38,6 +38,11 @@ inline bool parse(const char* json, Command& out)
         out = Command::Hold();
         return true;
     }
+    if (strstr(json, "\"type\":\"resume\""))
+    {
+        out = Command::Resume();
+        return true;
+    }
     if (strstr(json, "\"type\":\"power_off\""))
     {
         out = Command::PowerOff();

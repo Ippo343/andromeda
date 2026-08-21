@@ -238,6 +238,47 @@ void test_queue_web_command_and_process_hold()
 
     // holdEffect() sets nextTransition to the maximum possible value
     TEST_ASSERT_EQUAL_UINT32(~0UL, MissionControlTestAccess::nextTransition(mc));
+    TEST_ASSERT_TRUE(mc.isHolding());
+}
+
+// resumeEffect() must clear the holding flag and schedule a real (non-max)
+// transition, without restarting the current effect's fade-in.
+void test_resume_effect_clears_holding_and_reduces_remaining_by_elapsed()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setNextTransition(mc);
+
+    // Pin effectStart far enough in the past that it exceeds any possible
+    // MIN..MAX random pick, so resumeEffect() must clamp the remaining time
+    // to ~0 (schedule almost immediately) instead of handing the effect a
+    // fresh full window on top of what it already had. The test process's
+    // own uptime is only seconds, nowhere near 20 minutes, so this relies on
+    // uint32_t wraparound subtraction (the same rollover-safe trick used
+    // throughout mission-control.cpp) rather than a plain now-20min, which
+    // would go negative and clamp to 0 instead of wrapping.
+    milliseconds_t now = millis();
+    milliseconds_t farPast = now - (20 MINUTES);
+    MissionControlTestAccess::setEffectStartValue(mc, farPast);
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Hold()));
+    mc.update(0);
+    TEST_ASSERT_TRUE(mc.isHolding());
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Resume()));
+    milliseconds_t before = millis();
+    mc.update(0);
+    milliseconds_t after = millis();
+
+    TEST_ASSERT_FALSE(mc.isHolding());
+
+    milliseconds_t nextTransition = MissionControlTestAccess::nextTransition(mc);
+    milliseconds_t fadeOutDur = MissionControlTestAccess::FADE_OUT_DURATION(mc);
+    TEST_ASSERT_TRUE(nextTransition >= before + fadeOutDur);
+    TEST_ASSERT_TRUE(nextTransition <= after + fadeOutDur + 50);
+
+    // effectStart must be untouched - resuming keeps the current effect's
+    // plateau brightness rather than restarting its fade-in.
+    TEST_ASSERT_EQUAL_UINT32(farPast, MissionControlTestAccess::effectStart(mc));
 }
 
 // Reproduces the real "flash" bug end-to-end through update(): a NEXT
@@ -458,6 +499,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_set_next_transition_orders_timestamps_correctly);
 
     RUN_TEST(test_queue_web_command_and_process_hold);
+    RUN_TEST(test_resume_effect_clears_holding_and_reduces_remaining_by_elapsed);
     RUN_TEST(test_next_command_mid_update_does_not_flash_stale_t_into_high_brightness);
     RUN_TEST(test_queue_web_command_fills_and_rejects_when_full);
     RUN_TEST(test_update_does_not_dereference_null_effect_before_first_transition);

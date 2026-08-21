@@ -37,6 +37,7 @@ enum class CommandType : uint8_t
 {
     NEXT,
     HOLD,
+    RESUME,
     POWER_OFF,
     POWER_ON,
     COLOR,
@@ -52,6 +53,8 @@ inline const char* commandTypeToString(CommandType type)
             return "NEXT";
         case CommandType::HOLD:
             return "HOLD";
+        case CommandType::RESUME:
+            return "RESUME";
         case CommandType::POWER_OFF:
             return "POWER_OFF";
         case CommandType::POWER_ON:
@@ -78,6 +81,7 @@ struct Command
 
     static Command Next() { return {CommandType::NEXT}; }
     static Command Hold() { return {CommandType::HOLD}; }
+    static Command Resume() { return {CommandType::RESUME}; }
     static Command PowerOff() { return {CommandType::POWER_OFF}; }
     static Command PowerOn() { return {CommandType::POWER_ON}; }
     static Command Reboot() { return {CommandType::REBOOT}; }
@@ -125,6 +129,7 @@ class MissionControl
     }
 
     inline bool isOn() const { return ON; }
+    inline bool isHolding() const { return holding; }
     inline const char* getEffectName() const { return effect ? effect->GetName() : "none"; }
 
     // Consumes (reads and clears) the flag set whenever broadcast-worthy state
@@ -194,6 +199,12 @@ class MissionControl
     // Main ON/OFF switch. If OFF, power down and do nothing.
     bool ON = true;
 
+    // True while the current effect is held indefinitely (nextTransition
+    // pinned to the max value by holdEffect()). Mirrors ON for the web UI's
+    // HOLD/RESUME button - see resumeEffect() for how un-holding picks a new
+    // transition time.
+    bool holding = false;
+
     // Maximum allowed brightness (0-255)
     // Note that this is different from FastLED's global brightness,
     // which is also used for the fade in/out ramps.
@@ -237,6 +248,10 @@ class MissionControl
 
     // Hold the current effect forever
     void holdEffect();
+
+    // Un-hold: pick a new randomized transition time, keeping the current
+    // effect running rather than restarting its fade-in.
+    void resumeEffect();
 
     // Power off the LEDs and wait
     void powerOff();

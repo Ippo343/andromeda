@@ -19,6 +19,13 @@ void test_parses_hold()
     TEST_ASSERT_EQUAL(static_cast<int>(CommandType::HOLD), static_cast<int>(out.type));
 }
 
+void test_parses_resume()
+{
+    Command out;
+    TEST_ASSERT_TRUE(WsCommandParser::parse("{\"type\":\"resume\"}", out));
+    TEST_ASSERT_EQUAL(static_cast<int>(CommandType::RESUME), static_cast<int>(out.type));
+}
+
 void test_parses_power_off()
 {
     Command out;
@@ -136,6 +143,7 @@ int main(int argc, char** argv)
 
     RUN_TEST(test_parses_next);
     RUN_TEST(test_parses_hold);
+    RUN_TEST(test_parses_resume);
     RUN_TEST(test_parses_power_off);
     RUN_TEST(test_parses_power_on);
     RUN_TEST(test_parses_reboot);

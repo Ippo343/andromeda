@@ -15,6 +15,7 @@ DeviceState makeState()
 {
     DeviceState state{};
     state.power = true;
+    state.holding = false;
     state.brightness = 128;
     state.colorR = 255;
     state.colorG = 10;
@@ -52,6 +53,30 @@ void test_power_false_round_trips()
     StaticJsonDocument<WsStateBuilder::JSON_CAPACITY> doc;
     deserializeJson(doc, buf, len);
     TEST_ASSERT_FALSE(doc["power"].as<bool>());
+}
+
+void test_holding_true_round_trips()
+{
+    DeviceState state = makeState();
+    state.holding = true;
+    char buf[WsStateBuilder::JSON_CAPACITY];
+    size_t len = WsStateBuilder::buildStateJson(state, buf, sizeof(buf));
+
+    StaticJsonDocument<WsStateBuilder::JSON_CAPACITY> doc;
+    deserializeJson(doc, buf, len);
+    TEST_ASSERT_TRUE(doc["holding"].as<bool>());
+}
+
+void test_holding_false_round_trips()
+{
+    DeviceState state = makeState();
+    state.holding = false;
+    char buf[WsStateBuilder::JSON_CAPACITY];
+    size_t len = WsStateBuilder::buildStateJson(state, buf, sizeof(buf));
+
+    StaticJsonDocument<WsStateBuilder::JSON_CAPACITY> doc;
+    deserializeJson(doc, buf, len);
+    TEST_ASSERT_FALSE(doc["holding"].as<bool>());
 }
 
 void test_color_boundary_values_and_active_flag()
@@ -152,6 +177,8 @@ int main(int argc, char** argv)
 
     RUN_TEST(test_power_true_round_trips);
     RUN_TEST(test_power_false_round_trips);
+    RUN_TEST(test_holding_true_round_trips);
+    RUN_TEST(test_holding_false_round_trips);
     RUN_TEST(test_color_boundary_values_and_active_flag);
     RUN_TEST(test_effect_name_embedded_verbatim);
     RUN_TEST(test_reboot_required_false_when_models_match);

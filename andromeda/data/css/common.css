@@ -114,6 +114,10 @@ h1 {
     background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
 }
 
+.btn.hold.holding {
+    background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+}
+
 .btn.white {
     background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
     color: #333;

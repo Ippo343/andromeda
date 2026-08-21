@@ -27,6 +27,7 @@ struct ModelInfo
 struct DeviceState
 {
     bool power;
+    bool holding;
     uint8_t brightness;
     uint8_t colorR, colorG, colorB;
     bool colorActive;
@@ -50,6 +51,7 @@ inline size_t buildStateJson(const DeviceState& state, char* outBuffer, size_t o
 
     doc["type"] = "state";
     doc["power"] = state.power;
+    doc["holding"] = state.holding;
     doc["brightness"] = state.brightness;
 
     JsonObject color = doc.createNestedObject("color");

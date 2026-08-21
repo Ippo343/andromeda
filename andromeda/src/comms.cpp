@@ -277,6 +277,7 @@ size_t Comms::buildCurrentStateJson(char* outBuffer, size_t outBufferSize)
 
     WsStateBuilder::DeviceState state{
         .power = mc.isOn(),
+        .holding = mc.isHolding(),
         .brightness = mc.getMaxBrightness(),
         .colorR = mc.staticColor.r,
         .colorG = mc.staticColor.g,

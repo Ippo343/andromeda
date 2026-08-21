@@ -244,6 +244,9 @@ let ws = null;
 // incoming state broadcasts (handleServerMessage) can read/update it.
 let deviceIsOn = true;
 
+// Hold button toggle state - mirrors deviceIsOn's role but for HOLD/RESUME.
+let deviceIsHolding = false;
+
 // True while the brightness slider is actively being dragged, so an
 // incoming state broadcast (e.g. triggered from another tab) doesn't yank
 // the slider out from under the user mid-drag.
@@ -281,6 +284,25 @@ function applyPowerState(isOn) {
     }
 }
 
+// Updates the hold button's DOM/label/dataset to reflect isHolding, without
+// sending any command - used both after a local click and when a state
+// broadcast reports the device changed hold state from elsewhere.
+function applyHoldState(isHolding) {
+    deviceIsHolding = isHolding;
+    const holdBtn = document.getElementById('holdBtn');
+    if (!holdBtn) return;
+
+    if (isHolding) {
+        holdBtn.textContent = 'FX Loop';
+        holdBtn.dataset.cmd = 'resume';
+        holdBtn.classList.add('holding');
+    } else {
+        holdBtn.textContent = 'Hold';
+        holdBtn.dataset.cmd = 'hold';
+        holdBtn.classList.remove('holding');
+    }
+}
+
 // Shows/hides the "model change needs a reboot to take effect" indicator -
 // used both by the model select's own change handler and by state
 // broadcasts (so it's correct on load, before anyone has touched anything).
@@ -310,6 +332,7 @@ function handleServerMessage(raw) {
     if (msg.type !== 'state') return;
 
     applyPowerState(msg.power);
+    applyHoldState(msg.holding);
 
     const brightnessSlider = document.getElementById('brightnessSlider');
     if (brightnessSlider && !sliderActivelyDragging) {
@@ -504,9 +527,12 @@ function initControlsPage() {
                 ws.send(JSON.stringify({ type: this.dataset.cmd }));
             }
 
-            // Power button: toggle AFTER send so the correct cmd was sent
+            // Power/Hold buttons: toggle AFTER send so the correct cmd was sent
             if (this.id === 'powerBtn') {
                 applyPowerState(!deviceIsOn);
+            }
+            if (this.id === 'holdBtn') {
+                applyHoldState(!deviceIsHolding);
             }
         });
     });
