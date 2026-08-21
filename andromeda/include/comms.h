@@ -12,6 +12,7 @@
 #include "utils.h"
 #include "wifi-esp-adapters.h"
 #include "wifi-manager.h"
+#include "ws-state-builder.h"
 
 class Comms
 {
@@ -30,6 +31,7 @@ class Comms
     Comms();
 
     AsyncWebServer server;
+    AsyncWebSocket ws;
 
     TaskHandle_t webServerTaskHandle;
     DNSServer* dnsServer;
@@ -64,6 +66,17 @@ class Comms
     void startAsyncScan();
     String scanWiFiNetworks();
     void onWiFiScanComplete(int networksFound);
+
+    // Builds the current device state as JSON into outBuffer (size
+    // outBufferSize). Returns the number of bytes written (0 on failure).
+    // Pushed to a client on WS_EVT_CONNECT and broadcast to all clients
+    // whenever MissionControl::consumeStateDirty() reports a change.
+    size_t buildCurrentStateJson(char* outBuffer, size_t outBufferSize);
+
+    // Polled every webServerTask tick: if MissionControl reports state
+    // changed since the last check, broadcasts a fresh state JSON to every
+    // connected WebSocket client.
+    void broadcastStateIfDirty();
 
 #ifdef UNIT_TEST
     // Test-only access so native integration tests can inject fake

@@ -91,6 +91,10 @@ struct AwsFrameInfo
 
 class AsyncWebSocketClient
 {
+   public:
+    // Test helper: captures what the production code sent via client->text(...).
+    std::string lastSentText;
+    void text(const char* msg, size_t len) { lastSentText.assign(msg, len); }
 };
 
 using AwsEventHandler = std::function<void(class AsyncWebSocket*, AsyncWebSocketClient*,
@@ -108,6 +112,16 @@ class AsyncWebSocket
     {
         if (eventHandler) eventHandler(this, nullptr, WS_EVT_DATA, &info, data, len);
     }
+
+    // Test helper: simulate a new client connecting.
+    void simulateConnect(AsyncWebSocketClient* client)
+    {
+        if (eventHandler) eventHandler(this, client, WS_EVT_CONNECT, nullptr, nullptr, 0);
+    }
+
+    // Test helper: captures what the production code broadcast via textAll(...).
+    std::string lastBroadcastText;
+    void textAll(const char* msg, size_t len) { lastBroadcastText.assign(msg, len); }
 
     AwsEventHandler eventHandler;
 };

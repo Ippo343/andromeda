@@ -65,7 +65,8 @@
                 <div class="settings-content">
                     <div class="slider-container">
                         <label class="slider-label">Model Selection</label>
-                        <!-- The values here must match the MODEL_ID values in model_config.h -->
+                        <!-- Pre-JS fallback only: overwritten from the server's "models" list
+                             in the state message pushed right after the WebSocket connects -->
                         <div class="model-row" id="modelRow">
                             <select class="model-select" id="modelSelect">
                                 <option value="769">L10</option>

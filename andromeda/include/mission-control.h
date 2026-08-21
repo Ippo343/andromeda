@@ -85,7 +85,24 @@ class MissionControl
 
     // TODO: this is different from "public uint8_t maxBrightness"... how?
     inline uint8_t getMaxBrightness() const { return maxBrightness; }
-    inline void setMaxBrightness(uint8_t b) { maxBrightness = b; }
+    inline void setMaxBrightness(uint8_t b)
+    {
+        maxBrightness = b;
+        stateDirty = true;
+    }
+
+    inline bool isOn() const { return ON; }
+    inline const char* getEffectName() const { return effect ? effect->GetName() : "none"; }
+
+    // Consumes (reads and clears) the flag set whenever broadcast-worthy state
+    // changes, so Comms can poll it from its own task to know when to push a
+    // fresh state message over the WebSocket.
+    inline bool consumeStateDirty()
+    {
+        bool d = stateDirty;
+        stateDirty = false;
+        return d;
+    }
 
     CRGB staticColor = CRGB::White;
     bool isInStaticColorMode = false;
@@ -134,6 +151,12 @@ class MissionControl
     // Note that this is different from FastLED's global brightness,
     // which is also used for the fade in/out ramps.
     uint8_t maxBrightness = 255;
+
+    // Set whenever broadcast-worthy state changes; cleared by consumeStateDirty().
+    // volatile because it's written from the render task and read/cleared from
+    // Comms' web server task - mirrors the existing Comms::scanInProgress/
+    // scanComplete cross-task flag pattern.
+    volatile bool stateDirty = false;
 
     // These parameters control how long an effect lasts and how quickly it fades in and out
     milliseconds_t FADE_IN_DURATION = 2500;

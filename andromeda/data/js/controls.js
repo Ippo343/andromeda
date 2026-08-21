@@ -199,6 +199,15 @@ class ColorWheel {
 // WebSocket management
 let ws = null;
 
+// Power button toggle state - module scope so both the click handler and
+// incoming state broadcasts (handleServerMessage) can read/update it.
+let deviceIsOn = true;
+
+// True while the brightness slider is actively being dragged, so an
+// incoming state broadcast (e.g. triggered from another tab) doesn't yank
+// the slider out from under the user mid-drag.
+let sliderActivelyDragging = false;
+
 function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
@@ -207,6 +216,89 @@ function connectWebSocket() {
         document.body.classList.add('ws-disconnected');
         setTimeout(connectWebSocket, 2000);
     };
+    ws.onmessage = (event) => handleServerMessage(event.data);
+}
+
+// Updates the power button's DOM/label/dataset to reflect isOn, without
+// sending any command - used both after a local click and when a state
+// broadcast reports the device changed power state from elsewhere.
+function applyPowerState(isOn) {
+    deviceIsOn = isOn;
+    const powerBtn = document.getElementById('powerBtn');
+    if (!powerBtn) return;
+
+    if (isOn) {
+        powerBtn.textContent = 'Off';
+        powerBtn.dataset.cmd = 'power_off';
+        powerBtn.classList.remove('on');
+        powerBtn.classList.add('off');
+    } else {
+        powerBtn.textContent = 'On';
+        powerBtn.dataset.cmd = 'power_on';
+        powerBtn.classList.remove('off');
+        powerBtn.classList.add('on');
+    }
+}
+
+// Shows/hides the "model change needs a reboot to take effect" indicator -
+// used both by the model select's own change handler and by state
+// broadcasts (so it's correct on load, before anyone has touched anything).
+function setRebootIndicator(show) {
+    const rebootBtn = document.getElementById('rebootBtn');
+    const modelRow = document.getElementById('modelRow');
+    if (!rebootBtn || !modelRow) return;
+
+    if (show) {
+        rebootBtn.classList.add('visible');
+        modelRow.classList.add('has-reboot');
+    } else {
+        rebootBtn.classList.remove('visible');
+        modelRow.classList.remove('has-reboot');
+    }
+}
+
+// Handles a "state" message pushed by the server: on initial /ws connect,
+// and again any time device state changes (including from another tab).
+function handleServerMessage(raw) {
+    let msg;
+    try {
+        msg = JSON.parse(raw);
+    } catch (e) {
+        return;
+    }
+    if (msg.type !== 'state') return;
+
+    applyPowerState(msg.power);
+
+    const brightnessSlider = document.getElementById('brightnessSlider');
+    if (brightnessSlider && !sliderActivelyDragging) {
+        brightnessSlider.value = msg.brightness;
+        updateSliderThumb(brightnessSlider);
+    }
+
+    const colorPreview = document.getElementById('colorPreview');
+    const colorInfo = document.getElementById('colorInfo');
+    if (colorPreview && colorInfo && msg.color) {
+        const { r, g, b } = msg.color;
+        colorPreview.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+        colorInfo.innerHTML =
+            `<span style="color: #ff6b6b">${r}</span>, ` +
+            `<span style="color: #6bff6b">${g}</span>, ` +
+            `<span style="color: #6b6bff">${b}</span>`;
+    }
+
+    const modelSelect = document.getElementById('modelSelect');
+    if (modelSelect && Array.isArray(msg.models)) {
+        modelSelect.innerHTML = '';
+        for (const model of msg.models) {
+            const option = document.createElement('option');
+            option.value = model.id;
+            option.textContent = model.name;
+            modelSelect.appendChild(option);
+        }
+        if (msg.model) modelSelect.value = String(msg.model.configured.id);
+    }
+    if (msg.model) setRebootIndicator(msg.model.rebootRequired);
 }
 
 // Initialize page
@@ -261,21 +353,19 @@ function initControlsPage() {
         }
     });
 
-    // Brightness slider
+    // Brightness slider (initial value comes from the state message pushed
+    // right after the WebSocket connects - see handleServerMessage)
     const brightnessSlider = document.getElementById('brightnessSlider');
 
-    fetch('/brightness')
-        .then(r => r.text())
-        .then(value => {
-            const brightness = parseInt(value);
-            if (!isNaN(brightness) && brightness >= 0 && brightness <= 255) {
-                brightnessSlider.value = brightness;
-                updateSliderThumb(brightnessSlider);
-            }
-        })
-        .catch(console.error);
-
     updateSliderThumb(brightnessSlider);
+
+    const startSliderDrag = () => { sliderActivelyDragging = true; };
+    const stopSliderDrag = () => { sliderActivelyDragging = false; };
+    brightnessSlider.addEventListener('mousedown', startSliderDrag);
+    brightnessSlider.addEventListener('touchstart', startSliderDrag);
+    brightnessSlider.addEventListener('mouseup', stopSliderDrag);
+    brightnessSlider.addEventListener('touchend', stopSliderDrag);
+    brightnessSlider.addEventListener('change', stopSliderDrag);
 
     brightnessSlider.addEventListener('input', function() {
         updateSliderThumb(this);
@@ -286,8 +376,6 @@ function initControlsPage() {
 
     const modelSelect = document.getElementById('modelSelect');
     const logo = document.getElementById('logo');
-    const rebootBtn = document.getElementById('rebootBtn');
-    const modelRow = document.getElementById('modelRow');
 
     // Model Selection Listener
     modelSelect.addEventListener('change', function() {
@@ -305,11 +393,10 @@ function initControlsPage() {
             }));
         }
 
-        rebootBtn.classList.add('visible');
-        modelRow.classList.add('has-reboot');
+        setRebootIndicator(true);
     });
 
-    rebootBtn.addEventListener('click', function() {
+    document.getElementById('rebootBtn').addEventListener('click', function() {
         this.innerHTML = "Rebooting...";
         this.style.opacity = "0.5";
 
@@ -319,9 +406,6 @@ function initControlsPage() {
 
         setTimeout(() => location.reload(), 4000);
     });
-
-    // Power button toggle state
-    let deviceIsOn = true;
 
     // Button ripple effects
     document.querySelectorAll('.btn').forEach(btn => {
@@ -369,20 +453,7 @@ function initControlsPage() {
 
             // Power button: toggle AFTER send so the correct cmd was sent
             if (this.id === 'powerBtn') {
-                deviceIsOn = !deviceIsOn;
-                if (deviceIsOn) {
-                    // Device is now ON — button should offer to turn it Off
-                    this.textContent = 'Off';
-                    this.dataset.cmd = 'power_off';
-                    this.classList.remove('on');
-                    this.classList.add('off');
-                } else {
-                    // Device is now OFF — button should offer to turn it On
-                    this.textContent = 'On';
-                    this.dataset.cmd = 'power_on';
-                    this.classList.remove('off');
-                    this.classList.add('on');
-                }
+                applyPowerState(!deviceIsOn);
             }
         });
     });

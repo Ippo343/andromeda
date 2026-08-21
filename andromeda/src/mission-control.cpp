@@ -42,12 +42,14 @@ void MissionControl::processWebCommands()
             case CommandType::COLOR:
                 staticColor = CRGB(command.r, command.g, command.b);
                 if (!isInStaticColorMode) transitionToStaticColor();
+                stateDirty = true;
                 break;
             case CommandType::BRIGHTNESS:
                 setMaxBrightness(command.brightness);
                 break;
             case CommandType::MODEL:
                 FactoryConfig::setModelId(static_cast<ModelId>(command.modelId));
+                stateDirty = true;
                 break;
             case CommandType::REBOOT:
                 esp_restart();
@@ -180,6 +182,7 @@ void MissionControl::handleTransition(AbstractEffect* nextEffect, bool playAnima
         GEOMETRY.resetGlobalTransform();
 
     setNextTransition();
+    stateDirty = true;
 }
 
 void MissionControl::holdEffect()
@@ -202,12 +205,14 @@ void MissionControl::powerOff()
     ON = false;
     setMinCpuFrequency();
     PerformanceMonitor::Instance().stop();
+    stateDirty = true;
 }
 
 void MissionControl::powerOn()
 {
     ON = true;
     setMaxCpuFrequency();
+    stateDirty = true;
 }
 
 void MissionControl::update(milliseconds_t t)

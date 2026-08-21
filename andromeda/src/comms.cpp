@@ -12,6 +12,7 @@ constexpr int DNS_PORT = 53;
 
 Comms::Comms()
     : server(80),
+      ws("/ws"),
       webServerTaskHandle(nullptr),
       dnsServer(nullptr),
       isAPMode(false),
@@ -82,6 +83,7 @@ void Comms::webServerTask(void* parameter)
     while (true)
     {
         if (comms->isAPMode && comms->dnsServer) { comms->dnsServer->processNextRequest(); }
+        comms->broadcastStateIfDirty();
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 }
@@ -89,12 +91,17 @@ void Comms::webServerTask(void* parameter)
 void Comms::setupRoutes()
 {
     // WebSocket endpoint
-    static AsyncWebSocket ws("/ws");
     ws.onEvent(
         [](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg,
            uint8_t* data, size_t len)
         {
-            if (type == WS_EVT_DATA)
+            if (type == WS_EVT_CONNECT)
+            {
+                char buf[WsStateBuilder::JSON_CAPACITY];
+                size_t stateLen = Comms::Instance().buildCurrentStateJson(buf, sizeof(buf));
+                if (stateLen) client->text(buf, stateLen);
+            }
+            else if (type == WS_EVT_DATA)
             {
                 AwsFrameInfo* info = (AwsFrameInfo*)arg;
                 if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT)
@@ -237,6 +244,39 @@ bool Comms::processWiFiCredentials(AsyncWebServerRequest* request, const String&
             return true;
     }
     return true;
+}
+
+size_t Comms::buildCurrentStateJson(char* outBuffer, size_t outBufferSize)
+{
+    MissionControl& mc = MissionControl::Instance();
+    const ModelConfig* runningConfig = GEOMETRY.getConfig();
+    ModelId configuredId =
+        FactoryConfig::isConfigured() ? FactoryConfig::getModelId() : runningConfig->id;
+    const ModelConfig* configuredConfig = getModelConfig(configuredId);
+
+    WsStateBuilder::DeviceState state{
+        .power = mc.isOn(),
+        .brightness = mc.getMaxBrightness(),
+        .colorR = mc.staticColor.r,
+        .colorG = mc.staticColor.g,
+        .colorB = mc.staticColor.b,
+        .colorActive = mc.isInStaticColorMode,
+        .effectName = mc.getEffectName(),
+        .runningModel = {static_cast<uint16_t>(runningConfig->id), runningConfig->name},
+        .configuredModel = {static_cast<uint16_t>(configuredId),
+                            configuredConfig ? configuredConfig->name : "Unknown"},
+        .fps = PerformanceMonitor::Instance().fps(),
+    };
+    return WsStateBuilder::buildStateJson(state, outBuffer, outBufferSize);
+}
+
+void Comms::broadcastStateIfDirty()
+{
+    if (!MissionControl::Instance().consumeStateDirty()) return;
+
+    char buf[WsStateBuilder::JSON_CAPACITY];
+    size_t len = buildCurrentStateJson(buf, sizeof(buf));
+    if (len) ws.textAll(buf, len);
 }
 
 void Comms::printWifiStatus()

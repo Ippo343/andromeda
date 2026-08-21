@@ -1,3 +1,4 @@
+#include <ArduinoJson.h>
 #include <unity.h>
 
 #include <cstring>
@@ -113,6 +114,7 @@ class CommsTestAccess
     static AsyncWebServer& server(Comms& c) { return c.server; }
     static bool isAPMode(Comms& c) { return c.isAPMode; }
     static String scanWiFiNetworks(Comms& c) { return c.scanWiFiNetworks(); }
+    static void broadcastStateIfDirty(Comms& c) { c.broadcastStateIfDirty(); }
 };
 
 namespace
@@ -298,6 +300,62 @@ void test_ws_valid_text_frame_queues_command()
 }
 
 // ---------------------------------------------------------------------------
+// State broadcast (WS_EVT_CONNECT push + dirty-flag broadcast)
+// ---------------------------------------------------------------------------
+
+void test_ws_connect_pushes_initial_state()
+{
+    AsyncWebSocket* ws = CommsTestAccess::server(Comms::Instance()).webSocket;
+    TEST_ASSERT_NOT_NULL(ws);
+
+    AsyncWebSocketClient client;
+    ws->simulateConnect(&client);
+
+    TEST_ASSERT_FALSE(client.lastSentText.empty());
+
+    StaticJsonDocument<WsStateBuilder::JSON_CAPACITY> doc;
+    TEST_ASSERT_FALSE(deserializeJson(doc, client.lastSentText));
+    TEST_ASSERT_EQUAL_STRING("state", doc["type"]);
+    TEST_ASSERT_EQUAL(MissionControl::Instance().getMaxBrightness(), doc["brightness"].as<int>());
+}
+
+void test_state_broadcast_after_brightness_command()
+{
+    AsyncWebSocket* ws = CommsTestAccess::server(Comms::Instance()).webSocket;
+
+    char message[] = "{\"type\":\"brightness\",\"value\":77}";
+    AwsFrameInfo info;
+    info.final = true;
+    info.index = 0;
+    info.len = strlen(message);
+    info.opcode = WS_TEXT;
+    std::vector<uint8_t> buf(message, message + strlen(message) + 1);
+    ws->simulateDataFrame(info, buf.data(), strlen(message));
+
+    MissionControl::Instance().update(0);
+    TEST_ASSERT_EQUAL(77, MissionControl::Instance().getMaxBrightness());
+
+    CommsTestAccess::broadcastStateIfDirty(Comms::Instance());
+
+    TEST_ASSERT_FALSE(ws->lastBroadcastText.empty());
+    StaticJsonDocument<WsStateBuilder::JSON_CAPACITY> doc;
+    TEST_ASSERT_FALSE(deserializeJson(doc, ws->lastBroadcastText));
+    TEST_ASSERT_EQUAL(77, doc["brightness"].as<int>());
+}
+
+void test_state_broadcast_skipped_when_not_dirty()
+{
+    AsyncWebSocket* ws = CommsTestAccess::server(Comms::Instance()).webSocket;
+    ws->lastBroadcastText.clear();
+
+    // Nothing changed since the last consumeStateDirty() call, so the poll
+    // should be a no-op.
+    CommsTestAccess::broadcastStateIfDirty(Comms::Instance());
+
+    TEST_ASSERT_TRUE(ws->lastBroadcastText.empty());
+}
+
+// ---------------------------------------------------------------------------
 // Captive portal
 // ---------------------------------------------------------------------------
 
@@ -346,6 +404,10 @@ int main(int argc, char** argv)
     RUN_TEST(test_scan_route_returns_scanning_placeholder_on_cache_miss);
 
     RUN_TEST(test_ws_valid_text_frame_queues_command);
+
+    RUN_TEST(test_ws_connect_pushes_initial_state);
+    RUN_TEST(test_state_broadcast_after_brightness_command);
+    RUN_TEST(test_state_broadcast_skipped_when_not_dirty);
 
     RUN_TEST(test_not_found_redirects_in_ap_mode);
     RUN_TEST(test_not_found_returns_404_in_station_mode);
