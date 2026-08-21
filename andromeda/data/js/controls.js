@@ -37,7 +37,7 @@ class ColorWheel {
         this.preview = document.getElementById(previewId);
         this.info = document.getElementById(infoId);
 
-        this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+        this.ctx = this.canvas.getContext('2d');
         this.radius = this.canvas.width / 2;
         this.centerX = this.radius;
         this.centerY = this.radius;
@@ -132,7 +132,17 @@ class ColorWheel {
 
     handleInteraction(e) {
         e.preventDefault();
+        // Measured live from the rendered box (CSS pixels) rather than
+        // taken from this.centerX/this.radius (fixed from the canvas's
+        // internal bitmap resolution at construction): if the rendered size
+        // ever drifts from that bitmap size - DPI/zoom rounding, or the
+        // mobile 70vw breakpoint - the two stop lining up, and the assumed
+        // center sits off from the true visual center, which clamps the
+        // drag short of the rim on one side and past it on the opposite side.
         const rect = this.canvas.getBoundingClientRect();
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        const radius = Math.min(rect.width, rect.height) / 2;
 
         let clientX, clientY;
         if (e.touches) {
@@ -146,33 +156,36 @@ class ColorWheel {
         let x = clientX - rect.left;
         let y = clientY - rect.top;
 
-        const dx = x - this.centerX;
-        const dy = y - this.centerY;
+        const dx = x - centerX;
+        const dy = y - centerY;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
-        // Clamp to just inside the rim rather than rejecting: a float
-        // distance can pass while the truncated integer pixel getImageData
-        // actually samples lands just past the drawn circle, in the
-        // untouched (transparent/black) region - the 1px margin keeps the
-        // sampled pixel safely inside regardless of rounding.
-        const maxDistance = this.radius - 1;
-        if (distance > maxDistance) {
-            const scale = maxDistance / distance;
-            x = this.centerX + dx * scale;
-            y = this.centerY + dy * scale;
+        if (distance > radius) {
+            const scale = radius / distance;
+            x = centerX + dx * scale;
+            y = centerY + dy * scale;
         }
 
-        this.updateColor(x, y);
+        this.updateColor(x, y, centerX, centerY, radius);
     }
 
-    updateColor(x, y) {
+    updateColor(x, y, centerX = this.centerX, centerY = this.centerY, radius = this.radius) {
         this.selector.style.left = `${x}px`;
         this.selector.style.top = `${y}px`;
 
-        const imageData = this.ctx.getImageData(x, y, 1, 1).data;
-        const r = imageData[0];
-        const g = imageData[1];
-        const b = imageData[2];
+        // Computed directly from (x, y) rather than sampled back off the
+        // canvas: getImageData floors fractional coordinates toward -Infinity,
+        // which in the NW quadrant (dx < 0, dy < 0) pushes the sampled pixel
+        // further from center than intended, occasionally past the drawn
+        // circle into the transparent border and reading back as (0,0,0).
+        const dx = x - centerX;
+        const dy = y - centerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx);
+        const hue = (angle * 180 / Math.PI + 360) % 360;
+        const saturation = Math.min(distance / radius, 1);
+
+        const [r, g, b] = this.hsvToRgb(hue, saturation, 1);
 
         const colorString = `rgb(${r}, ${g}, ${b})`;
 
