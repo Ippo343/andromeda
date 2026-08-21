@@ -3,6 +3,7 @@
 #include <ArduinoLog.h>
 #include <Preferences.h>
 #include <WiFi.h>
+#include <esp_netif.h>
 
 namespace
 {
@@ -71,6 +72,23 @@ void EspWiFiConnector::enterAPMode()
     WiFi.disconnect();
     WiFi.mode(WIFI_AP);
     WiFi.softAP(AP_SSID, AP_PASSWORD);
+
+    // The AP-mode DHCP server doesn't offer a DNS-server option by default, so
+    // joining phones never learn to query us for DNS and skip captive-portal
+    // detection entirely (no auto-popup on iOS/Android). Explicitly offer our
+    // own IP as the DNS server so the wildcard DNSServer + hotspot-detect
+    // routes in comms.cpp actually get hit.
+    esp_netif_t* apNetif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
+    if (apNetif)
+    {
+        esp_netif_dns_info_t dnsInfo;
+        dnsInfo.ip.type = ESP_IPADDR_TYPE_V4;
+        dnsInfo.ip.u_addr.ip4.addr = static_cast<uint32_t>(WiFi.softAPIP());
+        esp_netif_dhcps_stop(apNetif);
+        esp_netif_set_dns_info(apNetif, ESP_NETIF_DNS_MAIN, &dnsInfo);
+        esp_netif_dhcps_start(apNetif);
+    }
+    else { Log.warningln("Could not get AP netif handle to set DHCP DNS option"); }
 }
 
 void EspPreferencesStore::saveCredentials(const String& ssid, const String& password)
