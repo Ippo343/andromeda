@@ -90,3 +90,14 @@ inline void setCpuFrequencyMhz(uint32_t) {}
 // ESP-IDF function pulled in by MissionControl::processWebCommands() (REBOOT
 // command) - no-op on the host, there is nothing to restart.
 inline void esp_restart() {}
+
+// The Arduino core's global "ESP" object (esp32-hal-*.h) - comms.cpp calls
+// ESP.restart() from tasks that never actually run natively (see
+// freertos/FreeRTOS.h's xTaskCreate mock), but the call still needs to
+// compile as dead code inside those lambdas.
+class EspClass
+{
+   public:
+    void restart() {}
+};
+inline EspClass ESP;
