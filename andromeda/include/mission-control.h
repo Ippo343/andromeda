@@ -13,7 +13,12 @@
 #include "perf-monitor.h"
 #include "utils.h"
 
-// Web command types, dispatched by MissionControl::processWebCommands()
+// Web command types, dispatched by MissionControl::processWebCommands().
+// BRIGHTNESS has no entry here: it never touches this queue (see comms.cpp's
+// WS handler) since it's applied directly via setMaxBrightness() - the
+// render loop re-reads maxBrightness every frame, so there's no correctness
+// reason to funnel a drag's worth of updates through the queue and its
+// per-command log line.
 enum class CommandType : uint8_t
 {
     NEXT,
@@ -21,10 +26,31 @@ enum class CommandType : uint8_t
     POWER_OFF,
     POWER_ON,
     COLOR,
-    BRIGHTNESS,
     MODEL,
     REBOOT
 };
+
+inline const char* commandTypeToString(CommandType type)
+{
+    switch (type)
+    {
+        case CommandType::NEXT:
+            return "NEXT";
+        case CommandType::HOLD:
+            return "HOLD";
+        case CommandType::POWER_OFF:
+            return "POWER_OFF";
+        case CommandType::POWER_ON:
+            return "POWER_ON";
+        case CommandType::COLOR:
+            return "COLOR";
+        case CommandType::MODEL:
+            return "MODEL";
+        case CommandType::REBOOT:
+            return "REBOOT";
+    }
+    return "UNKNOWN";
+}
 
 // Payload-carrying command sent from a web client into the render task's
 // command queue. Flat POD (no union) so FreeRTOS's byte-copy queue
@@ -34,7 +60,6 @@ struct Command
 {
     CommandType type;
     uint8_t r = 0, g = 0, b = 0;  // COLOR
-    uint8_t brightness = 0;       // BRIGHTNESS
     uint16_t modelId = 0;         // MODEL
 
     static Command Next() { return {CommandType::NEXT}; }
@@ -48,12 +73,6 @@ struct Command
         c.r = r;
         c.g = g;
         c.b = b;
-        return c;
-    }
-    static Command Brightness(uint8_t v)
-    {
-        Command c{CommandType::BRIGHTNESS};
-        c.brightness = v;
         return c;
     }
     static Command Model(uint16_t id)
@@ -107,6 +126,19 @@ class MissionControl
     CRGB staticColor = CRGB::White;
 
     inline bool isColorActive() const { return effect && effect->wantsLiveColorUpdates(); }
+
+    // Fast path for isColorActive() callers: update() re-reads staticColor
+    // every frame and pushes it into the live effect, so a color drag can
+    // write it directly from the network task instead of round-tripping
+    // through the command queue - restores the pre-queue slider/wheel
+    // responsiveness without reintroducing a race (only safe once an effect
+    // is already live; the initial mode switch still needs to queue through
+    // transitionToStaticColor()).
+    inline void setLiveColor(uint8_t r, uint8_t g, uint8_t b)
+    {
+        staticColor = CRGB(r, g, b);
+        stateDirty = true;
+    }
 
     // 80 MHz seems to be the minimum frequency for the WiFi and LED drivers to work,
     // at least on the C3 where I tried messing with it. At 40MHz nothing works lol.

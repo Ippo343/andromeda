@@ -107,9 +107,26 @@ void Comms::setupRoutes()
                 if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT)
                 {
                     data[len] = 0;
+                    const char* json = reinterpret_cast<const char*>(data);
+                    MissionControl& mc = MissionControl::Instance();
+
+                    // BRIGHTNESS and live COLOR updates fire at drag speed (dozens/sec) -
+                    // routing every one through the command queue overruns it and starves
+                    // async_tcp with per-command logging. Apply them directly; they're simple
+                    // field writes the render task re-reads every frame, same as before
+                    // commands were queue-only. Everything else stays queued since it mutates
+                    // render-task-owned state (allocating effects, etc.).
+                    uint8_t brightnessValue;
                     Command command;
-                    if (WsCommandParser::parse(reinterpret_cast<const char*>(data), command))
-                        MissionControl::Instance().queueWebCommand(command);
+                    if (WsCommandParser::parseBrightness(json, brightnessValue))
+                        mc.setMaxBrightness(brightnessValue);
+                    else if (WsCommandParser::parse(json, command))
+                    {
+                        if (command.type == CommandType::COLOR && mc.isColorActive())
+                            mc.setLiveColor(command.r, command.g, command.b);
+                        else
+                            mc.queueWebCommand(command);
+                    }
                     else
                         Log.warningln("Unrecognized WS command message: %s", (char*)data);
                 }

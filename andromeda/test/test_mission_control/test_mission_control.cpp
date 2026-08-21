@@ -283,16 +283,6 @@ void test_queue_color_command_while_already_in_static_mode_updates_color()
     TEST_ASSERT_EQUAL_UINT8(60, mc.staticColor.b);
 }
 
-void test_queue_brightness_command_updates_max_brightness()
-{
-    MissionControl& mc = MissionControl::Instance();
-
-    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Brightness(77)));
-    mc.update(0);
-
-    TEST_ASSERT_EQUAL_UINT8(77, mc.getMaxBrightness());
-}
-
 void test_queue_model_command_updates_factory_config()
 {
     MissionControl& mc = MissionControl::Instance();
@@ -341,7 +331,6 @@ int main(int argc, char** argv)
     RUN_TEST(test_power_off_and_on_toggle_state);
     RUN_TEST(test_queue_color_command_sets_static_color_and_enters_static_mode);
     RUN_TEST(test_queue_color_command_while_already_in_static_mode_updates_color);
-    RUN_TEST(test_queue_brightness_command_updates_max_brightness);
     RUN_TEST(test_queue_model_command_updates_factory_config);
     RUN_TEST(test_ws_json_color_command_flows_through_to_static_color);
 

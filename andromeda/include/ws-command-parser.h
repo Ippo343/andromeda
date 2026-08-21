@@ -66,15 +66,6 @@ inline bool parse(const char* json, Command& out)
         return true;
     }
 
-    if (strstr(json, "\"type\":\"brightness\""))
-    {
-        long value;
-        if (!findField(json, "\"value\":", value)) return false;
-        if (value < 0 || value > 255) return false;
-        out = Command::Brightness(static_cast<uint8_t>(value));
-        return true;
-    }
-
     if (strstr(json, "\"type\":\"model\""))
     {
         long id;
@@ -85,6 +76,20 @@ inline bool parse(const char* json, Command& out)
     }
 
     return false;
+}
+
+// Fast-path parser for BRIGHTNESS: applied directly from the network task
+// (setMaxBrightness() re-read every frame by the render loop) rather than
+// carried through Command/CommandType and the render-task command queue -
+// see the queue-overrun/watchdog note on CommandType in mission-control.h.
+inline bool parseBrightness(const char* json, uint8_t& outValue)
+{
+    if (!strstr(json, "\"type\":\"brightness\"")) return false;
+    long value;
+    if (!findField(json, "\"value\":", value)) return false;
+    if (value < 0 || value > 255) return false;
+    outValue = static_cast<uint8_t>(value);
+    return true;
 }
 
 }  // namespace WsCommandParser

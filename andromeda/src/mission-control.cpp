@@ -23,7 +23,7 @@ void MissionControl::processWebCommands()
     Command command;
     while (xQueueReceive(webCommandQueue, &command, 0) == pdTRUE)
     {
-        Log.noticeln("Processing web command: %d", static_cast<int>(command.type));
+        Log.noticeln("Processing web command: %s", commandTypeToString(command.type));
 
         switch (command.type)
         {
@@ -43,9 +43,6 @@ void MissionControl::processWebCommands()
                 staticColor = CRGB(command.r, command.g, command.b);
                 if (!isColorActive()) transitionToStaticColor();
                 stateDirty = true;
-                break;
-            case CommandType::BRIGHTNESS:
-                setMaxBrightness(command.brightness);
                 break;
             case CommandType::MODEL:
                 FactoryConfig::setModelId(static_cast<ModelId>(command.modelId));
@@ -70,8 +67,8 @@ bool MissionControl::queueWebCommand(Command command)
     if (xQueueSend(webCommandQueue, &command, 0) == pdTRUE) { return true; }
     else
     {
-        Log.warningln("Web command queue full, dropping command: %d",
-                      static_cast<int>(command.type));
+        Log.warningln("Web command queue full, dropping command: %s",
+                      commandTypeToString(command.type));
         return false;
     }
 }

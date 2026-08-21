@@ -343,6 +343,37 @@ void test_state_broadcast_after_brightness_command()
     TEST_ASSERT_EQUAL(77, doc["brightness"].as<int>());
 }
 
+void test_rapid_brightness_commands_bypass_queue_and_dont_drop()
+{
+    AsyncWebSocket* ws = CommsTestAccess::server(Comms::Instance()).webSocket;
+
+    // Drive far more brightness updates than the 10-slot web command queue
+    // could ever hold, back-to-back with no update()/processWebCommands()
+    // drain in between - this is what a fast slider drag looks like.
+    // Regression test for the crash where routing BRIGHTNESS through the
+    // queue silently dropped most of a drag's updates once the queue filled,
+    // and the resulting flood of "queue full" log lines on the async_tcp
+    // task tripped the watchdog. Each value must land immediately.
+    constexpr int kCommandCount = 30;
+    for (int value = 1; value <= kCommandCount; value++)
+    {
+        char message[64];
+        snprintf(message, sizeof(message), "{\"type\":\"brightness\",\"value\":%d}", value);
+        AwsFrameInfo info;
+        info.final = true;
+        info.index = 0;
+        info.len = strlen(message);
+        info.opcode = WS_TEXT;
+        std::vector<uint8_t> buf(message, message + strlen(message) + 1);
+        ws->simulateDataFrame(info, buf.data(), strlen(message));
+
+        TEST_ASSERT_EQUAL(value, MissionControl::Instance().getMaxBrightness());
+    }
+
+    // Leave the dirty flag consumed so it doesn't bleed into later tests.
+    CommsTestAccess::broadcastStateIfDirty(Comms::Instance());
+}
+
 void test_state_broadcast_skipped_when_not_dirty()
 {
     AsyncWebSocket* ws = CommsTestAccess::server(Comms::Instance()).webSocket;
@@ -407,6 +438,7 @@ int main(int argc, char** argv)
 
     RUN_TEST(test_ws_connect_pushes_initial_state);
     RUN_TEST(test_state_broadcast_after_brightness_command);
+    RUN_TEST(test_rapid_brightness_commands_bypass_queue_and_dont_drop);
     RUN_TEST(test_state_broadcast_skipped_when_not_dirty);
 
     RUN_TEST(test_not_found_redirects_in_ap_mode);
