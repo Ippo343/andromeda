@@ -7,6 +7,7 @@
 #include <Preferences.h>
 
 #include "WiFi.h"
+#include "comms-utils.h"
 #include "mission-control.h"
 #include "secrets.h"
 #include "utils.h"

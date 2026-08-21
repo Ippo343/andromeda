@@ -1,3 +1,7 @@
 .pio
 .vscode/
+*.info
+coverage-report/
+coverage_html/
+*.gcov
 

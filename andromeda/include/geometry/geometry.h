@@ -102,6 +102,14 @@ class Geometry
     // Load model coordinates from PROGMEM into RAM
     void loadCoordinates();
 
+    // Pure part of initialize(): allocates strips and loads coordinate data.
+    // No hardware/FastLED calls. Split out so it can run in native unit tests.
+    void allocateAndLoadCoordinates(ModelId model_id);
+
+    // Hardware-only part of initialize(): binds each strip's buffer to a
+    // FastLED controller on its configured pin. Not testable host-side.
+    void bindHardwareDrivers();
+
    public:
     Geometry();
     ~Geometry();
@@ -109,6 +117,11 @@ class Geometry
     // Initialize with a specific model
     // Should be called once at startup
     void initialize(ModelId model_id);
+
+    // Same as initialize(), but skips bindHardwareDrivers() (the
+    // FastLED.addLeds<...> calls), so it can run in native unit tests
+    // without real/simulated LED hardware.
+    void initializeForTest(ModelId model_id);
 
     inline const LedStrip* getStrips() const { return strips; }
 

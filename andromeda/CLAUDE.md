@@ -53,3 +53,7 @@ Core pattern: singletons accessed globally. Main loop: `MissionControl::update(m
 ## File Structure
 
 Use glob/grep to explore live: `include/` (headers), `src/` (implementations), `geometry/` (model configs). Don't hardcode paths; search when needed.
+
+## Testing
+
+Native (host) unit tests run via `pio test -e native` — compiled and run on the dev machine's GCC toolchain, not on real hardware, using FastLED's own native/stub platform. Covers utils, geometry math, effects, MissionControl's pure logic, and perf-monitor. `comms.cpp` and `animations.cpp` are excluded (real-time/network-bound, no small seam exists). `test/mocks/` provides minimal Arduino/ArduinoLog/Preferences/FreeRTOS stand-ins for the native build; `-DUNIT_TEST` gates a few test-only `friend` accessors into otherwise-private class internals. Requires a host GCC toolchain on `PATH` (MSYS2 on Windows — not bundled by PlatformIO). CI runs this plus a build-only check of all 3 hardware envs, see `.github/workflows/test.yml`.

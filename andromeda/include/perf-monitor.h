@@ -81,4 +81,11 @@ class PerformanceMonitor
     unsigned short frameTimes[SAMPLE_COUNT] = {0};  // Circular buffer of frame intervals
     unsigned short lastFrameTime = 0;               // Last frame timestamp
     size_t frameIndex = 0;                          // Current position in buffer
+
+#ifdef UNIT_TEST
+    // Test-only access so native unit tests can fill a synthetic sample
+    // buffer directly instead of depending on real elapsed millis() between
+    // tick() calls (which would make fps() tests either flaky or slow).
+    friend class PerformanceMonitorTestAccess;
+#endif
 };

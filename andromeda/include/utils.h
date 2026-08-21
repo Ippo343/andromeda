@@ -51,6 +51,12 @@ class RandParam
 class RandBool : public RandParam<bool, 0, 1>
 {
    public:
+    // RandParam's constructor calls the still-virtual randomize() during base
+    // construction, which resolves to RandParam::randomize() rather than this
+    // override (the vtable isn't set to the derived type yet). Re-randomize
+    // here, once construction of this class has actually started, so `value`
+    // ends up using this class's randomize().
+    RandBool() { randomize(); }
     void randomize() override;
 };
 
@@ -60,6 +66,9 @@ class RandBool : public RandParam<bool, 0, 1>
 class RandSign : public RandParam<char, -1, 1>
 {
    public:
+    // See RandBool's constructor comment: without this, the base
+    // RandParam::randomize() runs instead, which can produce 0.
+    RandSign() { randomize(); }
     void randomize() override;
 };
 

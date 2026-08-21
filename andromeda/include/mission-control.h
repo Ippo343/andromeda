@@ -151,4 +151,11 @@ class MissionControl
 
     QueueHandle_t webCommandQueue = nullptr;
     static constexpr int WEB_QUEUE_SIZE = 10;
+
+#ifdef UNIT_TEST
+    // Test-only access to private members (calcBrightness, setNextTransition,
+    // the timing fields) so native unit tests can exercise them directly
+    // without widening the real public API.
+    friend class MissionControlTestAccess;
+#endif
 };

@@ -326,7 +326,7 @@ void Comms::startAsyncScan()
 
 String Comms::scanWiFiNetworks()
 {
-    if (scanComplete && (millis() - lastScanTime < SCAN_CACHE_MS)) return scanResults;
+    if (isScanCacheValid(scanComplete, lastScanTime, millis(), SCAN_CACHE_MS)) return scanResults;
     if (!scanInProgress) startAsyncScan();
     return scanInProgress ? "{\"networks\":[],\"status\":\"scanning\"}" : scanResults;
 }

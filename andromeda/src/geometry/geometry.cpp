@@ -141,7 +141,7 @@ void addLedsToPin(uint8_t pin, CRGB* buffer, int count)
     }
 }
 
-Geometry::Geometry() : config(nullptr), strips(nullptr) {}
+Geometry::Geometry() : config(nullptr), _fixedStrips(nullptr), strips(nullptr) {}
 
 Geometry::~Geometry()
 {
@@ -150,9 +150,14 @@ Geometry::~Geometry()
         delete[] strips;
         strips = nullptr;
     }
+    if (_fixedStrips)
+    {
+        delete[] _fixedStrips;
+        _fixedStrips = nullptr;
+    }
 }
 
-void Geometry::initialize(ModelId model_id)
+void Geometry::allocateAndLoadCoordinates(ModelId model_id)
 {
     // Get model configuration
     config = getModelConfig(model_id);
@@ -164,6 +169,10 @@ void Geometry::initialize(ModelId model_id)
     }
 
     Log.noticeln("Initializing geometry for: %s", config->name);
+
+    // Free any previously allocated strips before re-initializing
+    if (strips) delete[] strips;
+    if (_fixedStrips) delete[] _fixedStrips;
 
     // Allocate strip array
     strips = new LedStrip[config->num_strips];
@@ -183,16 +192,26 @@ void Geometry::initialize(ModelId model_id)
 
     // Load coordinates from PROGMEM
     loadCoordinates();
+}
 
+void Geometry::bindHardwareDrivers()
+{
     // Initialize FastLED controllers for each strip
     for (size_t i = 0; i < config->num_strips; i++)
     {
         uint8_t pin = pgm_read_byte(&config->pin_map[i]);
         addLedsToPin(pin, strips[i].buffer, strips[i].num_leds);
     }
+}
 
+void Geometry::initialize(ModelId model_id)
+{
+    allocateAndLoadCoordinates(model_id);
+    bindHardwareDrivers();
     Log.noticeln("Geometry initialized successfully");
 }
+
+void Geometry::initializeForTest(ModelId model_id) { allocateAndLoadCoordinates(model_id); }
 
 void Geometry::loadCoordinates()
 {
