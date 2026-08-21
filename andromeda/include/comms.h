@@ -4,13 +4,14 @@
 #include <ESPAsyncWebServer.h>
 #include <ESPmDNS.h>
 #include <LittleFS.h>
-#include <Preferences.h>
 
 #include "WiFi.h"
 #include "comms-utils.h"
 #include "mission-control.h"
 #include "secrets.h"
 #include "utils.h"
+#include "wifi-esp-adapters.h"
+#include "wifi-manager.h"
 
 class Comms
 {
@@ -27,13 +28,23 @@ class Comms
 
    private:
     Comms();
-    int status = WL_IDLE_STATUS;
+
     AsyncWebServer server;
 
     TaskHandle_t webServerTaskHandle;
     DNSServer* dnsServer;
-    Preferences preferences;
     bool isAPMode;
+
+    EspWiFiConnector wifiConnector;
+    EspPreferencesStore preferencesStore;
+    WifiManager realWifiManager;
+
+    // Always points at realWifiManager in production. Native tests
+    // (CommsTestAccess) repoint this at a WifiManager built from fake
+    // IWiFiConnector/IPreferencesStore, so route handlers exercise real
+    // WifiManager logic without ever calling EspWiFiConnector's real,
+    // wall-clock-bound WiFi.status() polling loops.
+    WifiManager* wifiManager;
 
     volatile bool scanInProgress;
     volatile bool scanComplete;
@@ -41,10 +52,8 @@ class Comms
     unsigned long lastScanTime;
     static constexpr unsigned long SCAN_CACHE_MS = 30000;
 
-    bool connectToWiFi(const char* ssid, const char* password);
     bool startAPMode();
     bool startStationMode();
-    bool testWiFiConnection(const char* ssid, const char* password);
     bool processWiFiCredentials(AsyncWebServerRequest* request, const String& ssid,
                                 const String& password);
 
@@ -55,4 +64,11 @@ class Comms
     void startAsyncScan();
     String scanWiFiNetworks();
     void onWiFiScanComplete(int networksFound);
+
+#ifdef UNIT_TEST
+    // Test-only access so native integration tests can inject fake
+    // IWiFiConnector/IPreferencesStore implementations and drive route
+    // handlers directly without a real WiFi/NVS stack.
+    friend class CommsTestAccess;
+#endif
 };
