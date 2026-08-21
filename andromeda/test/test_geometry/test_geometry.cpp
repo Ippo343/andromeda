@@ -238,6 +238,19 @@ void test_model_config_is_in_family()
 }
 
 // ---------------------------------------------------------------------------
+// FactoryConfig (Preferences-backed model ID storage)
+// ---------------------------------------------------------------------------
+
+void test_factory_config_is_configured_reflects_model_id()
+{
+    FactoryConfig::setModelId(ModelId::UNKNOWN);
+    TEST_ASSERT_FALSE(FactoryConfig::isConfigured());
+
+    FactoryConfig::setModelId(ModelId::SINGLE_STRIP_TEST_DEVICE);
+    TEST_ASSERT_TRUE(FactoryConfig::isConfigured());
+}
+
+// ---------------------------------------------------------------------------
 // Destructor
 // ---------------------------------------------------------------------------
 
@@ -283,6 +296,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_get_model_config_unknown_id_returns_null);
     RUN_TEST(test_get_model_name_known_and_unknown);
     RUN_TEST(test_model_config_is_in_family);
+
+    RUN_TEST(test_factory_config_is_configured_reflects_model_id);
 
     RUN_TEST(test_geometry_destructor_frees_allocated_strips);
 
