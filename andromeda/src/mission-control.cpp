@@ -98,6 +98,12 @@ uint8_t MissionControl::calcBrightness(milliseconds_t t)
     // Most of the time is spent in the middle so test that first
     // we are all about microseconds in this highly efficient architecture
     if (t >= fadeInEnd && t <= fadeOutStart) { brightness = this->maxBrightness; }
+    // t can be older than effectStart: update()'s t is captured by the caller before
+    // processWebCommands() runs, and a command handled there (e.g. NEXT) can call
+    // handleTransition() synchronously, resetting effectStart to a later millis()
+    // before this same update() call reaches here. Without this guard, t - effectStart
+    // underflows (both are uint32_t) and produces a large bogus brightness instead of 0.
+    else if (t < effectStart) { brightness = 0; }
     else if (t < fadeInEnd)
     {
         milliseconds_t dt = (t - effectStart);
@@ -127,6 +133,7 @@ void MissionControl::runRandomAnimation()
     // First fade everything out to black and add a small delay
     // to create some separation from the effect
     FastLED.setBrightness(0);
+    FASTLED_SHOW();
     delay(200);
 
     // Reset the brightness to max and give control back to the animation
@@ -137,7 +144,10 @@ void MissionControl::runRandomAnimation()
     // Turn it down to zero and wait a little bit.
     // This creates another small separation before the effect.
     // The brightness must start from zero to avoid ugly jumps when the lerp kicks in
+    // setBrightness() only takes effect on the next show(), so push it now or the
+    // strip keeps displaying the animation's last (bright) frame during the delay.
     FastLED.setBrightness(0);
+    FASTLED_SHOW();
     delay(200);
 
     delete animation;

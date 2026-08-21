@@ -10,6 +10,7 @@
 // test_effects.cpp doing the same #include independently.
 #include "../../src/effects.cpp"
 #include "animation-base.h"
+#include "platforms/stub/time_stub.h"
 #include "ws-command-parser.h"
 
 // AbstractAnimation::GetName()/run() are declared in animation-base.h but
@@ -65,6 +66,18 @@ class MissionControlTestAccess
     {
         mc.nextTransition = t;
     }
+    static void setEffectStartValue(MissionControl& mc, milliseconds_t t) { mc.effectStart = t; }
+    static void setFadeInEndValue(MissionControl& mc, milliseconds_t t) { mc.fadeInEnd = t; }
+    static void setFadeOutStartValue(MissionControl& mc, milliseconds_t t) { mc.fadeOutStart = t; }
+    static void runRandomAnimation(MissionControl& mc) { mc.runRandomAnimation(); }
+};
+
+// Exposes PerformanceMonitor::lastFrameTime so tests can tell whether a
+// FASTLED_SHOW() (which ticks the monitor) has happened yet.
+class PerformanceMonitorTestAccess
+{
+   public:
+    static unsigned short lastFrameTime(PerformanceMonitor& pm) { return pm.lastFrameTime; }
 };
 
 void setUp()
@@ -96,6 +109,31 @@ void test_calc_brightness_before_effect_start_is_zero()
     // t == effectStart: dt=0 -> map(0, 0, FADE_IN_DURATION, 0, max) -> 0,
     // then dim8_raw(0) == 0.
     TEST_ASSERT_EQUAL_UINT8(0, MissionControlTestAccess::calcBrightness(mc, start));
+}
+
+// Reproduces the real "flash" bug: update()'s t is captured by the caller
+// before processWebCommands() runs, so a command handled there (e.g. NEXT)
+// that calls handleTransition() synchronously can leave t behind the
+// freshly-reset effectStart by the time calcBrightness() is reached later in
+// the same update() call. t and effectStart are both uint32_t, so t -
+// effectStart used to underflow into a huge value instead of clamping to 0 -
+// map()'s reinterpretation of that as a negative long then wrapped back into
+// a bogus, non-zero uint8_t brightness (a bright flash instead of a fade-in
+// from black).
+void test_calc_brightness_when_t_is_before_effect_start_is_zero()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setMaxBrightness(mc, 255);
+    // Pin effectStart/fadeInEnd/fadeOutStart to known, mutually consistent
+    // values, independent of how much real time has elapsed since the test
+    // process started (setNextTransition() would derive them from the real
+    // clock and could let a stale hold-plateau window mask this bug).
+    MissionControlTestAccess::setEffectStartValue(mc, 100000);
+    MissionControlTestAccess::setFadeInEndValue(mc, 102500);
+    MissionControlTestAccess::setFadeOutStartValue(mc, 200000);
+
+    TEST_ASSERT_EQUAL_UINT8(0, MissionControlTestAccess::calcBrightness(mc, 100000 - 800));
+    TEST_ASSERT_EQUAL_UINT8(0, MissionControlTestAccess::calcBrightness(mc, 100000 - 1));
 }
 
 void test_calc_brightness_ramps_up_during_fade_in()
@@ -202,6 +240,36 @@ void test_queue_web_command_and_process_hold()
     TEST_ASSERT_EQUAL_UINT32(~0UL, MissionControlTestAccess::nextTransition(mc));
 }
 
+// Reproduces the real "flash" bug end-to-end through update(): a NEXT
+// command handled inside processWebCommands() calls handleTransition()
+// synchronously, which resets effectStart to a fresh, later millis() - but
+// update()'s own "t" parameter was captured by the caller before
+// processWebCommands() ran, so for the rest of this same update() call it is
+// now stale (older than the new effectStart). calcBrightness(t) must treat
+// that as "effect hasn't started yet" (brightness 0), not compute a bogus
+// non-zero value from the underflowed t - effectStart - which is what
+// actually reaches the strip via FastLED.setBrightness()/show().
+void test_next_command_mid_update_does_not_flash_stale_t_into_high_brightness()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setMaxBrightness(mc, 255);
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Next()));
+
+    // A "stale" t, as if captured by the caller (main.cpp's loop()) right
+    // before processWebCommands() runs. runRandomAnimation()'s two real
+    // delay(200) calls (left un-mocked here, unlike other tests in this
+    // file) let genuine wall-clock time pass during handleTransition(), so
+    // the effectStart it sets afterward is guaranteed to be later than this
+    // - reproducing the real staleness, not a coincidental one.
+    milliseconds_t staleT = millis();
+
+    mc.update(staleT);
+
+    TEST_ASSERT_TRUE(MissionControlTestAccess::effectStart(mc) > staleT);
+    TEST_ASSERT_EQUAL_UINT8(0, FastLED.getBrightness());
+}
+
 void test_queue_web_command_fills_and_rejects_when_full()
 {
     MissionControl& mc = MissionControl::Instance();
@@ -294,6 +362,56 @@ void test_queue_model_command_updates_factory_config()
 }
 
 // ---------------------------------------------------------------------------
+// runRandomAnimation() - the strip must actually go black before and after
+// the transition animation, not just have FastLED's brightness field set.
+// setBrightness() alone has no visible effect until the next show(); a
+// missing show() there is what causes the "flash at the end of every
+// animation" bug (the strip keeps displaying the animation's last full-
+// brightness frame for the whole 200ms delay).
+// ---------------------------------------------------------------------------
+
+void test_run_random_animation_pushes_black_to_strip_before_each_delay()
+{
+    MissionControl& mc = MissionControl::Instance();
+
+    PerformanceMonitor::Instance().stop();  // reset lastFrameTime to 0
+
+    static int delayCallCount;
+    static unsigned short frameTimeAtDelay[2];
+    static uint8_t brightnessAtDelay[2];
+    delayCallCount = 0;
+
+    setDelayFunction(
+        [](uint32_t)
+        {
+            if (delayCallCount < 2)
+            {
+                frameTimeAtDelay[delayCallCount] =
+                    PerformanceMonitorTestAccess::lastFrameTime(PerformanceMonitor::Instance());
+                brightnessAtDelay[delayCallCount] = FastLED.getBrightness();
+            }
+            delayCallCount++;
+        });
+
+    MissionControlTestAccess::runRandomAnimation(mc);
+
+    setDelayFunction(fl::function<void(uint32_t)>());  // restore real delay() for other tests
+
+    // runRandomAnimation() must delay(200) twice: once before the animation,
+    // once after.
+    TEST_ASSERT_EQUAL_INT(2, delayCallCount);
+
+    // A non-zero lastFrameTime means PerformanceMonitor::tick() - and
+    // therefore FASTLED_SHOW()/FastLED.show() - already ran by the time each
+    // delay() fired, i.e. brightness 0 was actually pushed to the strip
+    // rather than just staged for the next unrelated show() call.
+    TEST_ASSERT_NOT_EQUAL(0, frameTimeAtDelay[0]);
+    TEST_ASSERT_NOT_EQUAL(0, frameTimeAtDelay[1]);
+    TEST_ASSERT_EQUAL_UINT8(0, brightnessAtDelay[0]);
+    TEST_ASSERT_EQUAL_UINT8(0, brightnessAtDelay[1]);
+}
+
+// ---------------------------------------------------------------------------
 // WsCommandParser -> queueWebCommand -> update() - the full WS message path
 // ---------------------------------------------------------------------------
 
@@ -318,6 +436,7 @@ int main(int argc, char** argv)
     UNITY_BEGIN();
 
     RUN_TEST(test_calc_brightness_before_effect_start_is_zero);
+    RUN_TEST(test_calc_brightness_when_t_is_before_effect_start_is_zero);
     RUN_TEST(test_calc_brightness_ramps_up_during_fade_in);
     RUN_TEST(test_calc_brightness_is_max_during_hold);
     RUN_TEST(test_calc_brightness_ramps_down_during_fade_out);
@@ -326,12 +445,14 @@ int main(int argc, char** argv)
     RUN_TEST(test_set_next_transition_orders_timestamps_correctly);
 
     RUN_TEST(test_queue_web_command_and_process_hold);
+    RUN_TEST(test_next_command_mid_update_does_not_flash_stale_t_into_high_brightness);
     RUN_TEST(test_queue_web_command_fills_and_rejects_when_full);
     RUN_TEST(test_update_does_not_dereference_null_effect_before_first_transition);
     RUN_TEST(test_power_off_and_on_toggle_state);
     RUN_TEST(test_queue_color_command_sets_static_color_and_enters_static_mode);
     RUN_TEST(test_queue_color_command_while_already_in_static_mode_updates_color);
     RUN_TEST(test_queue_model_command_updates_factory_config);
+    RUN_TEST(test_run_random_animation_pushes_black_to_strip_before_each_delay);
     RUN_TEST(test_ws_json_color_command_flows_through_to_static_color);
 
     return UNITY_END();
