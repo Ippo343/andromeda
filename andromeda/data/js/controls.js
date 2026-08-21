@@ -29,6 +29,28 @@ function updateSliderThumb(slider) {
     }
 }
 
+// Updates the color preview box, RGB label, and histogram bars together -
+// shared by live color-wheel drags and incoming state broadcasts so they
+// can't drift out of sync with each other.
+function applyColorDisplay(r, g, b) {
+    const colorPreview = document.getElementById('colorPreview');
+    const colorInfo = document.getElementById('colorInfo');
+    if (colorPreview) colorPreview.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+    if (colorInfo) {
+        colorInfo.innerHTML =
+            `<span style="color: #ff6b6b">${r}</span>, ` +
+            `<span style="color: #6bff6b">${g}</span>, ` +
+            `<span style="color: #6b6bff">${b}</span>`;
+    }
+
+    const histFillR = document.getElementById('histFillR');
+    const histFillG = document.getElementById('histFillG');
+    const histFillB = document.getElementById('histFillB');
+    if (histFillR) histFillR.style.width = `${(r / 255) * 100}%`;
+    if (histFillG) histFillG.style.width = `${(g / 255) * 100}%`;
+    if (histFillB) histFillB.style.width = `${(b / 255) * 100}%`;
+}
+
 // Color Wheel Class
 class ColorWheel {
     constructor(canvasId, selectorId, previewId, infoId) {
@@ -190,12 +212,8 @@ class ColorWheel {
         const colorString = `rgb(${r}, ${g}, ${b})`;
 
         this.selector.style.backgroundColor = colorString;
-        this.preview.style.backgroundColor = colorString;
 
-        this.info.innerHTML =
-            `<span style="color: #ff6b6b">${r}</span>, ` +
-            `<span style="color: #6bff6b">${g}</span>, ` +
-            `<span style="color: #6b6bff">${b}</span>`;
+        applyColorDisplay(r, g, b);
 
         const logo = document.getElementById('logo');
         const shineGradient = `linear-gradient(135deg,
@@ -299,15 +317,9 @@ function handleServerMessage(raw) {
         updateSliderThumb(brightnessSlider);
     }
 
-    const colorPreview = document.getElementById('colorPreview');
-    const colorInfo = document.getElementById('colorInfo');
-    if (colorPreview && colorInfo && msg.color) {
+    if (msg.color) {
         const { r, g, b } = msg.color;
-        colorPreview.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
-        colorInfo.innerHTML =
-            `<span style="color: #ff6b6b">${r}</span>, ` +
-            `<span style="color: #6bff6b">${g}</span>, ` +
-            `<span style="color: #6b6bff">${b}</span>`;
+        applyColorDisplay(r, g, b);
     }
 
     const modelSelect = document.getElementById('modelSelect');
@@ -360,6 +372,12 @@ function initControlsPage() {
         }
     });
 
+    // RGB label <-> histogram toggle
+    const colorInfoToggle = document.getElementById('colorInfoToggle');
+    colorInfoToggle.addEventListener('click', () => {
+        colorInfoToggle.classList.toggle('showing-histogram');
+    });
+
     // Settings toggle
     const settingsToggle = document.getElementById('settingsToggle');
     const settingsDrawer = document.getElementById('settingsDrawer');
@@ -383,7 +401,19 @@ function initControlsPage() {
     updateSliderThumb(brightnessSlider);
 
     const startSliderDrag = () => { sliderActivelyDragging = true; };
-    const stopSliderDrag = () => { sliderActivelyDragging = false; };
+    // Sends one extra "commit" message when the drag ends, telling the
+    // device to persist this value to NVS - the dozens/sec messages sent
+    // during the drag itself (below) never do, to avoid hammering flash.
+    const stopSliderDrag = () => {
+        sliderActivelyDragging = false;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'brightness',
+                value: parseInt(brightnessSlider.value),
+                commit: true
+            }));
+        }
+    };
     brightnessSlider.addEventListener('mousedown', startSliderDrag);
     brightnessSlider.addEventListener('touchstart', startSliderDrag);
     brightnessSlider.addEventListener('mouseup', stopSliderDrag);
