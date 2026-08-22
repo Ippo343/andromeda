@@ -32,7 +32,7 @@ extern const ModelConfig CONFIG = {
     .screen_width_mm = 84,
     .cartesian_data = (const CartesianCoordinates*)coords_L10,
 
-    .max_cpu_freq_mhz = 80,
+    .preferred_cpu_freq_mhz = 80,
 
     .min_frame_duration_ms = 7,  // 7ms = ~142fps
 };

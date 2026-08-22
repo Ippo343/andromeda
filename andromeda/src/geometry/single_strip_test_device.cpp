@@ -31,7 +31,7 @@ extern const ModelConfig CONFIG = {
     .screen_width_mm = 934,
     .cartesian_data = (const CartesianCoordinates*)STRIP_CARTESIAN,
 
-    .max_cpu_freq_mhz = 80,
+    .preferred_cpu_freq_mhz = 80,
 };
 
 }  // namespace SingleStripTestDevice

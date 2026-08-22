@@ -41,7 +41,7 @@ Core pattern: singletons accessed globally. Main loop: `MissionControl::update(m
 
 - **Time:** `milliseconds_t` (uint32_t); effects receive `t` for frame-relative math.
 - **Memory:** LEDs in strips; coordinates in flat arrays. No per-LED allocation.
-- **CPU:** Frequency scaling (80–240 MHz) + frame rate capping per device.
+- **CPU:** Fixed preferred frequency per model (80–240 MHz), set once at boot; frame rate capping per device.
 - **Brightness:** Global limiter each frame.
 
 ## Conventions

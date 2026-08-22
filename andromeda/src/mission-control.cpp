@@ -196,7 +196,6 @@ void MissionControl::handleTransition(AbstractEffect* nextEffect, bool playAnima
 
     ON = true;        // Ensure the system is ON
     holding = false;  // A transition (e.g. NEXT) always leaves hold mode
-    setMaxCpuFrequency();
 
     if (playAnimation) runRandomAnimation();
 
@@ -261,7 +260,6 @@ void MissionControl::powerOff()
     paint(CRGB::Black);
     FASTLED_SHOW();
     ON = false;
-    setMinCpuFrequency();
     PerformanceMonitor::Instance().stop();
     stateDirty = true;
 }
@@ -269,7 +267,6 @@ void MissionControl::powerOff()
 void MissionControl::powerOn()
 {
     ON = true;
-    setMaxCpuFrequency();
     stateDirty = true;
 }
 

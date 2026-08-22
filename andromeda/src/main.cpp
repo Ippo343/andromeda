@@ -66,7 +66,7 @@ void setup()
     // working at the Social Hub's desk.
     MissionControl::Instance().setMaxBrightness(BrightnessConfig::load(64));
 
-    MissionControl::Instance().setMaxCpuFrequency(config->max_cpu_freq_mhz);
+    MissionControl::Instance().setCpuFrequency(config->preferred_cpu_freq_mhz);
     MissionControl::Instance().setFrameDurationCap(config->min_frame_duration_ms);
 }
 
