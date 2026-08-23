@@ -194,6 +194,33 @@ void test_swipe_finishes_within_a_bounded_duration()
     TEST_ASSERT_TRUE(frames > 1);
 }
 
+// Swipe's swept color only lands within a narrow (step-wide) window of v per
+// frame, so coarsely-spaced samples (as in the bounded-duration test above)
+// can miss every real LED entirely by chance. Sample densely enough across
+// the full timeline to actually prove the sweep lights something up, not
+// just that it finishes.
+void test_swipe_actually_lights_up_a_led_somewhere_during_the_sweep()
+{
+    Swipe anim;
+    LedStrip& strip = GEOMETRY.getStrip(0);
+
+    bool sawLitLed = false;
+    for (milliseconds_t t = 0; t <= 1000 && !sawLitLed; t += 1)
+    {
+        anim.renderFrame(t);
+        for (size_t i = 0; i < strip.num_leds; i++)
+        {
+            if (strip.buffer[i] != CRGB::Black)
+            {
+                sawLitLed = true;
+                break;
+            }
+        }
+    }
+
+    TEST_ASSERT_TRUE(sawLitLed);
+}
+
 // A call at t=0 must render the animation's very first frame rather than
 // crash or skip straight to a later segment - regression guard for
 // SegmentedAnimation's segment-selection math at the very start.
@@ -254,6 +281,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_radial_sweep_finishes_within_a_bounded_duration);
     RUN_TEST(test_sequential_fade_in_finishes_within_a_bounded_duration);
     RUN_TEST(test_swipe_finishes_within_a_bounded_duration);
+    RUN_TEST(test_swipe_actually_lights_up_a_led_somewhere_during_the_sweep);
     RUN_TEST(test_rotation_animations_render_first_frame_without_crashing);
     RUN_TEST(test_rotation_animations_report_done_far_past_their_duration);
 

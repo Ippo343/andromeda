@@ -59,6 +59,21 @@ class ControllableAnimation : public AbstractFrameAnimation
     }
 };
 
+// A minimal effect that opts into ROTATE_SPACE, to exercise
+// finishTransition()'s rotation-hint branch deterministically - some real
+// effects do set this hint, but which one getRandomEffect() happens to pick
+// isn't something a test should rely on.
+class RotatingEffectStub : public AbstractEffect
+{
+   public:
+    RotatingEffectStub() { controlHints = ControlHints::ROTATE_SPACE; }
+    const char* GetName() override { return "RotatingEffectStub"; }
+    CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
+    {
+        return CRGB::Black;
+    }
+};
+
 // Exposes MissionControl's private members to this test file via the
 // UNIT_TEST-guarded friend declaration in mission-control.h.
 class MissionControlTestAccess
@@ -102,6 +117,16 @@ class MissionControlTestAccess
         mc.animation = a;
     }
     static AbstractFrameAnimation* getAnimation(MissionControl& mc) { return mc.animation; }
+
+    static void setPendingEffect(MissionControl& mc, AbstractEffect* e)
+    {
+        if (mc.pendingEffect) delete mc.pendingEffect;
+        mc.pendingEffect = e;
+    }
+    static AbstractEffect* getPendingEffect(MissionControl& mc) { return mc.pendingEffect; }
+
+    static void cancelTransition(MissionControl& mc) { mc.cancelTransition(); }
+    static void finishTransition(MissionControl& mc) { mc.finishTransition(); }
 
     static bool holdPending(MissionControl& mc) { return mc.holdPending; }
 
@@ -725,6 +750,34 @@ void test_repeated_transitions_do_not_leak_animation_instances()
     TEST_ASSERT_EQUAL_INT(before, stubAnimationLiveCount);
 }
 
+// cancelTransition() must also free a pendingEffect that was queued up for a
+// transition that never got to install it - otherwise it leaks. This
+// combination (a non-null nextEffect together with playAnimation=true)
+// never actually occurs from today's call sites, but cancelTransition()
+// should be safe regardless of how it's reached.
+void test_cancel_transition_frees_a_pending_effect_that_was_never_installed()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setPendingEffect(mc, new StaticColor());
+
+    MissionControlTestAccess::cancelTransition(mc);
+
+    TEST_ASSERT_NULL(MissionControlTestAccess::getPendingEffect(mc));
+}
+
+// finishTransition() must dispatch on the incoming effect's ROTATE_SPACE
+// hint the same way the old synchronous handleTransition() did.
+void test_finish_transition_applies_rotation_hint_from_the_new_effect()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setPendingEffect(mc, new RotatingEffectStub());
+
+    MissionControlTestAccess::finishTransition(mc);
+
+    TEST_ASSERT_EQUAL_STRING("RotatingEffectStub", mc.getEffectName());
+    TEST_ASSERT_EQUAL(RenderMode::FX_LOOP, MissionControlTestAccess::getMode(mc));
+}
+
 // ---------------------------------------------------------------------------
 // BrightnessConfig - persists max brightness across reboots (NVS)
 // ---------------------------------------------------------------------------
@@ -791,6 +844,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_full_transition_cycle_lands_on_new_effect_in_fx_loop_mode);
     RUN_TEST(test_hold_command_mid_transition_is_applied_once_transition_finishes);
     RUN_TEST(test_repeated_transitions_do_not_leak_animation_instances);
+    RUN_TEST(test_cancel_transition_frees_a_pending_effect_that_was_never_installed);
+    RUN_TEST(test_finish_transition_applies_rotation_hint_from_the_new_effect);
 
     return UNITY_END();
 }
