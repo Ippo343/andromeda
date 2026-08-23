@@ -16,16 +16,16 @@
 #include "../../src/effects.cpp"
 #include "animation-base.h"
 
-const char* AbstractAnimation::GetName() { return "AbstractAnimation"; }
-void AbstractAnimation::run() {}
+const char* AbstractBlockingAnimation::GetName() { return "AbstractBlockingAnimation"; }
+void AbstractBlockingAnimation::run() {}
 
-class StubAnimation : public AbstractAnimation
+class StubAnimation : public AbstractBlockingAnimation
 {
    public:
     const char* GetName() override { return "StubAnimation"; }
     void run() override {}
 };
-AbstractAnimation* getRandomAnimation() { return new StubAnimation(); }
+AbstractBlockingAnimation* getRandomAnimation() { return new StubAnimation(); }
 
 #include "../../src/comms.cpp"
 #include "../../src/mission-control.cpp"

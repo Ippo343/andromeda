@@ -13,27 +13,28 @@
 #include "platforms/stub/time_stub.h"
 #include "ws-command-parser.h"
 
-// AbstractAnimation::GetName()/run() are declared in animation-base.h but
-// never defined anywhere in production code - every real animation
-// overrides both, so this dead code path never needed a definition until
-// now. StubAnimation (below) overrides them too, but the compiler still
-// needs base-class vtable entries to exist at link time.
-const char* AbstractAnimation::GetName() { return "AbstractAnimation"; }
-void AbstractAnimation::run() {}
+// AbstractBlockingAnimation::GetName()/run() are declared in
+// animation-base.h but never defined anywhere in production code - every
+// real animation overrides both, so this dead code path never needed a
+// definition until now. StubAnimation (below) overrides them too, but the
+// compiler still needs base-class vtable entries to exist at link time.
+const char* AbstractBlockingAnimation::GetName() { return "AbstractBlockingAnimation"; }
+void AbstractBlockingAnimation::run() {}
 
 // Minimal animation stand-in so mission-control.cpp links without pulling in
 // the real animations.cpp - which is out of scope for native tests (its
 // animations drive real-time delay() busy loops, see the testing plan).
-// AbstractAnimation::GetName()/run() are declared but never defined for the
-// base class in production code (only overridden in concrete animations),
-// so instantiating AbstractAnimation directly wouldn't link either way.
-class StubAnimation : public AbstractAnimation
+// AbstractBlockingAnimation::GetName()/run() are declared but never defined
+// for the base class in production code (only overridden in concrete
+// animations), so instantiating AbstractBlockingAnimation directly wouldn't
+// link either way.
+class StubAnimation : public AbstractBlockingAnimation
 {
    public:
     const char* GetName() override { return "StubAnimation"; }
     void run() override {}
 };
-AbstractAnimation* getRandomAnimation() { return new StubAnimation(); }
+AbstractBlockingAnimation* getRandomAnimation() { return new StubAnimation(); }
 
 #include "../../src/mission-control.cpp"
 

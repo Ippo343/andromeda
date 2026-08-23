@@ -152,7 +152,7 @@ uint8_t MissionControl::calcBrightness(milliseconds_t t)
 // Pick a new random animation, play it, and deallocate it
 void MissionControl::runRandomAnimation()
 {
-    AbstractAnimation* animation = getRandomAnimation();
+    AbstractBlockingAnimation* animation = getRandomAnimation();
 
     Log.noticeln("Picked new animation: %s", animation->GetName());
 

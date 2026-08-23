@@ -6,19 +6,23 @@
 #include "perf-monitor.h"
 #include "utils.h"
 
-// Abstract base class for all animations.
-// Animations are not really effects, they are meant to be small programs
-// that take direct control of all the strips and run once.
-// The control flow will not loop them, it will use them as transitions
-// between different effects.
-class AbstractAnimation
+// Abstract base class for animations that take full, synchronous control of
+// the strips: run() is expected to block (own loop, delay(), FASTLED_SHOW())
+// until the animation is finished. Only used for the boot/status indicators
+// (WiFiConnectingAnimation, WiFiSuccessAnimation, ErrorAnimation) driven
+// directly from main.cpp before the web server/render loop is even up, where
+// blocking is harmless. The rotation animations MissionControl plays between
+// effects use AbstractFrameAnimation (animation-frame-base.h) instead, which
+// renders one frame at a time so the render loop stays responsive - see that
+// header for why the two are kept separate rather than unified.
+class AbstractBlockingAnimation
 {
    public:
     virtual const char* GetName();
 
     control_hints_t controlHints = ControlHints::NONE;
 
-    virtual ~AbstractAnimation() {}
+    virtual ~AbstractBlockingAnimation() {}
 
     virtual void run();
 

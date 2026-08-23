@@ -8,7 +8,7 @@
 
 // Sweeps all the strips with random colors,
 // then white and then black sequentially
-class SweepStrips : public AbstractAnimation
+class SweepStrips : public AbstractBlockingAnimation
 {
    public:
     virtual const char* GetName() { return "SweepStrips"; }
@@ -61,7 +61,7 @@ class SweepStrips : public AbstractAnimation
 // BaseSweep - Abstract Base Class for Sweep Animations
 // ============================================================================
 
-class BaseSweep : public AbstractAnimation
+class BaseSweep : public AbstractBlockingAnimation
 {
    protected:
     bool direction;  // Subclasses define meaning (clockwise/outward, etc.)
@@ -209,7 +209,7 @@ class RadialSweep : public BaseSweep
 // ============================================================================
 
 // Fade in each strip with a random color
-class SequentialFadeIn : public AbstractAnimation
+class SequentialFadeIn : public AbstractBlockingAnimation
 {
    public:
     virtual const char* GetName() { return "SequentialFadeIn"; }
@@ -251,7 +251,7 @@ class SequentialFadeIn : public AbstractAnimation
 // ============================================================================
 
 // Swipes a random color from left to right and then fades it out
-class Swipe : public AbstractAnimation
+class Swipe : public AbstractBlockingAnimation
 {
    public:
     virtual const char* GetName() { return "Swipe"; }
@@ -344,7 +344,7 @@ void ErrorAnimation::run()
 // Utility Functions
 // ============================================================================
 
-AbstractAnimation* getRandomAnimation()
+AbstractBlockingAnimation* getRandomAnimation()
 {
     size_t ANIMATIONS_COUNT = 5;
 

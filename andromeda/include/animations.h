@@ -5,7 +5,7 @@
 #include "geometry/geometry.h"
 #include "perf-monitor.h"
 
-class WiFiConnectingAnimation : public AbstractAnimation
+class WiFiConnectingAnimation : public AbstractBlockingAnimation
 {
    public:
     virtual const char* GetName();
@@ -13,7 +13,7 @@ class WiFiConnectingAnimation : public AbstractAnimation
     void run() override;
 };
 
-class WiFiSuccessAnimation : public AbstractAnimation
+class WiFiSuccessAnimation : public AbstractBlockingAnimation
 {
    public:
     virtual const char* GetName();
@@ -21,7 +21,7 @@ class WiFiSuccessAnimation : public AbstractAnimation
     void run() override;
 };
 
-class ErrorAnimation : public AbstractAnimation
+class ErrorAnimation : public AbstractBlockingAnimation
 {
    public:
     virtual const char* GetName();
@@ -29,5 +29,5 @@ class ErrorAnimation : public AbstractAnimation
     void run() override;
 };
 
-// Factory function to get a random animation instance
-AbstractAnimation* getRandomAnimation();
+// Factory function to get a random rotation animation instance
+AbstractBlockingAnimation* getRandomAnimation();

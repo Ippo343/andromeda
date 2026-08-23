@@ -12,13 +12,13 @@
 // only exercises getRandomAnimation()'s selection logic, never run().
 #include "../../src/animations.cpp"
 
-// AbstractAnimation::GetName()/run() are declared in animation-base.h but
-// never defined anywhere in production code - every real animation
-// overrides both, so this dead code path never needed a definition until a
-// native test needed the base class's vtable to link (mirrors
-// test_mission_control.cpp's identical workaround).
-const char* AbstractAnimation::GetName() { return "AbstractAnimation"; }
-void AbstractAnimation::run() {}
+// AbstractBlockingAnimation::GetName()/run() are declared in
+// animation-base.h but never defined anywhere in production code - every
+// real animation overrides both, so this dead code path never needed a
+// definition until a native test needed the base class's vtable to link
+// (mirrors test_mission_control.cpp's identical workaround).
+const char* AbstractBlockingAnimation::GetName() { return "AbstractBlockingAnimation"; }
+void AbstractBlockingAnimation::run() {}
 
 void setUp() { GEOMETRY.initializeForTest(ModelId::SINGLE_STRIP_TEST_DEVICE); }
 void tearDown() {}
@@ -107,7 +107,7 @@ void test_get_random_animation_produces_valid_animations()
     std::set<std::string> namesSeen;
     for (int i = 0; i < 300; i++)
     {
-        AbstractAnimation* anim = getRandomAnimation();
+        AbstractBlockingAnimation* anim = getRandomAnimation();
         TEST_ASSERT_NOT_NULL(anim);
         TEST_ASSERT_NOT_NULL(anim->GetName());
         namesSeen.insert(anim->GetName());
@@ -123,7 +123,7 @@ void test_get_random_animation_never_repeats_consecutively()
     std::string previous;
     for (int i = 0; i < 100; i++)
     {
-        AbstractAnimation* anim = getRandomAnimation();
+        AbstractBlockingAnimation* anim = getRandomAnimation();
         std::string name = anim->GetName();
         delete anim;
 
