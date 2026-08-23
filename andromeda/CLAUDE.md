@@ -16,24 +16,25 @@ Comms (Web/WiFi) ──→ MissionControl (main loop) ──→ Effects + Animat
                         └─ Queued web commands (FreeRTOS)
 ```
 
-Core pattern: singletons accessed globally. Main loop: `MissionControl::update(millis())` processes queued commands, renders effect/animation, manages timing/power.
+Core pattern: singletons accessed globally. Main loop: `MissionControl::update(millis())` processes queued commands, renders whatever the current `RenderMode` calls for (an effect, or an in-flight transition animation), manages timing/power. Every mode is driven one frame per `update()` tick - nothing in the render loop blocks, so queued web commands are always processed on the very next tick regardless of what's currently rendering.
 
 ## Design Principles
 
-- **Decoupled:** Effects handle per-LED color; animations manage sequences; geometry holds device data. Independently testable.
+- **Decoupled:** Effects handle per-LED color; animations manage transitions between effects; geometry holds device data. Independently testable.
+- **Non-blocking render loop:** Every per-frame unit (effects, rotation animations) renders exactly one frame per `update()` call and returns - nothing owns a blocking loop or calls `delay()`/`FASTLED_SHOW()` itself. `MissionControl` owns the single `FASTLED_SHOW()` call per tick and always runs `processWebCommands()` first, so the loop stays responsive no matter what's rendering.
 - **Performance-first:** Precompute per-frame values; use flat arrays indexed by LED position (no dynamic structures in hot paths).
 - **Device-agnostic:** Effects work with strip/LED indices; geometry provides coordinates for effects that need layout.
 - **Multi-board:** Compile-time board variants + runtime model ID selection let same code run on all hardware.
 
 ## Core Subsystems
 
-**MissionControl** — Main render/command loop. Receives queued web commands, orchestrates effect/animation render, manages power/brightness/CPU frequency/frame rate.
+**MissionControl** — Main render/command loop. Receives queued web commands, orchestrates effect/animation render, manages power/brightness/CPU frequency/frame rate. Its top-level state is a `RenderMode` enum (`OFF`, `FX_LOOP`, `HOLDING`, `TRANSITIONING`) rather than separate booleans - `TRANSITIONING` is the mode a rotation animation plays in, driven one frame per tick via `updateTransition()` (mirrors how `FX_LOOP`/`HOLDING` drive the current effect's `precompute`/`render`/`postprocess`).
 
 **Geometry** — Device config & LED data (strip count/lengths/pins, Cartesian/polar coordinates, constraints). Initialized with ModelId at startup.
 
 **Effects** — Abstract: compute CRGB per LED per frame via `evaluate(strip, led, led_idx, t)`. Optional `precompute(t)` and `postprocess(t)` for optimization.
 
-**Animations** — State machines managing effect selection & transitions. Decide which effect to render with what parameters.
+**Animations** — Short transition programs played between effects, in two flavors: `AbstractFrameAnimation` (the rotation animations MissionControl plays as transitions) renders one frame per `renderFrame(t)` call the same way effects do - most are written as a `SegmentedAnimation`, an ordered list of time-bounded phases (`addSegment(duration, fn)`) instead of a hand-rolled state machine. `AbstractBlockingAnimation` is the older, synchronous `run()`-owns-the-loop style, now scoped to the boot/status indicators (WiFi connecting/success, error) that run before the web server is even up, where blocking is harmless.
 
 **Comms** — WiFi + web server. All runtime commands (NEXT, HOLD, POWER_OFF, POWER_ON, COLOR, BRIGHTNESS, MODEL, REBOOT) go over a single persistent WebSocket (`/ws`), parsed and queued to MissionControl. HTTP is only used for static files and one-shot provisioning (`/save`, `/reset`) and reads (`/fps`, `/brightness`).
 
@@ -56,6 +57,6 @@ Use glob/grep to explore live: `include/` (headers), `src/` (implementations), `
 
 ## Testing
 
-Native (host) unit tests run via `pio test -e native` — compiled and run on the dev machine's GCC toolchain, not on real hardware, using FastLED's own native/stub platform. Covers utils, geometry math, effects, MissionControl's pure logic, and perf-monitor. `comms.cpp` and `animations.cpp` are excluded (real-time/network-bound); logic worth testing there (e.g. WS message parsing) gets extracted into a pure, dependency-free header instead — see `include/comms-utils.h` and `include/ws-command-parser.h` for the pattern. `test/mocks/` provides minimal Arduino/ArduinoLog/Preferences/FreeRTOS stand-ins for the native build; `-DUNIT_TEST` gates a few test-only `friend` accessors into otherwise-private class internals. Requires a host GCC toolchain on `PATH` (MSYS2 on Windows — not bundled by PlatformIO). CI runs this plus a build-only check of all 3 hardware envs, see `.github/workflows/test.yml`.
+Native (host) unit tests run via `pio test -e native` — compiled and run on the dev machine's GCC toolchain, not on real hardware, using FastLED's own native/stub platform. Covers utils, geometry math, effects, the rotation animations (`AbstractFrameAnimation`/`SegmentedAnimation`), MissionControl's pure logic (including its `RenderMode` transitions), and perf-monitor. `comms.cpp` is excluded (network-bound); logic worth testing there (e.g. WS message parsing) gets extracted into a pure, dependency-free header instead — see `include/comms-utils.h` and `include/ws-command-parser.h` for the pattern. `animations.cpp`'s boot/status indicators (`AbstractBlockingAnimation`: WiFi connecting/success, error) are the one part still out of scope, since they still own a real blocking `delay()` loop. `test/mocks/` provides minimal Arduino/ArduinoLog/Preferences/FreeRTOS stand-ins for the native build; `-DUNIT_TEST` gates a few test-only `friend` accessors into otherwise-private class internals. Requires a host GCC toolchain on `PATH` (MSYS2 on Windows — not bundled by PlatformIO). CI runs this plus a build-only check of all 3 hardware envs, see `.github/workflows/test.yml`.
 
 **Running `pio` on Windows:** PlatformIO's CLI usually isn't on `PATH` even after install. Its real location is `%USERPROFILE%\.platformio\penv\Scripts\pio.exe` — call that full path (e.g. from PowerShell: `& "$env:USERPROFILE\.platformio\penv\Scripts\pio.exe" test -e native`) instead of trying bare `pio` first.
