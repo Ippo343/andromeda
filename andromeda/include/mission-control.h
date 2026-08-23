@@ -101,6 +101,22 @@ struct Command
     }
 };
 
+// MissionControl's own top-level mode - what a frame tick should do. Replaces
+// what used to be two loosely-related bools (ON, holding): they were never
+// truly independent (holding was meaningless when !ON), and adding a third
+// bool for the non-blocking transition below would only make that worse.
+// TRANSITIONING is the mode a rotation animation plays in: unlike the old
+// blocking runRandomAnimation(), the render loop keeps ticking (and
+// processing web commands) while an animation is mid-flight - see
+// MissionControl::updateTransition().
+enum class RenderMode : uint8_t
+{
+    OFF,
+    FX_LOOP,
+    HOLDING,
+    TRANSITIONING
+};
+
 class MissionControl
 {
    public:
@@ -128,8 +144,8 @@ class MissionControl
         stateDirty = true;
     }
 
-    inline bool isOn() const { return ON; }
-    inline bool isHolding() const { return holding; }
+    inline bool isOn() const { return mode != RenderMode::OFF; }
+    inline bool isHolding() const { return mode == RenderMode::HOLDING; }
     inline const char* getEffectName() const { return effect ? effect->GetName() : "none"; }
 
     // Consumes (reads and clears) the flag set whenever broadcast-worthy state
@@ -178,14 +194,47 @@ class MissionControl
     // The effect that is currently running
     AbstractEffect* effect = nullptr;
 
-    // Main ON/OFF switch. If OFF, power down and do nothing.
-    bool ON = true;
+    // The rotation animation currently playing as a transition, or nullptr
+    // when mode != TRANSITIONING. Owned by MissionControl; deleted by
+    // finishTransition()/cancelTransition().
+    AbstractFrameAnimation* animation = nullptr;
 
-    // True while the current effect is held indefinitely (nextTransition
-    // pinned to the max value by holdEffect()). Mirrors ON for the web UI's
-    // HOLD/RESUME button - see resumeEffect() for how un-holding picks a new
-    // transition time.
-    bool holding = false;
+    // The effect to install once the in-flight TRANSITIONING finishes;
+    // nullptr means "pick a random one" (the normal rotation case).
+    // Mirrors handleTransition()'s nextEffect argument, just held across the
+    // multiple update() ticks a transition now spans instead of being usable
+    // immediately.
+    AbstractEffect* pendingEffect = nullptr;
+
+    RenderMode mode = RenderMode::FX_LOOP;
+
+    // Mode to restore on powerOn() - powerOff() saves whatever mode it
+    // preempted here (never TRANSITIONING: powerOff() cancels an in-flight
+    // transition rather than trying to resume mid-animation later).
+    RenderMode modeBeforeOff = RenderMode::FX_LOOP;
+
+    // Set when a HOLD command arrives while mode == TRANSITIONING: holdEffect()
+    // can't flip mode to HOLDING mid-transition without abandoning the
+    // in-flight animation/effect swap, so it defers - finishTransition()
+    // re-applies the hold once the transition actually lands on an effect.
+    bool holdPending = false;
+
+    // Brackets the phases of an in-flight TRANSITIONING: cut to black and
+    // pause (separation from the outgoing effect) -> play the animation at
+    // full brightness -> cut to black and pause again (separation from the
+    // incoming effect). animationFinishedAt is 0 until the animation itself
+    // reports done via renderFrame(), since its real length is data-dependent
+    // (random per-animation durations) and can't be precomputed the way the
+    // fixed-duration fade brackets below can.
+    struct TransitionWindow
+    {
+        milliseconds_t start = 0;
+        milliseconds_t preDelayEnd = 0;
+        milliseconds_t animationFinishedAt = 0;
+    };
+    TransitionWindow transitionWindow;
+    static constexpr milliseconds_t PRE_ANIMATION_DELAY = 200;
+    static constexpr milliseconds_t POST_ANIMATION_DELAY = 200;
 
     // Maximum allowed brightness (0-255)
     // Note that this is different from FastLED's global brightness,
@@ -225,8 +274,23 @@ class MissionControl
     //
     uint8_t calcBrightness(milliseconds_t t);
 
-    // Pick a new random animation, play it, and deallocate it
-    void runRandomAnimation();
+    // Drives the current phase of an in-flight TRANSITIONING (pre-delay ->
+    // animation -> post-delay), then hands off to finishTransition() once the
+    // whole window has elapsed. Called once per update() tick instead of
+    // owning a blocking loop - see handleTransition() for how a transition
+    // gets started.
+    void updateTransition(milliseconds_t t);
+
+    // Installs pendingEffect (or a random one) as the current effect, ending
+    // an in-flight TRANSITIONING and returning to FX_LOOP - or re-applying a
+    // deferred HOLD if one arrived mid-transition (see holdPending).
+    void finishTransition();
+
+    // Tears down an in-flight transition's animation without installing any
+    // effect - used when something needs to override the transition outright
+    // (a fresh handleTransition() call, or powerOff()) rather than let it run
+    // to completion.
+    void cancelTransition();
 
     // Hold the current effect forever
     void holdEffect();
@@ -242,11 +306,14 @@ class MissionControl
     // Switch to a static color and hold forever (lamp mode)
     void transitionToStaticColor();
 
-    // When the transition time is reached:
-    // - play an animation
-    // - pick a new effect
-    // - pick the next transition time
-    // - and also sprinkle random rotation transforms here and there
+    // When the transition time is reached (or a NEXT/COLOR command asks for
+    // one directly): cancels any transition already in flight, then either
+    // - playAnimation == true: kicks off a new TRANSITIONING window (mode =
+    //   TRANSITIONING; updateTransition()/finishTransition() take it from
+    //   there across the following update() ticks), or
+    // - playAnimation == false: installs nextEffect immediately, synchronously
+    //   (used by transitionToStaticColor() - a web COLOR command must take
+    //   effect right away, not after an animation plays).
     void handleTransition(AbstractEffect* nextEffect = nullptr, bool playAnimation = true);
 
     // Process any pending web commands

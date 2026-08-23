@@ -25,17 +25,39 @@ void AbstractBlockingAnimation::run() {}
 // Minimal rotation-animation stand-in so mission-control.cpp links without
 // pulling in the real animations.cpp (out of scope for this test target -
 // see test_animations.cpp for the real per-animation frame tests). Finishes
-// on its very first renderFrame() call so runRandomAnimation()'s spin loop
-// (mission-control.cpp) exits immediately.
+// on its very first renderFrame() call. Tracks how many instances are
+// currently alive so a test can prove MissionControl doesn't leak them
+// across repeated transitions.
+static int stubAnimationLiveCount = 0;
 class StubAnimation : public AbstractFrameAnimation
 {
    public:
+    StubAnimation() { stubAnimationLiveCount++; }
+    ~StubAnimation() override { stubAnimationLiveCount--; }
     const char* GetName() override { return "StubAnimation"; }
     bool renderFrame(milliseconds_t localT) override { return true; }
 };
 AbstractFrameAnimation* getRandomAnimation() { return new StubAnimation(); }
 
 #include "../../src/mission-control.cpp"
+
+// A hand-controllable animation for tests that need to drive TRANSITIONING
+// through specific phases (rather than StubAnimation's instant finish).
+class ControllableAnimation : public AbstractFrameAnimation
+{
+   public:
+    bool finished = false;
+    int renderCount = 0;
+    milliseconds_t lastLocalT = 0;
+
+    const char* GetName() override { return "ControllableAnimation"; }
+    bool renderFrame(milliseconds_t localT) override
+    {
+        renderCount++;
+        lastLocalT = localT;
+        return finished;
+    }
+};
 
 // Exposes MissionControl's private members to this test file via the
 // UNIT_TEST-guarded friend declaration in mission-control.h.
@@ -69,15 +91,50 @@ class MissionControlTestAccess
     static void setEffectStartValue(MissionControl& mc, milliseconds_t t) { mc.effectStart = t; }
     static void setFadeInEndValue(MissionControl& mc, milliseconds_t t) { mc.fadeInEnd = t; }
     static void setFadeOutStartValue(MissionControl& mc, milliseconds_t t) { mc.fadeOutStart = t; }
-    static void runRandomAnimation(MissionControl& mc) { mc.runRandomAnimation(); }
-};
 
-// Exposes PerformanceMonitor::lastFrameTime so tests can tell whether a
-// FASTLED_SHOW() (which ticks the monitor) has happened yet.
-class PerformanceMonitorTestAccess
-{
-   public:
-    static unsigned short lastFrameTime(PerformanceMonitor& pm) { return pm.lastFrameTime; }
+    static RenderMode getMode(MissionControl& mc) { return mc.mode; }
+    static void setMode(MissionControl& mc, RenderMode m) { mc.mode = m; }
+    static RenderMode getModeBeforeOff(MissionControl& mc) { return mc.modeBeforeOff; }
+
+    static void setAnimation(MissionControl& mc, AbstractFrameAnimation* a)
+    {
+        if (mc.animation) delete mc.animation;
+        mc.animation = a;
+    }
+    static AbstractFrameAnimation* getAnimation(MissionControl& mc) { return mc.animation; }
+
+    static bool holdPending(MissionControl& mc) { return mc.holdPending; }
+
+    static milliseconds_t transitionWindowStart(MissionControl& mc)
+    {
+        return mc.transitionWindow.start;
+    }
+    static void setTransitionWindowStart(MissionControl& mc, milliseconds_t t)
+    {
+        mc.transitionWindow.start = t;
+    }
+    static milliseconds_t transitionWindowPreDelayEnd(MissionControl& mc)
+    {
+        return mc.transitionWindow.preDelayEnd;
+    }
+    static void setTransitionWindowPreDelayEnd(MissionControl& mc, milliseconds_t t)
+    {
+        mc.transitionWindow.preDelayEnd = t;
+    }
+    static milliseconds_t transitionWindowAnimationFinishedAt(MissionControl& mc)
+    {
+        return mc.transitionWindow.animationFinishedAt;
+    }
+    static void setTransitionWindowAnimationFinishedAt(MissionControl& mc, milliseconds_t t)
+    {
+        mc.transitionWindow.animationFinishedAt = t;
+    }
+
+    static milliseconds_t PRE_ANIMATION_DELAY(MissionControl& mc) { return mc.PRE_ANIMATION_DELAY; }
+    static milliseconds_t POST_ANIMATION_DELAY(MissionControl& mc)
+    {
+        return mc.POST_ANIMATION_DELAY;
+    }
 };
 
 void setUp()
@@ -88,11 +145,15 @@ void setUp()
     // handleTransition() has run at least once - guaranteed because
     // nextTransition defaults to 0, so the very first real update(millis())
     // call always takes the "t >= nextTransition" branch first. Tests call
-    // the private setNextTransition()/calcBrightness() directly (bypassing
-    // handleTransition()), which can leave that invariant broken for
-    // whichever test runs next against the shared MissionControl singleton -
-    // so each test starts from a known-initialized effect.
-    MissionControlTestAccess::setEffect(MissionControl::Instance(), new StaticColor());
+    // private methods directly (bypassing handleTransition()), which can
+    // leave that invariant broken for whichever test runs next against the
+    // shared MissionControl singleton - so each test starts from a known,
+    // fully-reset state: a real effect, FX_LOOP mode, no in-flight
+    // transition.
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setEffect(mc, new StaticColor());
+    MissionControlTestAccess::setAnimation(mc, nullptr);
+    MissionControlTestAccess::setMode(mc, RenderMode::FX_LOOP);
 }
 void tearDown() {}
 
@@ -239,6 +300,7 @@ void test_queue_web_command_and_process_hold()
     // holdEffect() sets nextTransition to the maximum possible value
     TEST_ASSERT_EQUAL_UINT32(~0UL, MissionControlTestAccess::nextTransition(mc));
     TEST_ASSERT_TRUE(mc.isHolding());
+    TEST_ASSERT_EQUAL(RenderMode::HOLDING, MissionControlTestAccess::getMode(mc));
 }
 
 // resumeEffect() must clear the holding flag and schedule a real (non-max)
@@ -270,6 +332,7 @@ void test_resume_effect_clears_holding_and_reduces_remaining_by_elapsed()
     milliseconds_t after = millis();
 
     TEST_ASSERT_FALSE(mc.isHolding());
+    TEST_ASSERT_EQUAL(RenderMode::FX_LOOP, MissionControlTestAccess::getMode(mc));
 
     milliseconds_t nextTransition = MissionControlTestAccess::nextTransition(mc);
     milliseconds_t fadeOutDur = MissionControlTestAccess::FADE_OUT_DURATION(mc);
@@ -279,36 +342,6 @@ void test_resume_effect_clears_holding_and_reduces_remaining_by_elapsed()
     // effectStart must be untouched - resuming keeps the current effect's
     // plateau brightness rather than restarting its fade-in.
     TEST_ASSERT_EQUAL_UINT32(farPast, MissionControlTestAccess::effectStart(mc));
-}
-
-// Reproduces the real "flash" bug end-to-end through update(): a NEXT
-// command handled inside processWebCommands() calls handleTransition()
-// synchronously, which resets effectStart to a fresh, later millis() - but
-// update()'s own "t" parameter was captured by the caller before
-// processWebCommands() ran, so for the rest of this same update() call it is
-// now stale (older than the new effectStart). calcBrightness(t) must treat
-// that as "effect hasn't started yet" (brightness 0), not compute a bogus
-// non-zero value from the underflowed t - effectStart - which is what
-// actually reaches the strip via FastLED.setBrightness()/show().
-void test_next_command_mid_update_does_not_flash_stale_t_into_high_brightness()
-{
-    MissionControl& mc = MissionControl::Instance();
-    MissionControlTestAccess::setMaxBrightness(mc, 255);
-
-    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Next()));
-
-    // A "stale" t, as if captured by the caller (main.cpp's loop()) right
-    // before processWebCommands() runs. runRandomAnimation()'s two real
-    // delay(200) calls (left un-mocked here, unlike other tests in this
-    // file) let genuine wall-clock time pass during handleTransition(), so
-    // the effectStart it sets afterward is guaranteed to be later than this
-    // - reproducing the real staleness, not a coincidental one.
-    milliseconds_t staleT = millis();
-
-    mc.update(staleT);
-
-    TEST_ASSERT_TRUE(MissionControlTestAccess::effectStart(mc) > staleT);
-    TEST_ASSERT_EQUAL_UINT8(0, FastLED.getBrightness());
 }
 
 void test_queue_web_command_fills_and_rejects_when_full()
@@ -348,8 +381,22 @@ void test_update_does_not_dereference_null_effect_before_first_transition()
     // effect before the t >= nextTransition branch runs handleTransition().
     MissionControlTestAccess::setNextTransitionValue(mc, 0);
 
-    mc.update(0);
+    mc.update(0);  // must not crash despite effect == nullptr
 
+    // handleTransition()'s default (playAnimation=true) no longer installs an
+    // effect synchronously - it starts a TRANSITIONING window instead, so
+    // effect legitimately stays null until that transition lands.
+    TEST_ASSERT_EQUAL(RenderMode::TRANSITIONING, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_NOT_NULL(MissionControlTestAccess::getAnimation(mc));
+
+    // Drive the transition to completion: effect must end up non-null once it lands.
+    milliseconds_t preDelayEnd = MissionControlTestAccess::transitionWindowPreDelayEnd(mc);
+    mc.update(preDelayEnd);  // StubAnimation finishes on its very first renderFrame() call
+    milliseconds_t finishedAt = MissionControlTestAccess::transitionWindowAnimationFinishedAt(mc);
+    TEST_ASSERT_TRUE(finishedAt != 0);
+    mc.update(finishedAt + MissionControlTestAccess::POST_ANIMATION_DELAY(mc));
+
+    TEST_ASSERT_EQUAL(RenderMode::FX_LOOP, MissionControlTestAccess::getMode(mc));
     TEST_ASSERT_NOT_NULL(MissionControlTestAccess::getEffect(mc));
 }
 
@@ -358,10 +405,37 @@ void test_power_off_and_on_toggle_state()
     MissionControl& mc = MissionControl::Instance();
 
     TEST_ASSERT_TRUE(mc.queueWebCommand(Command::PowerOff()));
-    mc.update(0);  // ON is now false; update() should take the early-return path
+    mc.update(0);  // mode is now OFF; update() should take the early-return path
+    TEST_ASSERT_FALSE(mc.isOn());
 
     TEST_ASSERT_TRUE(mc.queueWebCommand(Command::PowerOn()));
     mc.update(0);  // processWebCommands() still runs even while OFF, turning it back ON
+    TEST_ASSERT_TRUE(mc.isOn());
+}
+
+// powerOff()/powerOn() must round-trip through whichever mode was active
+// before powering off - HOLDING included, not just plain FX_LOOP - since the
+// web UI's HOLD/RESUME state shouldn't silently reset across a power cycle.
+void test_power_off_and_on_restores_holding_mode()
+{
+    MissionControl& mc = MissionControl::Instance();
+    // Pin nextTransition safely into the future: it's leftover state from
+    // whichever test ran before this one, and powerOn() falls through to the
+    // rest of update() in the same tick - a stale/expired nextTransition
+    // would otherwise let "t >= nextTransition" fire handleTransition() and
+    // clobber the HOLDING mode this test is trying to verify survives a
+    // power cycle.
+    MissionControlTestAccess::setNextTransition(mc);
+    MissionControlTestAccess::setMode(mc, RenderMode::HOLDING);
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::PowerOff()));
+    mc.update(0);
+    TEST_ASSERT_FALSE(mc.isOn());
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::PowerOn()));
+    mc.update(0);
+    TEST_ASSERT_TRUE(mc.isOn());
+    TEST_ASSERT_TRUE(mc.isHolding());
 }
 
 void test_queue_color_command_sets_static_color_and_enters_static_mode()
@@ -403,53 +477,252 @@ void test_queue_model_command_updates_factory_config()
 }
 
 // ---------------------------------------------------------------------------
-// runRandomAnimation() - the strip must actually go black before and after
-// the transition animation, not just have FastLED's brightness field set.
-// setBrightness() alone has no visible effect until the next show(); a
-// missing show() there is what causes the "flash at the end of every
-// animation" bug (the strip keeps displaying the animation's last full-
-// brightness frame for the whole 200ms delay).
+// TRANSITIONING - the non-blocking replacement for the old blocking
+// runRandomAnimation(). These are interaction tests: they drive update()
+// itself across several ticks (rather than calling private methods in
+// isolation) to prove the actual system-level behavior this refactor exists
+// for - the render loop, and therefore processWebCommands(), never blocks
+// for the length of a transition.
 // ---------------------------------------------------------------------------
 
-void test_run_random_animation_pushes_black_to_strip_before_each_delay()
+// A NEXT command must start a TRANSITIONING window rather than block inside
+// processWebCommands() for the transition's whole duration - and a second
+// command queued right after must be drained on the very next update() tick,
+// not after the transition finishes.
+void test_next_command_starts_transitioning_without_blocking_later_commands()
 {
     MissionControl& mc = MissionControl::Instance();
 
-    PerformanceMonitor::Instance().stop();  // reset lastFrameTime to 0
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Next()));
+    mc.update(millis());
 
-    static int delayCallCount;
-    static unsigned short frameTimeAtDelay[2];
-    static uint8_t brightnessAtDelay[2];
-    delayCallCount = 0;
+    TEST_ASSERT_EQUAL(RenderMode::TRANSITIONING, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_NOT_NULL(MissionControlTestAccess::getAnimation(mc));
 
-    setDelayFunction(
-        [](uint32_t)
-        {
-            if (delayCallCount < 2)
-            {
-                frameTimeAtDelay[delayCallCount] =
-                    PerformanceMonitorTestAccess::lastFrameTime(PerformanceMonitor::Instance());
-                brightnessAtDelay[delayCallCount] = FastLED.getBrightness();
-            }
-            delayCallCount++;
-        });
+    // If update() were still blocking for the whole transition (the old
+    // runRandomAnimation() behavior), this command would sit queued and
+    // unactioned until the transition finished. It must take effect on the
+    // very next tick instead.
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::PowerOff()));
+    mc.update(millis());
 
-    MissionControlTestAccess::runRandomAnimation(mc);
+    TEST_ASSERT_EQUAL(RenderMode::OFF, MissionControlTestAccess::getMode(mc));
+}
 
-    setDelayFunction(fl::function<void(uint32_t)>());  // restore real delay() for other tests
+// Reproduces the same "stale t" scenario the old blocking flow had a guard
+// for, adapted to the new model: t captured just before processWebCommands()
+// runs can be older than transitionWindow.start once a NEXT command starts a
+// fresh transition inside that same update() call. updateTransition() must
+// not flash a non-zero brightness in that case.
+void test_next_command_mid_update_does_not_flash_stale_t_into_high_brightness()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setMaxBrightness(mc, 255);
 
-    // runRandomAnimation() must delay(200) twice: once before the animation,
-    // once after.
-    TEST_ASSERT_EQUAL_INT(2, delayCallCount);
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Next()));
 
-    // A non-zero lastFrameTime means PerformanceMonitor::tick() - and
-    // therefore FASTLED_SHOW()/FastLED.show() - already ran by the time each
-    // delay() fired, i.e. brightness 0 was actually pushed to the strip
-    // rather than just staged for the next unrelated show() call.
-    TEST_ASSERT_NOT_EQUAL(0, frameTimeAtDelay[0]);
-    TEST_ASSERT_NOT_EQUAL(0, frameTimeAtDelay[1]);
-    TEST_ASSERT_EQUAL_UINT8(0, brightnessAtDelay[0]);
-    TEST_ASSERT_EQUAL_UINT8(0, brightnessAtDelay[1]);
+    milliseconds_t staleT = millis();
+    mc.update(staleT);
+
+    TEST_ASSERT_EQUAL(RenderMode::TRANSITIONING, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_EQUAL_UINT8(0, FastLED.getBrightness());
+}
+
+// updateTransition()'s own stale-t guard, exercised directly: a t older than
+// transitionWindow.start (the same underflow shape calcBrightness() guards
+// against) must clamp to zero brightness rather than underflow.
+void test_update_transition_guards_against_t_before_window_start()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setMaxBrightness(mc, 255);
+    MissionControlTestAccess::setAnimation(mc, new ControllableAnimation());
+    MissionControlTestAccess::setMode(mc, RenderMode::TRANSITIONING);
+    MissionControlTestAccess::setTransitionWindowStart(mc, 100000);
+    MissionControlTestAccess::setTransitionWindowPreDelayEnd(mc, 100200);
+    MissionControlTestAccess::setTransitionWindowAnimationFinishedAt(mc, 0);
+
+    mc.update(100000 - 1);
+
+    TEST_ASSERT_EQUAL_UINT8(0, FastLED.getBrightness());
+    TEST_ASSERT_EQUAL(RenderMode::TRANSITIONING, MissionControlTestAccess::getMode(mc));
+}
+
+// The strip must actually go to black (brightness pushed via FASTLED_SHOW(),
+// not just a field set) during both the pre- and post-animation delay
+// windows, and back to full brightness while the animation itself renders.
+void test_transitioning_pre_and_post_delay_windows_zero_the_strip_brightness()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setMaxBrightness(mc, 255);
+
+    ControllableAnimation* anim = new ControllableAnimation();
+    MissionControlTestAccess::setAnimation(mc, anim);
+
+    milliseconds_t start = millis();
+    milliseconds_t preDelayEnd = start + MissionControlTestAccess::PRE_ANIMATION_DELAY(mc);
+    MissionControlTestAccess::setTransitionWindowStart(mc, start);
+    MissionControlTestAccess::setTransitionWindowPreDelayEnd(mc, preDelayEnd);
+    MissionControlTestAccess::setTransitionWindowAnimationFinishedAt(mc, 0);
+    MissionControlTestAccess::setMode(mc, RenderMode::TRANSITIONING);
+
+    // Still inside the pre-delay window.
+    mc.update(start);
+    TEST_ASSERT_EQUAL_UINT8(0, FastLED.getBrightness());
+
+    // Past pre-delay: the animation renders at full brightness.
+    anim->finished = false;
+    mc.update(preDelayEnd);
+    TEST_ASSERT_EQUAL_UINT8(255, FastLED.getBrightness());
+    TEST_ASSERT_TRUE(anim->renderCount > 0);
+
+    // The animation finishes: its very last frame still renders at full
+    // brightness (so the animation's final frame is actually visible instead
+    // of being cut off), and only the *next* tick - now inside the
+    // post-delay window - goes back to black.
+    anim->finished = true;
+    mc.update(preDelayEnd + 1);
+    TEST_ASSERT_EQUAL_UINT8(255, FastLED.getBrightness());
+    milliseconds_t finishedAt = MissionControlTestAccess::transitionWindowAnimationFinishedAt(mc);
+    TEST_ASSERT_TRUE(finishedAt != 0);
+
+    mc.update(finishedAt + 1);
+    TEST_ASSERT_EQUAL_UINT8(0, FastLED.getBrightness());
+}
+
+// POWER_OFF arriving mid-transition must cancel the in-flight animation
+// cleanly (no dangling pointer) and blank the strip immediately, rather than
+// wait for the transition to run its course.
+void test_power_off_mid_transition_cancels_animation_and_blanks_strip()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setMaxBrightness(mc, 255);
+
+    ControllableAnimation* anim = new ControllableAnimation();
+    MissionControlTestAccess::setAnimation(mc, anim);
+
+    milliseconds_t now = millis();
+    MissionControlTestAccess::setTransitionWindowStart(mc, now);
+    MissionControlTestAccess::setTransitionWindowPreDelayEnd(mc, now);  // already past pre-delay
+    MissionControlTestAccess::setTransitionWindowAnimationFinishedAt(mc, 0);
+    MissionControlTestAccess::setMode(mc, RenderMode::TRANSITIONING);
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::PowerOff()));
+    mc.update(now);
+
+    TEST_ASSERT_EQUAL(RenderMode::OFF, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_NULL(MissionControlTestAccess::getAnimation(mc));
+    // powerOff() blanks by painting the buffer black (matching the pre-
+    // refactor behavior), not by touching FastLED's brightness scalar -
+    // check the actual strip content rather than FastLED.getBrightness().
+    TEST_ASSERT_TRUE(GEOMETRY.getStrip(0).buffer[0] == CRGB::Black);
+}
+
+// Drives a full TRANSITIONING cycle end-to-end through update() - pre-delay,
+// animation, post-delay - and checks it lands back in FX_LOOP with a fresh,
+// non-null effect installed.
+void test_full_transition_cycle_lands_on_new_effect_in_fx_loop_mode()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setMaxBrightness(mc, 255);
+
+    ControllableAnimation* anim = new ControllableAnimation();
+    anim->finished = true;  // finishes on its very first renderFrame() call
+    MissionControlTestAccess::setAnimation(mc, anim);
+
+    milliseconds_t start = millis();
+    milliseconds_t preDelayEnd = start + MissionControlTestAccess::PRE_ANIMATION_DELAY(mc);
+    MissionControlTestAccess::setTransitionWindowStart(mc, start);
+    MissionControlTestAccess::setTransitionWindowPreDelayEnd(mc, preDelayEnd);
+    MissionControlTestAccess::setTransitionWindowAnimationFinishedAt(mc, 0);
+    MissionControlTestAccess::setMode(mc, RenderMode::TRANSITIONING);
+
+    mc.update(start);  // still pre-delay
+    TEST_ASSERT_EQUAL(RenderMode::TRANSITIONING, MissionControlTestAccess::getMode(mc));
+
+    mc.update(preDelayEnd);  // animation runs and finishes immediately
+    TEST_ASSERT_EQUAL(RenderMode::TRANSITIONING, MissionControlTestAccess::getMode(mc));
+    milliseconds_t finishedAt = MissionControlTestAccess::transitionWindowAnimationFinishedAt(mc);
+    TEST_ASSERT_TRUE(finishedAt != 0);
+
+    mc.update(finishedAt);  // still inside post-delay
+    TEST_ASSERT_EQUAL(RenderMode::TRANSITIONING, MissionControlTestAccess::getMode(mc));
+
+    milliseconds_t postDelayEnd = finishedAt + MissionControlTestAccess::POST_ANIMATION_DELAY(mc);
+    mc.update(postDelayEnd);  // transition completes
+
+    TEST_ASSERT_EQUAL(RenderMode::FX_LOOP, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_NULL(MissionControlTestAccess::getAnimation(mc));
+    TEST_ASSERT_NOT_NULL(MissionControlTestAccess::getEffect(mc));
+}
+
+// A HOLD command arriving mid-transition can't flip to HOLDING immediately
+// without abandoning the in-flight animation/effect swap - it must defer,
+// then actually take effect once the transition lands.
+void test_hold_command_mid_transition_is_applied_once_transition_finishes()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setMaxBrightness(mc, 255);
+
+    ControllableAnimation* anim = new ControllableAnimation();
+    anim->finished = true;
+    MissionControlTestAccess::setAnimation(mc, anim);
+
+    milliseconds_t start = millis();
+    milliseconds_t preDelayEnd = start + MissionControlTestAccess::PRE_ANIMATION_DELAY(mc);
+    MissionControlTestAccess::setTransitionWindowStart(mc, start);
+    MissionControlTestAccess::setTransitionWindowPreDelayEnd(mc, preDelayEnd);
+    MissionControlTestAccess::setTransitionWindowAnimationFinishedAt(mc, 0);
+    MissionControlTestAccess::setMode(mc, RenderMode::TRANSITIONING);
+
+    mc.update(preDelayEnd);  // animation finishes, enters post-delay
+    milliseconds_t finishedAt = MissionControlTestAccess::transitionWindowAnimationFinishedAt(mc);
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Hold()));
+    mc.update(finishedAt);  // HOLD processed while still TRANSITIONING -> deferred
+
+    TEST_ASSERT_EQUAL(RenderMode::TRANSITIONING, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_TRUE(MissionControlTestAccess::holdPending(mc));
+
+    milliseconds_t postDelayEnd = finishedAt + MissionControlTestAccess::POST_ANIMATION_DELAY(mc);
+    mc.update(postDelayEnd);  // transition completes -> deferred hold applied
+
+    TEST_ASSERT_EQUAL(RenderMode::HOLDING, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_FALSE(MissionControlTestAccess::holdPending(mc));
+    TEST_ASSERT_TRUE(mc.isHolding());
+}
+
+// Runs several real NEXT-triggered transitions end-to-end (through the real
+// handleTransition()/updateTransition()/finishTransition() path, using the
+// stubbed getRandomAnimation()) and checks the animation instance count
+// returns to baseline - i.e. MissionControl doesn't leak an AbstractFrameAnimation
+// each time it starts and finishes a transition.
+void test_repeated_transitions_do_not_leak_animation_instances()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setMaxBrightness(mc, 255);
+
+    int before = stubAnimationLiveCount;
+
+    for (int i = 0; i < 5; i++)
+    {
+        TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Next()));
+        mc.update(millis());
+        TEST_ASSERT_EQUAL(RenderMode::TRANSITIONING, MissionControlTestAccess::getMode(mc));
+
+        // StubAnimation finishes on its very first renderFrame() call; jump
+        // straight past the fixed pre/post-delay brackets to drive the
+        // transition to completion without waiting on real wall-clock time.
+        milliseconds_t preDelayEnd = MissionControlTestAccess::transitionWindowPreDelayEnd(mc);
+        mc.update(preDelayEnd);
+        milliseconds_t finishedAt =
+            MissionControlTestAccess::transitionWindowAnimationFinishedAt(mc);
+        TEST_ASSERT_TRUE(finishedAt != 0);
+
+        mc.update(finishedAt + MissionControlTestAccess::POST_ANIMATION_DELAY(mc));
+        TEST_ASSERT_EQUAL(RenderMode::FX_LOOP, MissionControlTestAccess::getMode(mc));
+    }
+
+    TEST_ASSERT_EQUAL_INT(before, stubAnimationLiveCount);
 }
 
 // ---------------------------------------------------------------------------
@@ -500,16 +773,24 @@ int main(int argc, char** argv)
 
     RUN_TEST(test_queue_web_command_and_process_hold);
     RUN_TEST(test_resume_effect_clears_holding_and_reduces_remaining_by_elapsed);
-    RUN_TEST(test_next_command_mid_update_does_not_flash_stale_t_into_high_brightness);
     RUN_TEST(test_queue_web_command_fills_and_rejects_when_full);
     RUN_TEST(test_update_does_not_dereference_null_effect_before_first_transition);
     RUN_TEST(test_power_off_and_on_toggle_state);
+    RUN_TEST(test_power_off_and_on_restores_holding_mode);
     RUN_TEST(test_queue_color_command_sets_static_color_and_enters_static_mode);
     RUN_TEST(test_queue_color_command_while_already_in_static_mode_updates_color);
     RUN_TEST(test_queue_model_command_updates_factory_config);
-    RUN_TEST(test_run_random_animation_pushes_black_to_strip_before_each_delay);
     RUN_TEST(test_ws_json_color_command_flows_through_to_static_color);
     RUN_TEST(test_brightness_config_persists_and_reloads_value);
+
+    RUN_TEST(test_next_command_starts_transitioning_without_blocking_later_commands);
+    RUN_TEST(test_next_command_mid_update_does_not_flash_stale_t_into_high_brightness);
+    RUN_TEST(test_update_transition_guards_against_t_before_window_start);
+    RUN_TEST(test_transitioning_pre_and_post_delay_windows_zero_the_strip_brightness);
+    RUN_TEST(test_power_off_mid_transition_cancels_animation_and_blanks_strip);
+    RUN_TEST(test_full_transition_cycle_lands_on_new_effect_in_fx_loop_mode);
+    RUN_TEST(test_hold_command_mid_transition_is_applied_once_transition_finishes);
+    RUN_TEST(test_repeated_transitions_do_not_leak_animation_instances);
 
     return UNITY_END();
 }

@@ -149,79 +149,87 @@ uint8_t MissionControl::calcBrightness(milliseconds_t t)
     return dim8_raw(constrain(brightness, 0, 255));
 }
 
-// Pick a new random animation, play it, and deallocate it.
-//
-// TEMPORARY: animations were converted to AbstractFrameAnimation's per-frame
-// renderFrame(t) interface (renders one frame, no delay()/FASTLED_SHOW() of
-// its own), but this method still drives that interface with a blocking spin
-// loop, so from the outside it behaves exactly as before - the actual
-// non-blocking integration (driving renderFrame() once per MissionControl::
-// update() tick, so processWebCommands() keeps running during a transition)
-// lands in the very next commit, which removes this loop entirely.
-void MissionControl::runRandomAnimation()
+// Tears down an in-flight transition's animation without installing any
+// effect. Safe to call unconditionally (idempotent when nothing is in
+// flight) - see mission-control.h for when each caller needs it.
+void MissionControl::cancelTransition()
 {
-    AbstractFrameAnimation* animation = getRandomAnimation();
-
-    Log.noticeln("Picked new animation: %s", animation->GetName());
-
-    if (animation->controlHints & ControlHints::ROTATE_SPACE)
-        GEOMETRY.applyGlobalRandomRotation();
-    else
-        GEOMETRY.resetGlobalTransform();
-
-    // First fade everything out to black and add a small delay
-    // to create some separation from the effect
-    FastLED.setBrightness(0);
-    FASTLED_SHOW();
-    delay(200);
-
-    // Reset the brightness to max and give control back to the animation
-    FastLED.setBrightness(MissionControl::Instance().getMaxBrightness());
-    milliseconds_t animationStart = millis();
-    bool done = false;
-    while (!done)
+    if (animation)
     {
-        done = animation->renderFrame(millis() - animationStart);
-        FASTLED_SHOW();
+        delete animation;
+        animation = nullptr;
     }
-    paint(CRGB::Black);
-    FASTLED_SHOW();
-
-    // Turn it down to zero and wait a little bit.
-    // This creates another small separation before the effect.
-    // The brightness must start from zero to avoid ugly jumps when the lerp kicks in
-    // setBrightness() only takes effect on the next show(), so push it now or the
-    // strip keeps displaying the animation's last (bright) frame during the delay.
-    FastLED.setBrightness(0);
-    FASTLED_SHOW();
-    delay(200);
-
-    delete animation;
-    animation = NULL;
+    // Only ever non-null for a transition that hasn't landed yet (see
+    // handleTransition()) - cancelling one drops it too, or it would leak.
+    if (pendingEffect)
+    {
+        delete pendingEffect;
+        pendingEffect = nullptr;
+    }
+    holdPending = false;
 }
 
-// When the transition time is reached:
-// - play an animation
-// - pick a new effect (unless one is passed in)
-// - pick the next transition time
-// - and also sprinkle random rotation transforms here and there
-void MissionControl::handleTransition(AbstractEffect* nextEffect, bool playAnimation)
+// Drives one phase of an in-flight TRANSITIONING per update() tick: cut to
+// black and pause -> play the animation at full brightness -> cut to black
+// and pause again -> hand off to finishTransition(). Never calls
+// FASTLED_SHOW() itself - update() owns that, exactly once per tick,
+// regardless of which mode is active.
+void MissionControl::updateTransition(milliseconds_t t)
 {
-    Log.noticeln("Handling transition");
+    // t can be stale relative to transitionWindow.start for the same reason
+    // calcBrightness() guards against t < effectStart: a command processed
+    // earlier in this same update() tick (e.g. NEXT) can call
+    // handleTransition(), which resets transitionWindow.start to a fresh,
+    // later millis() before this point is reached.
+    if (t < transitionWindow.start)
+    {
+        FastLED.setBrightness(0);
+        return;
+    }
 
-    ON = true;        // Ensure the system is ON
-    holding = false;  // A transition (e.g. NEXT) always leaves hold mode
+    if (t < transitionWindow.preDelayEnd)
+    {
+        FastLED.setBrightness(0);
+        return;
+    }
 
-    if (playAnimation) runRandomAnimation();
+    if (transitionWindow.animationFinishedAt == 0)
+    {
+        FastLED.setBrightness(maxBrightness);
+        milliseconds_t animationT = t - transitionWindow.preDelayEnd;
+        if (animation->renderFrame(animationT))
+        {
+            // 0 doubles as "not finished yet" - see mission-control.h's
+            // TransitionWindow comment. That sentinel would only misfire if
+            // an animation reported done at the exact millisecond the
+            // transition began, which handleTransition() already rules out
+            // by construction (preDelayEnd is always > 0 by the time
+            // animations can finish).
+            transitionWindow.animationFinishedAt = t;
+        }
+        return;
+    }
 
-    // Delete the current effect if it exists
+    if (t < transitionWindow.animationFinishedAt + POST_ANIMATION_DELAY)
+    {
+        FastLED.setBrightness(0);
+        return;
+    }
+
+    delete animation;
+    animation = nullptr;
+    finishTransition();
+}
+
+// Installs pendingEffect (or a random one), ending the transition and
+// returning to FX_LOOP - or HOLDING, if a HOLD command arrived mid-transition
+// and was deferred (see holdPending).
+void MissionControl::finishTransition()
+{
     if (effect) delete effect;
 
-    // If a next effect is provided, use it, otherwise pick a new random effect
-    if (nextEffect)
-        effect = nextEffect;
-    else
-        effect = getRandomEffect();
+    effect = pendingEffect ? pendingEffect : getRandomEffect();
+    pendingEffect = nullptr;
 
     Log.noticeln("Picked new effect: %s", effect->GetName());
 
@@ -231,6 +239,50 @@ void MissionControl::handleTransition(AbstractEffect* nextEffect, bool playAnima
         GEOMETRY.resetGlobalTransform();
 
     setNextTransition();
+    mode = RenderMode::FX_LOOP;
+    stateDirty = true;
+
+    if (holdPending)
+    {
+        holdPending = false;
+        holdEffect();
+    }
+}
+
+// Starts a transition to a new effect: cancels one already in flight (a
+// fresh NEXT/COLOR always wins over whatever was already happening), then
+// either kicks off a new TRANSITIONING window (playAnimation) or installs
+// nextEffect immediately (!playAnimation, e.g. transitionToStaticColor() -
+// a web COLOR command must take effect right away).
+void MissionControl::handleTransition(AbstractEffect* nextEffect, bool playAnimation)
+{
+    Log.noticeln("Handling transition");
+
+    cancelTransition();
+    mode = RenderMode::FX_LOOP;  // provisional; overridden below if playAnimation
+
+    if (!playAnimation)
+    {
+        pendingEffect = nextEffect;
+        finishTransition();
+        return;
+    }
+
+    animation = getRandomAnimation();
+    Log.noticeln("Picked new animation: %s", animation->GetName());
+
+    if (animation->controlHints & ControlHints::ROTATE_SPACE)
+        GEOMETRY.applyGlobalRandomRotation();
+    else
+        GEOMETRY.resetGlobalTransform();
+
+    pendingEffect = nextEffect;
+
+    transitionWindow.start = millis();
+    transitionWindow.preDelayEnd = transitionWindow.start + PRE_ANIMATION_DELAY;
+    transitionWindow.animationFinishedAt = 0;
+
+    mode = RenderMode::TRANSITIONING;
     stateDirty = true;
 }
 
@@ -242,7 +294,15 @@ void MissionControl::holdEffect()
     // Note that using Next from the web UI resets the transition and restarts the cycle.
     nextTransition = ~0UL;
     fadeOutStart = ~0UL;
-    holding = true;
+
+    // Can't flip to HOLDING mid-transition without abandoning the in-flight
+    // animation/effect swap - defer it; finishTransition() re-applies the
+    // hold once the transition actually lands on an effect.
+    if (mode == RenderMode::TRANSITIONING)
+        holdPending = true;
+    else
+        mode = RenderMode::HOLDING;
+
     stateDirty = true;
 
     Log.noticeln("Holding current effect forever");
@@ -263,7 +323,9 @@ void MissionControl::resumeEffect()
 
     fadeOutStart = now + remaining;
     nextTransition = fadeOutStart + FADE_OUT_DURATION;
-    holding = false;
+
+    holdPending = false;
+    if (mode != RenderMode::TRANSITIONING) mode = RenderMode::FX_LOOP;
     stateDirty = true;
 
     Log.noticeln("Resuming effect rotation, next transition in %d ms", remaining);
@@ -271,17 +333,23 @@ void MissionControl::resumeEffect()
 
 void MissionControl::powerOff()
 {
-    // Immediately switch off all the lights and prevent further updates
+    // Immediately switch off all the lights and prevent further updates.
+    // Cancels rather than tries to resume an in-flight transition later -
+    // powerOn() always comes back into FX_LOOP/HOLDING, never mid-animation.
+    cancelTransition();
+    if (mode != RenderMode::OFF)
+        modeBeforeOff = (mode == RenderMode::TRANSITIONING) ? RenderMode::FX_LOOP : mode;
+
     paint(CRGB::Black);
     FASTLED_SHOW();
-    ON = false;
+    mode = RenderMode::OFF;
     PerformanceMonitor::Instance().stop();
     stateDirty = true;
 }
 
 void MissionControl::powerOn()
 {
-    ON = true;
+    mode = modeBeforeOff;
     stateDirty = true;
 }
 
@@ -289,7 +357,7 @@ void MissionControl::update(milliseconds_t t)
 {
     processWebCommands();
 
-    if (!ON)
+    if (mode == RenderMode::OFF)
     {
         vTaskDelay(pdMS_TO_TICKS(10));
         return;
@@ -303,19 +371,23 @@ void MissionControl::update(milliseconds_t t)
 
     Energy::set(slowSin(millis(), 0.5, 0, 255));
 
-    if (t >= nextTransition)
-    {
-        handleTransition();
-        return;
-    }
-
     milliseconds_t frameStart = millis();
 
-    FastLED.setBrightness(calcBrightness(t));
+    if (mode == RenderMode::TRANSITIONING) { updateTransition(t); }
+    else
+    {
+        if (t >= nextTransition)
+        {
+            handleTransition();
+            return;
+        }
 
-    effect->precompute(t);
-    effect->render(t);
-    effect->postprocess(t);
+        FastLED.setBrightness(calcBrightness(t));
+
+        effect->precompute(t);
+        effect->render(t);
+        effect->postprocess(t);
+    }
 
     FASTLED_SHOW();
 
