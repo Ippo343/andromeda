@@ -149,10 +149,18 @@ uint8_t MissionControl::calcBrightness(milliseconds_t t)
     return dim8_raw(constrain(brightness, 0, 255));
 }
 
-// Pick a new random animation, play it, and deallocate it
+// Pick a new random animation, play it, and deallocate it.
+//
+// TEMPORARY: animations were converted to AbstractFrameAnimation's per-frame
+// renderFrame(t) interface (renders one frame, no delay()/FASTLED_SHOW() of
+// its own), but this method still drives that interface with a blocking spin
+// loop, so from the outside it behaves exactly as before - the actual
+// non-blocking integration (driving renderFrame() once per MissionControl::
+// update() tick, so processWebCommands() keeps running during a transition)
+// lands in the very next commit, which removes this loop entirely.
 void MissionControl::runRandomAnimation()
 {
-    AbstractBlockingAnimation* animation = getRandomAnimation();
+    AbstractFrameAnimation* animation = getRandomAnimation();
 
     Log.noticeln("Picked new animation: %s", animation->GetName());
 
@@ -169,8 +177,15 @@ void MissionControl::runRandomAnimation()
 
     // Reset the brightness to max and give control back to the animation
     FastLED.setBrightness(MissionControl::Instance().getMaxBrightness());
-    animation->run();
-    animation->cleanup();
+    milliseconds_t animationStart = millis();
+    bool done = false;
+    while (!done)
+    {
+        done = animation->renderFrame(millis() - animationStart);
+        FASTLED_SHOW();
+    }
+    paint(CRGB::Black);
+    FASTLED_SHOW();
 
     // Turn it down to zero and wait a little bit.
     // This creates another small separation before the effect.

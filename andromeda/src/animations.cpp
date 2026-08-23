@@ -1,59 +1,62 @@
 #include "animations.h"
 
 #include "animation-utils.h"
+#include "segmented-animation.h"
 
 // ============================================================================
 // SweepStrips - Internal Animation Class
 // ============================================================================
 
-// Sweeps all the strips with random colors,
-// then white and then black sequentially
-class SweepStrips : public AbstractBlockingAnimation
+// Sweeps all the strips with random colors, then white and then black
+// sequentially. Each color is one segment; within a segment, the number of
+// lit LEDs is a function of how far into the segment we are (segmentT)
+// instead of a discrete step counter driven by delay().
+class SweepStrips : public SegmentedAnimation
 {
    public:
     virtual const char* GetName() { return "SweepStrips"; }
 
-    RandParam<int, 10, 30> timeStep;
-
-    void run() override
+    SweepStrips()
     {
         vector<CHSV> colors = randomComplementaryColors(3);
-
-        paint(CRGB::Black);
-        for (size_t c = 0; c < 3; c++) colorSweep(colors[c]);
-        colorSweep(CRGB::White);
-        colorSweep(CRGB::Black);
+        for (auto& color : colors) addColorSegment(color);
+        addColorSegment(CRGB::White);
+        addColorSegment(CRGB::Black);
     }
 
    private:
-    void colorSweep(CRGB color)
+    RandParam<int, 10, 30> timeStep;
+
+    void addColorSegment(CRGB color)
     {
         // Find the longest strip
-        size_t maxLeds = 0;
+        size_t maxLeds = 1;
         for (size_t i = 0; i < GEOMETRY.getNumStrips(); i++)
         {
             maxLeds = max(maxLeds, GEOMETRY.getStrip(i).num_leds);
         }
 
-        // Sweep with normalized progress
-        for (size_t step = 0; step < maxLeds; step++)
-        {
-            FOR_EACH_STRIP
-            {
-                size_t stripLen = GEOMETRY.getStrip(iStrip).num_leds;
+        milliseconds_t duration = maxLeds * timeStep;
 
-                // Map the current step to how many LEDs should be lit on this strip
-                size_t ledsToLight = map(step, 0, maxLeds - 1, 0, stripLen - 1);
+        addSegment(duration,
+                   [maxLeds, duration, color](milliseconds_t segmentT)
+                   {
+                       // Map elapsed segment time to how many LEDs should be lit,
+                       // the same normalized-progress math the old step counter used.
+                       size_t step = map(segmentT, 0, duration, 0, maxLeds - 1);
 
-                // Fill from 0 to ledsToLight
-                for (size_t i = 0; i <= ledsToLight; i++)
-                {
-                    GEOMETRY.getStrip(iStrip).buffer[i] = color;
-                }
-            }
-            FASTLED_SHOW();
-            delay(timeStep);
-        }
+                       FOR_EACH_STRIP
+                       {
+                           size_t stripLen = GEOMETRY.getStrip(iStrip).num_leds;
+                           size_t ledsToLight = map(step, 0, maxLeds - 1, 0, stripLen - 1);
+
+                           // Fill from 0 to ledsToLight
+                           for (size_t i = 0; i <= ledsToLight; i++)
+                           {
+                               GEOMETRY.getStrip(iStrip).buffer[i] = color;
+                           }
+                       }
+                   });
     }
 };
 
@@ -61,7 +64,7 @@ class SweepStrips : public AbstractBlockingAnimation
 // BaseSweep - Abstract Base Class for Sweep Animations
 // ============================================================================
 
-class BaseSweep : public AbstractBlockingAnimation
+class BaseSweep : public SegmentedAnimation
 {
    protected:
     bool direction;  // Subclasses define meaning (clockwise/outward, etc.)
@@ -73,54 +76,52 @@ class BaseSweep : public AbstractBlockingAnimation
     virtual unsigned short getCoordinate(int strip, int led) = 0;
     virtual unsigned short getMaxCoordinate() = 0;
 
-    void run() override
+    // Called from each concrete subclass's constructor, once direction/
+    // sweepDuration/rampWidth are set - not from BaseSweep's own constructor,
+    // so the virtual calls below (getMaxCoordinate/getCoordinate/
+    // flipCoordinates) resolve to the derived class's overrides.
+    void buildSegments()
     {
         vector<CHSV> colors = randomComplementaryColors(3);
 
-        // Coordinate system flip for direction (if needed)
         if (!direction) { flipCoordinates(); }
 
-        paint(CRGB::Black);
-        for (size_t c = 0; c < 3; c++) { colorSweep(colors[c]); }
-        colorSweep(CRGB::White);
-        colorSweep(CRGB::Black);
+        for (auto& color : colors) addSweepSegment(color);
+        addSweepSegment(CRGB::White);
+        addSweepSegment(CRGB::Black);
     }
 
    private:
-    void colorSweep(CRGB color)
+    void addSweepSegment(CRGB color)
     {
-        long coordLead = 0;  // The coordinate of the leading edge of the ramp
-        long coordTail = 0;  // The coordinate of the trailing edge of the ramp
         unsigned short maxCoord = getMaxCoordinate();
+        unsigned short ramp = rampWidth;
+        unsigned short duration = sweepDuration;
 
-        milliseconds_t start = millis();
-        milliseconds_t t = 0;
+        addSegment(duration,
+                   [this, color, maxCoord, ramp, duration](milliseconds_t segmentT)
+                   {
+                       // Always sweep in positive direction from 0 to max + rampWidth
+                       long coordLead = map(segmentT, 0, duration, 0, maxCoord + ramp);
+                       long coordTail = coordLead - ramp;
 
-        while (t <= sweepDuration)
-        {
-            // Always sweep in positive direction from 0 to max + rampWidth
-            coordLead = map(t, 0, sweepDuration, 0, maxCoord + rampWidth);
-            coordTail = coordLead - rampWidth;
+                       FOR_EACH_STRIP
+                       {
+                           FOR_EACH_LED(iStrip)
+                           {
+                               unsigned short coord = getCoordinate(iStrip, iLed);
 
-            FOR_EACH_STRIP
-            {
-                FOR_EACH_LED(iStrip)
-                {
-                    unsigned short coord = getCoordinate(iStrip, iLed);
-
-                    SweepRampResult ramp =
-                        computeSweepRamp(coordLead, coordTail, coord, maxCoord, rampWidth);
-                    if (ramp.inRange)
-                    {
-                        uint8_t brightness = map(ramp.rampDistance, 0, rampWidth, 0, 255);
-                        GEOMETRY.getStrip(iStrip).buffer[iLed] = color % brightness;
-                    }
-                }
-            }
-
-            FASTLED_SHOW();
-            t = millis() - start;
-        }
+                               SweepRampResult sweepRamp =
+                                   computeSweepRamp(coordLead, coordTail, coord, maxCoord, ramp);
+                               if (sweepRamp.inRange)
+                               {
+                                   uint8_t brightness =
+                                       map(sweepRamp.rampDistance, 0, ramp, 0, 255);
+                                   GEOMETRY.getStrip(iStrip).buffer[iLed] = color % brightness;
+                               }
+                           }
+                       }
+                   });
     }
 };
 
@@ -141,6 +142,7 @@ class ClockSweep : public BaseSweep
         direction = clockwise;
         sweepDuration = duration;
         rampWidth = 1000;  // 10 degrees
+        buildSegments();
     }
 
    protected:
@@ -181,6 +183,7 @@ class RadialSweep : public BaseSweep
         direction = outward;
         sweepDuration = duration;
         rampWidth = 10;  // Radial ramp width in distance units
+        buildSegments();
     }
 
    protected:
@@ -208,86 +211,110 @@ class RadialSweep : public BaseSweep
 // SequentialFadeIn - Internal Animation Class
 // ============================================================================
 
-// Fade in each strip with a random color
-class SequentialFadeIn : public AbstractBlockingAnimation
+// Fade in each strip with a random color, one strip at a time, then fade all
+// of them out together. Converted to N per-strip fade-in segments (each
+// duration `fadeIn`, matching the old sequential fadeInStrip() calls) plus a
+// final group fade-out segment (duration `fadeOut`).
+class SequentialFadeIn : public SegmentedAnimation
 {
    public:
     virtual const char* GetName() { return "SequentialFadeIn"; }
 
-    RandParam<milliseconds_t, 150, 500> fadeIn;
-    milliseconds_t fadeOut = 2 * fadeIn;
-
-    void run() override
+    SequentialFadeIn()
     {
         paint(CRGB::Black);
 
+        size_t numStrips = GEOMETRY.getNumStrips();
+        milliseconds_t fadeInMs = fadeIn;
+        milliseconds_t fadeOutMs = fadeOut;
+
         // Shuffle the strip indices to randomize the order of fading in
-        int strips[GEOMETRY.getNumStrips()];
-        for (size_t i = 0; i < GEOMETRY.getNumStrips(); i++) strips[i] = i;
-        shuffle(strips, GEOMETRY.getNumStrips());
+        vector<int> strips(numStrips);
+        for (size_t i = 0; i < numStrips; i++) strips[i] = i;
+        shuffle(strips.data(), (int)numStrips);
 
-        auto colors = randomComplementaryColors(GEOMETRY.getNumStrips());
+        vector<CHSV> colors = randomComplementaryColors((int)numStrips);
 
-        for (size_t i = 0; i < GEOMETRY.getNumStrips(); i++)
+        for (size_t i = 0; i < numStrips; i++)
         {
-            fadeInStrip(strips[i], colors[i], fadeIn);
+            int stripIdx = strips[i];
+            CHSV color = colors[i];
+            addSegment(fadeInMs,
+                       [stripIdx, color, fadeInMs](milliseconds_t segmentT)
+                       {
+                           uint8_t v = constrain(map(segmentT, 0, fadeInMs, 0, color.v), 0, 255);
+                           paintStrip(stripIdx, CHSV(color.h, color.s, v));
+                       });
         }
 
-        milliseconds_t start = millis();
-        milliseconds_t dt;
-        do {
-            dt = millis() - start;
-            uint8_t b = constrain(map(dt, 0, fadeOut, 255, 0), 0, 255);
-
-            FOR_EACH_STRIP { paintStrip(strips[iStrip], colors[iStrip] % b); }
-
-            FASTLED_SHOW();
-        } while (dt < fadeOut);
+        addSegment(fadeOutMs,
+                   [strips, colors, numStrips, fadeOutMs](milliseconds_t segmentT)
+                   {
+                       uint8_t b = constrain(map(segmentT, 0, fadeOutMs, 255, 0), 0, 255);
+                       for (size_t i = 0; i < numStrips; i++)
+                       {
+                           paintStrip(strips[i], colors[i] % b);
+                       }
+                   });
     }
+
+   private:
+    RandParam<milliseconds_t, 150, 500> fadeIn;
+    milliseconds_t fadeOut = 2 * fadeIn;
 };
 
 // ============================================================================
 // Swipe - Internal Animation Class
 // ============================================================================
 
-// Swipes a random color from left to right and then fades it out
-class Swipe : public AbstractBlockingAnimation
+// Swipes a random color from left to right, fading the trail out behind it.
+// The original had no explicit duration (it stepped a spatial variable in a
+// tight loop with no delay(), so its wall-clock length was just however long
+// the loop took to run); converting to a per-frame model requires making
+// that duration explicit, similar to the other sweeps.
+class Swipe : public SegmentedAnimation
 {
    public:
     virtual const char* GetName() { return "Swipe"; }
 
-    Swipe() { controlHints |= ControlHints::ROTATE_SPACE; }
-
-    void run() override
+    Swipe()
     {
+        controlHints |= ControlHints::ROTATE_SPACE;
+
         paint(CRGB::Black);
         CRGB color = randomColor();
+        short radius = GEOMETRY.getScreenRadius();
+        short stepLocal = step;
+        milliseconds_t durationMs = duration;
 
-        // Even without any delay, scrolling the whole screen size takes a long time
-        // (which I am a bit suspicious of to be honest, but I guess calling it 520 times is a bit
-        // much). It looks smoother if you increase in steps of 2 or 3
-        RandParam<short, 2, 3> step;
+        // Goes to (step * radius) so the fading trail has time to fully fade out.
+        short vStart = -radius;
+        short vEnd = stepLocal * radius;
 
-        // It goes to (step * GEOMETRY.getScreenHalfSize()) so that the fading trail has time to
-        // fully fade out
-        for (short v = -GEOMETRY.getScreenRadius(); v <= (step * GEOMETRY.getScreenRadius());
-             v += step)
-        {
-            FOR_EACH_STRIP
-            {
-                FOR_EACH_LED(iStrip)
-                {
-                    short lv = GEOMETRY.getStrip(iStrip).leds[iLed].cartesian.x;
-                    if (lv >= (v - step) && lv <= v) GEOMETRY.getStrip(iStrip).buffer[iLed] = color;
-                }
+        addSegment(durationMs,
+                   [color, stepLocal, vStart, vEnd, durationMs](milliseconds_t segmentT)
+                   {
+                       short v = map(segmentT, 0, durationMs, vStart, vEnd);
 
-                fadeToBlackBy(GEOMETRY.getStrip(iStrip).buffer, GEOMETRY.getStrip(iStrip).num_leds,
-                              step);
-            }
+                       FOR_EACH_STRIP
+                       {
+                           FOR_EACH_LED(iStrip)
+                           {
+                               short lv = GEOMETRY.getStrip(iStrip).leds[iLed].cartesian.x;
+                               if (lv >= (v - stepLocal) && lv <= v)
+                                   GEOMETRY.getStrip(iStrip).buffer[iLed] = color;
+                           }
 
-            FASTLED_SHOW();
-        }
+                           fadeToBlackBy(GEOMETRY.getStrip(iStrip).buffer,
+                                         GEOMETRY.getStrip(iStrip).num_leds, stepLocal);
+                       }
+                   });
     }
+
+   private:
+    // It looks smoother if the swept edge advances in steps of 2 or 3.
+    RandParam<short, 2, 3> step;
+    RandParam<milliseconds_t, 400, 700> duration;
 };
 
 // ============================================================================
@@ -344,7 +371,7 @@ void ErrorAnimation::run()
 // Utility Functions
 // ============================================================================
 
-AbstractBlockingAnimation* getRandomAnimation()
+AbstractFrameAnimation* getRandomAnimation()
 {
     size_t ANIMATIONS_COUNT = 5;
 
@@ -372,9 +399,7 @@ AbstractBlockingAnimation* getRandomAnimation()
             return new ClockSweep();
         case 3:
             return new RadialSweep();
-        case 4:
-            return new Swipe();
         default:
-            return new ErrorAnimation();
+            return new Swipe();
     }
 }

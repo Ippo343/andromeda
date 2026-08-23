@@ -107,7 +107,7 @@ void test_get_random_animation_produces_valid_animations()
     std::set<std::string> namesSeen;
     for (int i = 0; i < 300; i++)
     {
-        AbstractBlockingAnimation* anim = getRandomAnimation();
+        AbstractFrameAnimation* anim = getRandomAnimation();
         TEST_ASSERT_NOT_NULL(anim);
         TEST_ASSERT_NOT_NULL(anim->GetName());
         namesSeen.insert(anim->GetName());
@@ -123,13 +123,117 @@ void test_get_random_animation_never_repeats_consecutively()
     std::string previous;
     for (int i = 0; i < 100; i++)
     {
-        AbstractBlockingAnimation* anim = getRandomAnimation();
+        AbstractFrameAnimation* anim = getRandomAnimation();
         std::string name = anim->GetName();
         delete anim;
 
         if (i > 0) { TEST_ASSERT_TRUE(name != previous); }
         previous = name;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Rotation animations (SweepStrips/ClockSweep/RadialSweep/SequentialFadeIn/
+// Swipe) - each is now an AbstractFrameAnimation driven by renderFrame(t),
+// with no delay()/busy loop of its own, so they're natively testable the
+// same way effects are (test_effects.cpp's exerciseEvaluate() pattern).
+// ---------------------------------------------------------------------------
+
+// Drives an animation's renderFrame() forward in fixed steps until it
+// reports done, asserting that actually happens within maxT - i.e. the
+// animation has a real, bounded duration and doesn't spin forever. Returns
+// the number of renderFrame() calls made, so callers can also sanity-check
+// more than one frame was actually rendered.
+static int driveToCompletion(AbstractFrameAnimation& anim, milliseconds_t step = 25,
+                             milliseconds_t maxT = 10000)
+{
+    int frames = 0;
+    for (milliseconds_t t = 0; t <= maxT; t += step)
+    {
+        frames++;
+        if (anim.renderFrame(t)) return frames;
+    }
+    TEST_FAIL_MESSAGE("animation did not report done within maxT");
+    return frames;
+}
+
+void test_sweep_strips_finishes_within_a_bounded_duration()
+{
+    SweepStrips anim;
+    int frames = driveToCompletion(anim);
+    TEST_ASSERT_TRUE(frames > 1);
+}
+
+void test_clock_sweep_finishes_within_a_bounded_duration()
+{
+    ClockSweep anim;
+    int frames = driveToCompletion(anim);
+    TEST_ASSERT_TRUE(frames > 1);
+}
+
+void test_radial_sweep_finishes_within_a_bounded_duration()
+{
+    RadialSweep anim;
+    int frames = driveToCompletion(anim);
+    TEST_ASSERT_TRUE(frames > 1);
+}
+
+void test_sequential_fade_in_finishes_within_a_bounded_duration()
+{
+    GEOMETRY.initializeForTest(
+        ModelId::L70_MK1);  // multiple strips, to exercise per-strip segments
+    SequentialFadeIn anim;
+    int frames = driveToCompletion(anim);
+    TEST_ASSERT_TRUE(frames > 1);
+}
+
+void test_swipe_finishes_within_a_bounded_duration()
+{
+    Swipe anim;
+    int frames = driveToCompletion(anim);
+    TEST_ASSERT_TRUE(frames > 1);
+}
+
+// A call at t=0 must render the animation's very first frame rather than
+// crash or skip straight to a later segment - regression guard for
+// SegmentedAnimation's segment-selection math at the very start.
+void test_rotation_animations_render_first_frame_without_crashing()
+{
+    SweepStrips sweepStrips;
+    TEST_ASSERT_FALSE(sweepStrips.renderFrame(0));
+
+    ClockSweep clockSweep;
+    TEST_ASSERT_FALSE(clockSweep.renderFrame(0));
+
+    RadialSweep radialSweep;
+    TEST_ASSERT_FALSE(radialSweep.renderFrame(0));
+
+    SequentialFadeIn sequentialFadeIn;
+    TEST_ASSERT_FALSE(sequentialFadeIn.renderFrame(0));
+
+    Swipe swipe;
+    TEST_ASSERT_FALSE(swipe.renderFrame(0));
+}
+
+// A call far past any animation's real duration must still report done
+// (clamped), not silently keep going or crash - regression guard for
+// SegmentedAnimation's last-segment clamping.
+void test_rotation_animations_report_done_far_past_their_duration()
+{
+    SweepStrips sweepStrips;
+    TEST_ASSERT_TRUE(sweepStrips.renderFrame(60000));
+
+    ClockSweep clockSweep;
+    TEST_ASSERT_TRUE(clockSweep.renderFrame(60000));
+
+    RadialSweep radialSweep;
+    TEST_ASSERT_TRUE(radialSweep.renderFrame(60000));
+
+    SequentialFadeIn sequentialFadeIn;
+    TEST_ASSERT_TRUE(sequentialFadeIn.renderFrame(60000));
+
+    Swipe swipe;
+    TEST_ASSERT_TRUE(swipe.renderFrame(60000));
 }
 
 int main(int argc, char** argv)
@@ -144,6 +248,14 @@ int main(int argc, char** argv)
 
     RUN_TEST(test_get_random_animation_produces_valid_animations);
     RUN_TEST(test_get_random_animation_never_repeats_consecutively);
+
+    RUN_TEST(test_sweep_strips_finishes_within_a_bounded_duration);
+    RUN_TEST(test_clock_sweep_finishes_within_a_bounded_duration);
+    RUN_TEST(test_radial_sweep_finishes_within_a_bounded_duration);
+    RUN_TEST(test_sequential_fade_in_finishes_within_a_bounded_duration);
+    RUN_TEST(test_swipe_finishes_within_a_bounded_duration);
+    RUN_TEST(test_rotation_animations_render_first_frame_without_crashing);
+    RUN_TEST(test_rotation_animations_report_done_far_past_their_duration);
 
     return UNITY_END();
 }

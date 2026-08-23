@@ -1,6 +1,7 @@
 #pragma once
 
 #include "animation-base.h"
+#include "animation-frame-base.h"
 #include "effects-utils.h"
 #include "geometry/geometry.h"
 #include "perf-monitor.h"
@@ -30,4 +31,4 @@ class ErrorAnimation : public AbstractBlockingAnimation
 };
 
 // Factory function to get a random rotation animation instance
-AbstractBlockingAnimation* getRandomAnimation();
+AbstractFrameAnimation* getRandomAnimation();

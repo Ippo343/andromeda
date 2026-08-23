@@ -10,6 +10,7 @@
 // test_effects.cpp doing the same #include independently.
 #include "../../src/effects.cpp"
 #include "animation-base.h"
+#include "animation-frame-base.h"
 #include "platforms/stub/time_stub.h"
 #include "ws-command-parser.h"
 
@@ -21,20 +22,18 @@
 const char* AbstractBlockingAnimation::GetName() { return "AbstractBlockingAnimation"; }
 void AbstractBlockingAnimation::run() {}
 
-// Minimal animation stand-in so mission-control.cpp links without pulling in
-// the real animations.cpp - which is out of scope for native tests (its
-// animations drive real-time delay() busy loops, see the testing plan).
-// AbstractBlockingAnimation::GetName()/run() are declared but never defined
-// for the base class in production code (only overridden in concrete
-// animations), so instantiating AbstractBlockingAnimation directly wouldn't
-// link either way.
-class StubAnimation : public AbstractBlockingAnimation
+// Minimal rotation-animation stand-in so mission-control.cpp links without
+// pulling in the real animations.cpp (out of scope for this test target -
+// see test_animations.cpp for the real per-animation frame tests). Finishes
+// on its very first renderFrame() call so runRandomAnimation()'s spin loop
+// (mission-control.cpp) exits immediately.
+class StubAnimation : public AbstractFrameAnimation
 {
    public:
     const char* GetName() override { return "StubAnimation"; }
-    void run() override {}
+    bool renderFrame(milliseconds_t localT) override { return true; }
 };
-AbstractBlockingAnimation* getRandomAnimation() { return new StubAnimation(); }
+AbstractFrameAnimation* getRandomAnimation() { return new StubAnimation(); }
 
 #include "../../src/mission-control.cpp"
 

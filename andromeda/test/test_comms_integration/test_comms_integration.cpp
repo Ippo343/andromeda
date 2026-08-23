@@ -15,17 +15,18 @@
 // don't define MissionControl/PerformanceMonitor.
 #include "../../src/effects.cpp"
 #include "animation-base.h"
+#include "animation-frame-base.h"
 
 const char* AbstractBlockingAnimation::GetName() { return "AbstractBlockingAnimation"; }
 void AbstractBlockingAnimation::run() {}
 
-class StubAnimation : public AbstractBlockingAnimation
+class StubAnimation : public AbstractFrameAnimation
 {
    public:
     const char* GetName() override { return "StubAnimation"; }
-    void run() override {}
+    bool renderFrame(milliseconds_t localT) override { return true; }
 };
-AbstractBlockingAnimation* getRandomAnimation() { return new StubAnimation(); }
+AbstractFrameAnimation* getRandomAnimation() { return new StubAnimation(); }
 
 #include "../../src/comms.cpp"
 #include "../../src/mission-control.cpp"
