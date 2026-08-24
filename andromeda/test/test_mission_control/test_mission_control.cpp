@@ -492,6 +492,34 @@ void test_queue_color_command_while_already_in_static_mode_updates_color()
     TEST_ASSERT_EQUAL_UINT8(60, mc.staticColor.b);
 }
 
+// Regression guard: isColorActive() must not read the stale outgoing effect
+// while TRANSITIONING. If a StaticColor was already active when NEXT was
+// pressed, that effect stays around (untouched) for the whole transition
+// window - before the fix, isColorActive() reported true from it, so a COLOR
+// command mid-transition skipped transitionToStaticColor() and only wrote
+// staticColor into an effect finishTransition() was about to delete, silently
+// losing the color once the animation landed on a fresh random effect.
+// transitionToStaticColor() always ends in HOLDING (it calls holdEffect()
+// unconditionally - a solid color is meant to be pinned, not rotate away).
+void test_color_command_mid_transition_cancels_transition_and_applies_color()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setEffect(mc, new StaticColor());
+    MissionControlTestAccess::setAnimation(mc, new ControllableAnimation());
+    MissionControlTestAccess::setMode(mc, RenderMode::TRANSITIONING);
+
+    TEST_ASSERT_FALSE(MissionControlTestAccess::holdPending(mc));
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Color(70, 80, 90)));
+    mc.update(0);
+
+    TEST_ASSERT_EQUAL(RenderMode::HOLDING, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_TRUE(mc.isColorActive());
+    TEST_ASSERT_EQUAL_UINT8(70, mc.staticColor.r);
+    TEST_ASSERT_EQUAL_UINT8(80, mc.staticColor.g);
+    TEST_ASSERT_EQUAL_UINT8(90, mc.staticColor.b);
+}
+
 void test_queue_model_command_updates_factory_config()
 {
     MissionControl& mc = MissionControl::Instance();
@@ -861,6 +889,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_power_off_and_on_restores_holding_mode);
     RUN_TEST(test_queue_color_command_sets_static_color_and_enters_static_mode);
     RUN_TEST(test_queue_color_command_while_already_in_static_mode_updates_color);
+    RUN_TEST(test_color_command_mid_transition_cancels_transition_and_applies_color);
     RUN_TEST(test_queue_model_command_updates_factory_config);
     RUN_TEST(test_ws_json_color_command_flows_through_to_static_color);
     RUN_TEST(test_brightness_config_persists_and_reloads_value);

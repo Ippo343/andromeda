@@ -176,7 +176,16 @@ class MissionControl
 
     CRGB staticColor = CRGB::White;
 
-    inline bool isColorActive() const { return effect && effect->wantsLiveColorUpdates(); }
+    // False during TRANSITIONING even if the outgoing effect is a StaticColor:
+    // that effect isn't on screen (the animation is) and is about to be
+    // deleted by finishTransition(), so treating it as "active" here would
+    // route a COLOR command to setLiveColor()/staticColor instead of
+    // transitionToStaticColor() - silently writing into an effect that's
+    // discarded when the transition lands instead of cancelling it.
+    inline bool isColorActive() const
+    {
+        return mode != RenderMode::TRANSITIONING && effect && effect->wantsLiveColorUpdates();
+    }
 
     // Fast path for isColorActive() callers: update() re-reads staticColor
     // every frame and pushes it into the live effect, so a color drag can
