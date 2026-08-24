@@ -129,6 +129,7 @@ class MissionControlTestAccess
     static void finishTransition(MissionControl& mc) { mc.finishTransition(); }
 
     static bool holdPending(MissionControl& mc) { return mc.holdPending; }
+    static void setHoldPending(MissionControl& mc, bool v) { mc.holdPending = v; }
 
     static milliseconds_t transitionWindowStart(MissionControl& mc)
     {
@@ -716,6 +717,34 @@ void test_hold_command_mid_transition_is_applied_once_transition_finishes()
     TEST_ASSERT_TRUE(mc.isHolding());
 }
 
+// A HOLD command that arrived mid-transition (holdPending) and never got to
+// land, because POWER_OFF cut the transition short first, must not be
+// silently dropped: powerOn() should come back into HOLDING, not FX_LOOP.
+// powerOff() computes modeBeforeOff from holdPending before cancelTransition()
+// clears it - this regression-guards that ordering.
+void test_power_off_mid_transition_with_pending_hold_restores_holding_on_power_on()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setMaxBrightness(mc, 255);
+
+    ControllableAnimation* anim = new ControllableAnimation();
+    MissionControlTestAccess::setAnimation(mc, anim);
+    MissionControlTestAccess::setMode(mc, RenderMode::TRANSITIONING);
+    MissionControlTestAccess::setHoldPending(mc, true);
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::PowerOff()));
+    mc.update(millis());
+
+    TEST_ASSERT_EQUAL(RenderMode::OFF, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_EQUAL(RenderMode::HOLDING, MissionControlTestAccess::getModeBeforeOff(mc));
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::PowerOn()));
+    mc.update(millis());
+
+    TEST_ASSERT_EQUAL(RenderMode::HOLDING, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_TRUE(mc.isHolding());
+}
+
 // Runs several real NEXT-triggered transitions end-to-end (through the real
 // handleTransition()/updateTransition()/finishTransition() path, using the
 // stubbed getRandomAnimation()) and checks the animation instance count
@@ -843,6 +872,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_power_off_mid_transition_cancels_animation_and_blanks_strip);
     RUN_TEST(test_full_transition_cycle_lands_on_new_effect_in_fx_loop_mode);
     RUN_TEST(test_hold_command_mid_transition_is_applied_once_transition_finishes);
+    RUN_TEST(test_power_off_mid_transition_with_pending_hold_restores_holding_on_power_on);
     RUN_TEST(test_repeated_transitions_do_not_leak_animation_instances);
     RUN_TEST(test_cancel_transition_frees_a_pending_effect_that_was_never_installed);
     RUN_TEST(test_finish_transition_applies_rotation_hint_from_the_new_effect);

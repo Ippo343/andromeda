@@ -156,6 +156,7 @@ void MissionControl::cancelTransition()
 {
     if (animation)
     {
+        Log.noticeln("Cancelling in-flight transition animation: %s", animation->GetName());
         delete animation;
         animation = nullptr;
     }
@@ -333,12 +334,25 @@ void MissionControl::resumeEffect()
 
 void MissionControl::powerOff()
 {
+    Log.noticeln("Powering off (was in mode: %s)", renderModeToString(mode));
+
     // Immediately switch off all the lights and prevent further updates.
     // Cancels rather than tries to resume an in-flight transition later -
     // powerOn() always comes back into FX_LOOP/HOLDING, never mid-animation.
-    cancelTransition();
+    // cancelTransition() logs its own line when it actually had an animation
+    // in flight, so a power-off mid-transition shows up clearly in the log
+    // as this line followed by "Cancelling in-flight transition animation".
+    //
+    // Computed before cancelTransition() runs (it clears holdPending): a HOLD
+    // that arrived mid-transition and was deferred (holdPending) must still
+    // be honored by powerOn() even though the transition itself is dropped -
+    // otherwise powering off mid-transition silently loses a pending HOLD.
     if (mode != RenderMode::OFF)
-        modeBeforeOff = (mode == RenderMode::TRANSITIONING) ? RenderMode::FX_LOOP : mode;
+        modeBeforeOff = (mode == RenderMode::TRANSITIONING)
+                            ? (holdPending ? RenderMode::HOLDING : RenderMode::FX_LOOP)
+                            : mode;
+
+    cancelTransition();
 
     paint(CRGB::Black);
     FASTLED_SHOW();
@@ -350,6 +364,7 @@ void MissionControl::powerOff()
 void MissionControl::powerOn()
 {
     mode = modeBeforeOff;
+    Log.noticeln("Powering on, resuming mode: %s", renderModeToString(mode));
     stateDirty = true;
 }
 

@@ -117,6 +117,22 @@ enum class RenderMode : uint8_t
     TRANSITIONING
 };
 
+inline const char* renderModeToString(RenderMode mode)
+{
+    switch (mode)
+    {
+        case RenderMode::OFF:
+            return "OFF";
+        case RenderMode::FX_LOOP:
+            return "FX_LOOP";
+        case RenderMode::HOLDING:
+            return "HOLDING";
+        case RenderMode::TRANSITIONING:
+            return "TRANSITIONING";
+    }
+    return "UNKNOWN";
+}
+
 class MissionControl
 {
    public:
