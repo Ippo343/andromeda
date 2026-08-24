@@ -162,6 +162,13 @@ class MissionControl
 
     inline bool isOn() const { return mode != RenderMode::OFF; }
     inline bool isHolding() const { return mode == RenderMode::HOLDING; }
+
+    // True when a HOLD command arrived mid-transition and is waiting for the
+    // transition to land (see holdPending) - i.e. the device is committed to
+    // holding but isn't there yet. Comms folds this into the wire "holding"
+    // bit so the web UI's Hold button flips the instant the command is
+    // accepted, instead of lagging behind for the rest of the transition.
+    inline bool isHoldPending() const { return holdPending; }
     inline const char* getEffectName() const { return effect ? effect->GetName() : "none"; }
 
     // Consumes (reads and clears) the flag set whenever broadcast-worthy state

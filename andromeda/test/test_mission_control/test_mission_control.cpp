@@ -736,6 +736,11 @@ void test_hold_command_mid_transition_is_applied_once_transition_finishes()
 
     TEST_ASSERT_EQUAL(RenderMode::TRANSITIONING, MissionControlTestAccess::getMode(mc));
     TEST_ASSERT_TRUE(MissionControlTestAccess::holdPending(mc));
+    // isHoldPending() is what lets the web UI flip its Hold button the
+    // instant the command is accepted, instead of lagging until the
+    // in-flight transition actually lands on HOLDING.
+    TEST_ASSERT_TRUE(mc.isHoldPending());
+    TEST_ASSERT_FALSE(mc.isHolding());
 
     milliseconds_t postDelayEnd = finishedAt + MissionControlTestAccess::POST_ANIMATION_DELAY(mc);
     mc.update(postDelayEnd);  // transition completes -> deferred hold applied
