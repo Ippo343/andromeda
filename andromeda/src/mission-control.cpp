@@ -196,7 +196,7 @@ void MissionControl::updateTransition(milliseconds_t t)
 
     if (transitionWindow.animationFinishedAt == 0)
     {
-        FastLED.setBrightness(maxBrightness);
+        FastLED.setBrightness(dim8_raw(maxBrightness));
         milliseconds_t animationT = t - transitionWindow.preDelayEnd;
         if (animation->renderFrame(animationT))
         {

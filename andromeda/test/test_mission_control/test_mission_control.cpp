@@ -603,7 +603,10 @@ void test_update_transition_guards_against_t_before_window_start()
 
 // The strip must actually go to black (brightness pushed via FASTLED_SHOW(),
 // not just a field set) during both the pre- and post-animation delay
-// windows, and back to full brightness while the animation itself renders.
+// windows, and back to (gamma-corrected) max brightness while the animation
+// itself renders. maxBrightness is 255 here, where dim8_raw is the identity,
+// so this doesn't exercise the gamma curve itself - see
+// test_transitioning_animation_applies_gamma_corrected_max_brightness for that.
 void test_transitioning_pre_and_post_delay_windows_zero_the_strip_brightness()
 {
     MissionControl& mc = MissionControl::Instance();
@@ -641,6 +644,32 @@ void test_transitioning_pre_and_post_delay_windows_zero_the_strip_brightness()
 
     mc.update(finishedAt + 1);
     TEST_ASSERT_EQUAL_UINT8(0, FastLED.getBrightness());
+}
+
+// Regression test: updateTransition() used to apply maxBrightness to the
+// strip raw during animation playback, while calcBrightness() (used for
+// FX_LOOP fades) ran it through dim8_raw() first. At low persisted
+// brightness settings this made transition animations render noticeably
+// brighter than the effects around them - the persisted brightness appeared
+// to not apply to animations at all.
+void test_transitioning_animation_applies_gamma_corrected_max_brightness()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setMaxBrightness(mc, 100);
+
+    ControllableAnimation* anim = new ControllableAnimation();
+    MissionControlTestAccess::setAnimation(mc, anim);
+
+    milliseconds_t start = millis();
+    milliseconds_t preDelayEnd = start + MissionControlTestAccess::PRE_ANIMATION_DELAY(mc);
+    MissionControlTestAccess::setTransitionWindowStart(mc, start);
+    MissionControlTestAccess::setTransitionWindowPreDelayEnd(mc, preDelayEnd);
+    MissionControlTestAccess::setTransitionWindowAnimationFinishedAt(mc, 0);
+    MissionControlTestAccess::setMode(mc, RenderMode::TRANSITIONING);
+
+    anim->finished = false;
+    mc.update(preDelayEnd);
+    TEST_ASSERT_EQUAL_UINT8(dim8_raw(100), FastLED.getBrightness());
 }
 
 // POWER_OFF arriving mid-transition must cancel the in-flight animation
@@ -903,6 +932,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_next_command_mid_update_does_not_flash_stale_t_into_high_brightness);
     RUN_TEST(test_update_transition_guards_against_t_before_window_start);
     RUN_TEST(test_transitioning_pre_and_post_delay_windows_zero_the_strip_brightness);
+    RUN_TEST(test_transitioning_animation_applies_gamma_corrected_max_brightness);
     RUN_TEST(test_power_off_mid_transition_cancels_animation_and_blanks_strip);
     RUN_TEST(test_full_transition_cycle_lands_on_new_effect_in_fx_loop_mode);
     RUN_TEST(test_hold_command_mid_transition_is_applied_once_transition_finishes);
