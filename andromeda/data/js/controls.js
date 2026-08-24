@@ -424,10 +424,14 @@ function initControlsPage() {
     updateSliderThumb(brightnessSlider);
 
     const startSliderDrag = () => { sliderActivelyDragging = true; };
+    // Just clears the dragging flag - the actual commit is sent from the
+    // 'change' listener below. mouseup/touchend and 'change' both fire on
+    // release, so sending the commit from here too would double-send it.
+    const stopSliderDrag = () => { sliderActivelyDragging = false; };
     // Sends one extra "commit" message when the drag ends, telling the
     // device to persist this value to NVS - the dozens/sec messages sent
     // during the drag itself (below) never do, to avoid hammering flash.
-    const stopSliderDrag = () => {
+    const commitSliderValue = () => {
         sliderActivelyDragging = false;
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
@@ -441,7 +445,7 @@ function initControlsPage() {
     brightnessSlider.addEventListener('touchstart', startSliderDrag);
     brightnessSlider.addEventListener('mouseup', stopSliderDrag);
     brightnessSlider.addEventListener('touchend', stopSliderDrag);
-    brightnessSlider.addEventListener('change', stopSliderDrag);
+    brightnessSlider.addEventListener('change', commitSliderValue);
 
     brightnessSlider.addEventListener('input', function() {
         updateSliderThumb(this);
