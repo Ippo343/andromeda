@@ -32,7 +32,7 @@ Core pattern: singletons accessed globally. Main loop: `MissionControl::update(m
 
 **Geometry** — Device config & LED data (strip count/lengths/pins, Cartesian/polar coordinates, constraints). Initialized with ModelId at startup.
 
-**Effects** — Abstract: compute CRGB per LED per frame via `evaluate(strip, led, led_idx, t)`. Optional `precompute(t)` and `postprocess(t)` for optimization.
+**Effects** — Abstract: compute CRGB per LED per frame via `evaluate(strip, led, led_idx, t)`. Optional `precompute(t)` and `postprocess(t)` for optimization. `include/physics/` holds float-only, dt-driven physics simulation modules (curve motion, constraint-based integrators, N-body gravity) shared by the "emitter-field" effects - N colored point emitters, additively blended per-LED via inverse-square falloff - which derive from `EmitterFieldEffect` (`include/effects/emitter-field-effect.h`) instead of `AbstractEffect` directly.
 
 **Animations** — Short transition programs played between effects, in two flavors: `AbstractFrameAnimation` (the rotation animations MissionControl plays as transitions) renders one frame per `renderFrame(t)` call the same way effects do - most are written as a `SegmentedAnimation`, an ordered list of time-bounded phases (`addSegment(duration, fn)`) instead of a hand-rolled state machine. `AbstractBlockingAnimation` is the older, synchronous `run()`-owns-the-loop style, now scoped to the boot/status indicators (WiFi connecting/success, error) that run before the web server is even up, where blocking is harmless.
 
