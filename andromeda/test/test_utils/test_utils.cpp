@@ -194,6 +194,72 @@ void test_seed_rngs_runs_and_random_still_works()
 }
 
 // ---------------------------------------------------------------------------
+// rateToThreshold
+// ---------------------------------------------------------------------------
+
+void test_rate_to_threshold_zero_dt_is_zero()
+{
+    TEST_ASSERT_EQUAL_UINT32(0, rateToThreshold(10.0f, 0, 100000));
+}
+
+void test_rate_to_threshold_scales_linearly_with_dt()
+{
+    uint32_t t1 = rateToThreshold(10.0f, 10, 100000);
+    uint32_t t2 = rateToThreshold(10.0f, 20, 100000);
+    TEST_ASSERT_EQUAL_UINT32(t1 * 2, t2);
+}
+
+void test_rate_to_threshold_scales_linearly_with_rate()
+{
+    uint32_t t1 = rateToThreshold(5.0f, 10, 100000);
+    uint32_t t2 = rateToThreshold(10.0f, 10, 100000);
+    TEST_ASSERT_EQUAL_UINT32(t1 * 2, t2);
+}
+
+void test_rate_to_threshold_clamps_to_roll_limit()
+{
+    // A huge dt (e.g. a stalled frame) must not overflow past rollLimit
+    TEST_ASSERT_EQUAL_UINT32(100000, rateToThreshold(10.0f, 1000000, 100000));
+}
+
+// ---------------------------------------------------------------------------
+// accumulateFadeAmount
+// ---------------------------------------------------------------------------
+
+void test_accumulate_fade_amount_zero_dt_is_zero()
+{
+    float debt = 0;
+    TEST_ASSERT_EQUAL_UINT8(0, accumulateFadeAmount(debt, 1.0f, 0));
+}
+
+void test_accumulate_fade_amount_carries_sub_quantum_loss_over_time()
+{
+    // A per-call loss far below 1/255 would round to 0 forever if not accumulated.
+    // Drive ~1 simulated second of 1ms frames and confirm the fade amount eventually
+    // registers, proving the debt carries across calls instead of being discarded.
+    float debt = 0;
+    bool sawNonzeroFade = false;
+    for (int i = 0; i < 1000; i++)
+    {
+        if (accumulateFadeAmount(debt, 1.0f, 1) > 0)
+        {
+            sawNonzeroFade = true;
+            break;
+        }
+    }
+    TEST_ASSERT_TRUE(sawNonzeroFade);
+}
+
+void test_accumulate_fade_amount_matches_single_frame_when_dt_is_large_enough()
+{
+    // A single call whose loss is well above the 1/255 quantum should register
+    // immediately without needing to accumulate across calls.
+    float debt = 0;
+    uint8_t fadeAmount = accumulateFadeAmount(debt, 1.0f, 1000);  // loss = 1.0 -> full fade
+    TEST_ASSERT_EQUAL_UINT8(255, fadeAmount);
+}
+
+// ---------------------------------------------------------------------------
 // Energy / EnergyParam
 // ---------------------------------------------------------------------------
 
@@ -244,6 +310,15 @@ int main(int argc, char** argv)
     RUN_TEST(test_rand_sign_randomize_never_zero);
 
     RUN_TEST(test_seed_rngs_runs_and_random_still_works);
+
+    RUN_TEST(test_rate_to_threshold_zero_dt_is_zero);
+    RUN_TEST(test_rate_to_threshold_scales_linearly_with_dt);
+    RUN_TEST(test_rate_to_threshold_scales_linearly_with_rate);
+    RUN_TEST(test_rate_to_threshold_clamps_to_roll_limit);
+
+    RUN_TEST(test_accumulate_fade_amount_zero_dt_is_zero);
+    RUN_TEST(test_accumulate_fade_amount_carries_sub_quantum_loss_over_time);
+    RUN_TEST(test_accumulate_fade_amount_matches_single_frame_when_dt_is_large_enough);
 
     RUN_TEST(test_energy_get_set_round_trips);
     RUN_TEST(test_energy_param_maps_energy_range_to_its_own_range);

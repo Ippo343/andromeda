@@ -12,6 +12,21 @@ void seedRNGs()
     random16_add_entropy(random(65536));
 }
 
+uint32_t rateToThreshold(float ratePerSecond, milliseconds_t dt, uint32_t rollLimit)
+{
+    float p = ratePerSecond * dt / 1000.0f;
+    return (uint32_t)(constrain(p, 0.0f, 1.0f) * rollLimit);
+}
+
+uint8_t accumulateFadeAmount(float& debt, float lossRatePerSecond, milliseconds_t dt)
+{
+    float loss = lossRatePerSecond * dt / 1000.0f;
+    debt += constrain(loss, 0.0f, 1.0f) * 255.0f;
+    uint8_t fadeAmount = (uint8_t)debt;  // floor
+    debt -= fadeAmount;
+    return fadeAmount;
+}
+
 void RandBool::randomize() { value = random(0, 2) > 0; }
 
 void RandSign::randomize()
