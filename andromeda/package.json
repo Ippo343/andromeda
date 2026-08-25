@@ -1,0 +1,7 @@
+{
+  "name": "andromeda-web",
+  "private": true,
+  "scripts": {
+    "test:web": "node --test test/js/*.test.js"
+  }
+}

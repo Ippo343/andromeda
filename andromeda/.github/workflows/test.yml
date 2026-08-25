@@ -38,6 +38,19 @@ jobs:
           name: coverage-info
           path: coverage.info
 
+  web-tests:
+    name: Web UI unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+
+      - name: Run web UI unit tests
+        run: npm run test:web
+
   hardware-build:
     name: Hardware firmware build (${{ matrix.env }})
     runs-on: ubuntu-latest
