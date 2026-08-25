@@ -290,6 +290,45 @@ void test_rgbody_problem_brighter_near_an_emitter_than_far_away()
 }
 
 // ---------------------------------------------------------------------------
+// BezierSwarm
+// ---------------------------------------------------------------------------
+
+void test_bezier_swarm_evaluates()
+{
+    BezierSwarm fx;
+    exerciseEvaluate(fx, 9500);
+    exerciseEvaluate(fx, 9600);  // second frame exercises path-stepping with a real dt
+}
+
+void test_bezier_swarm_sets_rotate_space_hint()
+{
+    BezierSwarm fx;
+    TEST_ASSERT_TRUE(fx.controlHints & ControlHints::ROTATE_SPACE);
+}
+
+// Guards against the single-emitter case regressing to a static color: retries
+// construction (bounded) until landing on the N=1 branch, then confirms the emitted
+// hue actually changes after several seconds of simulated time.
+void test_bezier_swarm_single_emitter_hue_changes_over_time()
+{
+    randomSeed(1);
+    for (int attempt = 0; attempt < 200; attempt++)
+    {
+        BezierSwarm fx;
+        if (fx.positions.size() != 1) continue;
+
+        fx.precompute(0);
+        CHSV first = fx.colors[0];
+        fx.precompute(8000);
+        CHSV later = fx.colors[0];
+
+        TEST_ASSERT_NOT_EQUAL(first.h, later.h);
+        return;
+    }
+    TEST_FAIL_MESSAGE("Never landed on the N=1 BezierSwarm branch in 200 attempts");
+}
+
+// ---------------------------------------------------------------------------
 // HexagonalRippleGalaxy
 // ---------------------------------------------------------------------------
 
@@ -478,7 +517,7 @@ void test_get_random_effect_produces_valid_effects()
         namesSeen.insert(fx->GetName());
         delete fx;
     }
-    // 11 possible effects; 300 draws (never repeating consecutively) should
+    // 12 possible effects; 300 draws (never repeating consecutively) should
     // realistically hit all of them.
     TEST_ASSERT_TRUE(namesSeen.size() >= 8);
 }
@@ -487,7 +526,7 @@ void test_get_random_effect_produces_valid_effects()
 // EFFECT_REGISTRY / createEffect()
 // ---------------------------------------------------------------------------
 
-void test_num_effects_matches_registry_length() { TEST_ASSERT_EQUAL_INT(11, NUM_EFFECTS); }
+void test_num_effects_matches_registry_length() { TEST_ASSERT_EQUAL_INT(12, NUM_EFFECTS); }
 
 void test_create_effect_matches_registry_name_for_every_entry()
 {
@@ -532,6 +571,10 @@ int main(int argc, char** argv)
 
     RUN_TEST(test_rgbody_problem_evaluates);
     RUN_TEST(test_rgbody_problem_brighter_near_an_emitter_than_far_away);
+
+    RUN_TEST(test_bezier_swarm_evaluates);
+    RUN_TEST(test_bezier_swarm_sets_rotate_space_hint);
+    RUN_TEST(test_bezier_swarm_single_emitter_hue_changes_over_time);
 
     RUN_TEST(test_hexagonal_ripple_galaxy_evaluates);
     RUN_TEST(test_hexagonal_ripple_galaxy_color_varies_with_time);

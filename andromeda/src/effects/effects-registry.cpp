@@ -1,6 +1,7 @@
 #include "effects.h"
 
 const EffectInfo EFFECT_REGISTRY[] = {
+    {EffectId::BezierSwarm, "BezierSwarm"},
     {EffectId::CartesianMoodlight, "CartesianMoodlight"},
     {EffectId::ElectricSparks, "ElectricSparks"},
     {EffectId::HexagonalRippleGalaxy, "Hexagonal Ripple Galaxy"},
@@ -21,6 +22,8 @@ AbstractEffect* createEffect(EffectId id)
 {
     switch (id)
     {
+        case EffectId::BezierSwarm:
+            return new BezierSwarm();
         case EffectId::CartesianMoodlight:
             return new CartesianMoodlight();
         case EffectId::ElectricSparks:

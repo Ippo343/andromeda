@@ -1,6 +1,7 @@
 #pragma once
 
 #include "effects-base.h"
+#include "effects/bezier-swarm.h"
 #include "effects/cartesian-moodlight.h"
 #include "effects/electric-sparks.h"
 #include "effects/error-effect.h"
@@ -24,6 +25,7 @@
 // and ErrorEffect is an internal fallback, not a user-selectable effect.
 enum class EffectId : uint8_t
 {
+    BezierSwarm,
     CartesianMoodlight,
     ElectricSparks,
     HexagonalRippleGalaxy,
