@@ -292,7 +292,7 @@ void test_rgbody_problem_brighter_near_an_emitter_than_far_away()
 }
 
 // Regression test: this file's setUp() uses SINGLE_STRIP_TEST_DEVICE, a deliberately
-// non-square (934x10mm) model - exactly the case that would expose a bug where
+// non-square (934x10mm) model - exactly the case that exposed a bug where
 // RGBodyProblem seeded positions using GEOMETRY.getScreenRadius() (the *wider* half-
 // dimension) instead of the narrower one, letting bodies spawn far outside the strip's
 // actual 10mm-tall footprint. Checked right after construction, before any simulation
@@ -365,7 +365,7 @@ void test_multi_pendulum_sets_rotate_space_hint()
 }
 
 // Regression test: this file's setUp() uses SINGLE_STRIP_TEST_DEVICE, a deliberately
-// non-square (934x10mm) model - exactly the case that would expose a bug where
+// non-square (934x10mm) model - exactly the case that exposed a bug where
 // MultiPendulum sized its chain off GEOMETRY.getScreenRadius() (the *wider* half-
 // dimension) instead of the narrower one, letting bobs swing outside the strip's
 // actual 10mm-tall footprint. The chain's maximum possible reach from the anchor is
@@ -579,7 +579,7 @@ void test_get_random_effect_produces_valid_effects()
     }
     // 13 possible effects; 300 draws (never repeating consecutively) should
     // realistically hit all of them.
-    TEST_ASSERT_TRUE(namesSeen.size() >= 8);
+    TEST_ASSERT_TRUE(namesSeen.size() >= 10);
 }
 
 // ---------------------------------------------------------------------------
