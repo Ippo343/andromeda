@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "effects/emitter-field-effect.h"
 #include "geometry/geometry.h"
 #include "physics/frame-clock.h"
 #include "physics/physics-random.h"
@@ -163,6 +164,59 @@ void test_frame_clock_clamps_huge_gap_to_max_dt()
     TEST_ASSERT_EQUAL_UINT32(250, dt);
 }
 
+// ---------------------------------------------------------------------------
+// EmitterFieldEffect
+// ---------------------------------------------------------------------------
+
+// Minimal no-op subclass: positions/colors are set directly by the test, no real
+// physics, just proving the shared additive-blend rendering math in isolation.
+class NoOpEmitterField : public EmitterFieldEffect
+{
+   public:
+    explicit NoOpEmitterField(size_t n) : EmitterFieldEffect(n) {}
+    const char* GetName() override { return "NoOpEmitterField"; }
+    void updatePositions(milliseconds_t, milliseconds_t) override {}
+};
+
+void test_emitter_field_effect_blends_colors_additively_at_zero_distance()
+{
+    NoOpEmitterField fx(2);
+    fx.positions[0] = Vec2f(0, 0);
+    fx.positions[1] = Vec2f(0, 0);
+    fx.colors[0] = CHSV(0, 0, 255);  // full-value white-ish -> CRGB(255,255,255)
+    fx.colors[1] = CHSV(0, 0, 255);
+    fx.precompute(1000);  // updatePositions() is a no-op, so positions above stick;
+                          // this only refreshes the cached CartesianCoordinates.
+
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    Led led = strip.leds[0];
+    led.cartesian = Vec2f(0, 0).toCartesian();
+
+    CRGB result = fx.evaluate(&strip, &led, 0, 1000);
+    // Two coincident full-brightness white emitters, additively blended and
+    // channel-saturated, should be at (or very near) full white.
+    TEST_ASSERT_TRUE(result.r > 250);
+    TEST_ASSERT_TRUE(result.g > 250);
+    TEST_ASSERT_TRUE(result.b > 250);
+}
+
+void test_emitter_field_effect_distant_emitter_contributes_almost_nothing()
+{
+    NoOpEmitterField fx(1);
+    fx.positions[0] = Vec2f((float)GEOMETRY.getScreenRadius() * 20.0f, 0);
+    fx.colors[0] = CHSV(0, 255, 255);
+    fx.precompute(1000);  // updatePositions() is a no-op, so the position above sticks;
+                          // this only refreshes the cached CartesianCoordinates.
+
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    Led led = strip.leds[0];
+    led.cartesian = Vec2f(0, 0).toCartesian();
+
+    CRGB result = fx.evaluate(&strip, &led, 0, 1000);
+    int sum = (int)result.r + result.g + result.b;
+    TEST_ASSERT_TRUE(sum < 5);
+}
+
 int main(int argc, char** argv)
 {
     UNITY_BEGIN();
@@ -184,6 +238,9 @@ int main(int argc, char** argv)
     RUN_TEST(test_frame_clock_first_tick_uses_16ms_fallback);
     RUN_TEST(test_frame_clock_reports_real_delta_on_subsequent_ticks);
     RUN_TEST(test_frame_clock_clamps_huge_gap_to_max_dt);
+
+    RUN_TEST(test_emitter_field_effect_blends_colors_additively_at_zero_distance);
+    RUN_TEST(test_emitter_field_effect_distant_emitter_contributes_almost_nothing);
 
     return UNITY_END();
 }
