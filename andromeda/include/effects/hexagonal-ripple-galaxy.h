@@ -1,7 +1,5 @@
 #pragma once
 
-#include <math.h>
-
 #include "effects-base.h"
 #include "utils.h"
 
@@ -49,18 +47,11 @@ class HexagonalRippleGalaxy : public AbstractEffect
 
     CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
     {
-        // Get position in millimeters
-        float x = led->cartesian.x;
-        float y = led->cartesian.y;
-
-        // Calculate radius and angle using floating point for accuracy
-        float radius = sqrt(x * x + y * y);
-        float angle = atan2(y, x);
-
-        // Convert to 8-bit values for FastLED functions
-        uint8_t radius8 =
-            (uint8_t)constrain(radius * 0.49f, 0, 255);      // Scale ~520mm max radius to 255
-        uint8_t angle8 = (uint8_t)((angle + PI) * 40.584f);  // Map (-π,π) to (0,255)
+        // Geometry already precomputes polar radius/angle per LED at load time
+        // (Geometry::loadCoordinates()) -- reuse it instead of recomputing
+        // sqrt/atan2 here every frame.
+        uint8_t radius8 = map(led->polar.radius, 0, GEOMETRY.getScreenRadius(), 0, 255);
+        uint8_t angle8 = map(led->polar.cdegrees % FULL_CIRCLE, 0, FULL_CIRCLE, 0, 255);
 
         // Create ripples with randomized parameters
         uint8_t ripple1 = sin8((radius8 * static_cast<uint8_t>(ripple1Freq)) -
