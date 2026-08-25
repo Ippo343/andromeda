@@ -555,6 +555,13 @@ function initControlsPage() {
                 logo.style.webkitTextFillColor = 'transparent';
                 document.getElementById('logo').style.setProperty('--logo-filt', 0.1);
             }
+            else if (this.classList.contains('on')) {
+                logo.style.setProperty('--grad', randomGradient());
+                logo.style.backgroundImage = '';
+                logo.style.animation = '';
+                logo.style.webkitTextFillColor = 'transparent';
+                updateSliderThumb(brightnessSlider);
+            }
             else if (this.classList.contains('next')) {
                 logo.style.setProperty('--grad', randomGradient());
                 logo.style.backgroundImage = '';
