@@ -264,6 +264,7 @@ void test_rgbody_problem_evaluates()
 {
     RGBodyProblem fx;
     exerciseEvaluate(fx, 7000);
+    exerciseEvaluate(fx, 7016);  // second frame exercises N-body-stepping with a real dt
 }
 
 void test_rgbody_problem_brighter_near_an_emitter_than_far_away()
@@ -271,10 +272,11 @@ void test_rgbody_problem_brighter_near_an_emitter_than_far_away()
     RGBodyProblem fx;
     fx.precompute(1000);
 
+    CartesianCoordinates emitter0 = fx.positions[0].toCartesian();
     LedStrip& strip = GEOMETRY.getStrip(0);
     Led nearLed = strip.leds[0];
-    nearLed.cartesian.x = fx.locations[0].x + 5;
-    nearLed.cartesian.y = fx.locations[0].y;
+    nearLed.cartesian.x = emitter0.x + 5;
+    nearLed.cartesian.y = emitter0.y;
 
     Led farLed = strip.leds[0];
     short farCoord = GEOMETRY.getScreenRadius() * 10;
@@ -287,6 +289,23 @@ void test_rgbody_problem_brighter_near_an_emitter_than_far_away()
     int nearSum = (int)near.r + near.g + near.b;
     int farSum = (int)far.r + far.g + far.b;
     TEST_ASSERT_TRUE(nearSum > farSum);
+}
+
+// Regression test: this file's setUp() uses SINGLE_STRIP_TEST_DEVICE, a deliberately
+// non-square (934x10mm) model - exactly the case that would expose a bug where
+// RGBodyProblem seeded positions using GEOMETRY.getScreenRadius() (the *wider* half-
+// dimension) instead of the narrower one, letting bodies spawn far outside the strip's
+// actual 10mm-tall footprint. Checked right after construction, before any simulation
+// has run, since NBodySystem has no hard position clamp once it starts stepping.
+void test_rgbody_problem_initial_positions_use_narrower_screen_dimension()
+{
+    randomSeed(11);
+    for (int attempt = 0; attempt < 20; attempt++)
+    {
+        RGBodyProblem fx;
+        for (auto& p : fx.positions)
+            TEST_ASSERT_TRUE(fabsf(p.y) <= (float)GEOMETRY.getScreenHalfHeight());
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -612,6 +631,7 @@ int main(int argc, char** argv)
 
     RUN_TEST(test_rgbody_problem_evaluates);
     RUN_TEST(test_rgbody_problem_brighter_near_an_emitter_than_far_away);
+    RUN_TEST(test_rgbody_problem_initial_positions_use_narrower_screen_dimension);
 
     RUN_TEST(test_bezier_swarm_evaluates);
     RUN_TEST(test_bezier_swarm_sets_rotate_space_hint);
