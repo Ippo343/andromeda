@@ -7,6 +7,7 @@ const {
     powerButtonState,
     rgbToHistogramWidths,
     hsvToRgb,
+    logoBrightnessFilter,
 } = require('../../data/js/controls-logic.js');
 
 describe('pickInitialTab', () => {
@@ -98,5 +99,24 @@ describe('hsvToRgb', () => {
 
     test('v=0 is black regardless of hue/saturation', () => {
         assert.deepEqual(hsvToRgb(90, 1, 0), [0, 0, 0]);
+    });
+});
+
+describe('logoBrightnessFilter', () => {
+    test('0 stays at 0', () => {
+        assert.equal(logoBrightnessFilter(0), 0);
+    });
+
+    test('max stays at 1', () => {
+        assert.equal(logoBrightnessFilter(255), 1);
+    });
+
+    test('low slider values still render a mostly-bright logo', () => {
+        assert.ok(logoBrightnessFilter(25) > 0.5);
+    });
+
+    test('is steeper than linear across the range', () => {
+        const mid = 128;
+        assert.ok(logoBrightnessFilter(mid) > mid / 255);
     });
 });

@@ -74,6 +74,15 @@ function hsvToRgb(h, s, v) {
     ];
 }
 
+// Maps a brightness slider value [0, 255] to the logo's CSS
+// filter: brightness() multiplier. The logo is a visual nicety, not an
+// indicator of the real brightness sent to the controller - users mostly
+// live near the top of the slider, so a steep curve (exponent << 1) keeps
+// the logo looking bright well below max and only dims sharply near zero.
+function logoBrightnessFilter(value) {
+    return Math.pow(value / 255, 0.35);
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         pickInitialTab,
@@ -82,5 +91,6 @@ if (typeof module !== 'undefined' && module.exports) {
         powerButtonState,
         rgbToHistogramWidths,
         hsvToRgb,
+        logoBrightnessFilter,
     };
 }

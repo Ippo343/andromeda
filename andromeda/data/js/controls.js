@@ -24,8 +24,7 @@ function updateSliderThumb(slider) {
     // Update logo brightness filter
     const logo = document.getElementById('logo');
     if (logo) {
-        const brightness = value / 255;
-        logo.style.setProperty('--logo-filt', brightness);
+        logo.style.setProperty('--logo-filt', logoBrightnessFilter(value));
     }
 }
 
