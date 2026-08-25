@@ -344,6 +344,23 @@ void test_get_random_effect_produces_valid_effects()
     TEST_ASSERT_TRUE(namesSeen.size() >= 8);
 }
 
+// ---------------------------------------------------------------------------
+// EFFECT_REGISTRY / createEffect()
+// ---------------------------------------------------------------------------
+
+void test_num_effects_matches_registry_length() { TEST_ASSERT_EQUAL_INT(11, NUM_EFFECTS); }
+
+void test_create_effect_matches_registry_name_for_every_entry()
+{
+    for (size_t i = 0; i < NUM_EFFECTS; i++)
+    {
+        AbstractEffect* fx = createEffect(EFFECT_REGISTRY[i].id);
+        TEST_ASSERT_NOT_NULL(fx);
+        TEST_ASSERT_EQUAL_STRING(EFFECT_REGISTRY[i].name, fx->GetName());
+        delete fx;
+    }
+}
+
 int main(int argc, char** argv)
 {
     UNITY_BEGIN();
@@ -377,6 +394,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_cartesian_moodlight_randomize_and_evaluate);
 
     RUN_TEST(test_get_random_effect_produces_valid_effects);
+    RUN_TEST(test_num_effects_matches_registry_length);
+    RUN_TEST(test_create_effect_matches_registry_name_for_every_entry);
 
     RUN_TEST(test_polar_swipe_evaluates_across_all_strips_of_real_multi_strip_model);
 
