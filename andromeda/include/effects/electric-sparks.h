@@ -130,7 +130,8 @@ class ElectricSparks : public AbstractEffect
             }
         }
 
-        // Copy the current buffer so that the next frame can diffuse it
-        preValues = newValues;
+        // Swap buffers so the next frame can diffuse what we just wrote, without
+        // paying for a deep copy of both nested vectors every frame.
+        std::swap(preValues, newValues);
     }
 };

@@ -20,6 +20,27 @@ class NinjaStar : public AbstractEffect
     CRGB outerColor;
     uint8_t offset;
 
+    // scale8(v, v) applied 4x is a pure function of v (0-255) with no
+    // per-instance parameters, so it's memoized once across all instances
+    // instead of recomputed per LED per frame.
+    static inline uint8_t pow16LUT[256] = {};
+    static inline bool pow16LUTReady = false;
+
+    static uint8_t pow16(uint8_t v)
+    {
+        if (!pow16LUTReady)
+        {
+            for (int i = 0; i < 256; i++)
+            {
+                uint8_t r = (uint8_t)i;
+                for (size_t j = 0; j < 4; j++) r = scale8(r, r);
+                pow16LUT[i] = r;
+            }
+            pow16LUTReady = true;
+        }
+        return pow16LUT[v];
+    }
+
     void precompute(milliseconds_t t) override
     {
         innerColor = inner.evaluate();
@@ -32,9 +53,7 @@ class NinjaStar : public AbstractEffect
         // TODO: precompute the mapping of the LEDs during the constructor
         uint8_t theta = map((led->polar.cdegrees * beams) % FULL_CIRCLE, 0, FULL_CIRCLE, 0, 255);
 
-        // TODO: this is a great opportunity for a LUT
-        uint8_t v = sin8(theta + offset);
-        for (size_t i = 0; i < 4; i++) v = scale8(v, v);
+        uint8_t v = pow16(sin8(theta + offset));
 
         unsigned short scaledRadius = map(led->polar.radius, 0, GEOMETRY.getScreenRadius(), 0, 255);
         CRGB color = blend(innerColor, outerColor, scaledRadius);

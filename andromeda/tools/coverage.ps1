@@ -21,11 +21,14 @@ if (-not (Test-Path $msysBash)) {
 $unixRoot = "/c/" + ($repoRoot -replace '^C:\\', '' -replace '\\', '/')
 
 Write-Host "== Capturing coverage ==" -ForegroundColor Cyan
-$captureCmd = "export PATH=/mingw64/bin:/usr/bin:/bin:`$PATH && cd '$unixRoot' && lcov --capture --directory .pio/build/native --output-file coverage.info --rc lcov_branch_coverage=1 --rc branch_coverage=1"
+# lcov_branch_coverage is geninfo's actual rc key (see mingw64/bin/geninfo); passing an extra
+# --rc branch_coverage=1 alongside it silently drops branch data entirely -- verified by testing
+# each flag in isolation, so don't reintroduce it.
+$captureCmd = "export PATH=/mingw64/bin:/usr/bin:/bin:`$PATH && cd '$unixRoot' && lcov --capture --directory .pio/build/native --output-file coverage.info --rc lcov_branch_coverage=1"
 & $msysBash -lc $captureCmd
 
 Write-Host "== Filtering coverage (project sources only) ==" -ForegroundColor Cyan
-$filterCmd = "export PATH=/mingw64/bin:/usr/bin:/bin:`$PATH && cd '$unixRoot' && lcov --remove coverage.info '*mingw64*' '*.pio*' '*test*' --output-file coverage.info --rc branch_coverage=1 && lcov --list coverage.info --rc branch_coverage=1"
+$filterCmd = "export PATH=/mingw64/bin:/usr/bin:/bin:`$PATH && cd '$unixRoot' && lcov --remove coverage.info '*mingw64*' '*.pio*' '*test*' --output-file coverage.info --rc lcov_branch_coverage=1 && lcov --list coverage.info --rc lcov_branch_coverage=1"
 & $msysBash -lc $filterCmd
 
 Write-Host "== Generating HTML report ==" -ForegroundColor Cyan

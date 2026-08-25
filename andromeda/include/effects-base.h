@@ -51,10 +51,10 @@ class AbstractEffect
     {
         FOR_EACH_STRIP
         {
+            LedStrip& strip = GEOMETRY.getStrip(iStrip);
             FOR_EACH_LED(iStrip)
             {
-                GEOMETRY.getStrip(iStrip).buffer[iLed] = this->evaluate(
-                    &GEOMETRY.getStrip(iStrip), &GEOMETRY.getStrip(iStrip).leds[iLed], iLed, t);
+                strip.buffer[iLed] = this->evaluate(&strip, &strip.leds[iLed], iLed, t);
             }
         }
     }

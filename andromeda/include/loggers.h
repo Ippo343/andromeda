@@ -66,6 +66,16 @@ class TeeLog : public Print
     }
 };
 
+// Default runtime log level: NOTICE for normal builds (errors/warnings/notices
+// only), overridable per-env with a build flag (e.g. -DLOG_RUNTIME_LEVEL=LOG_LEVEL_VERBOSE)
+// for local debugging. Note this only affects what gets printed at runtime -
+// ArduinoLog has no compile-time level gate (only an all-or-nothing
+// DISABLE_LOGGING), so every log call's format string is compiled into flash
+// regardless of this setting.
+#ifndef LOG_RUNTIME_LEVEL
+#define LOG_RUNTIME_LEVEL LOG_LEVEL_NOTICE
+#endif
+
 // Set up logging to both Serial and File,
 // and also configure log format with timestamp and log level
 void setupLoggers()
@@ -73,7 +83,7 @@ void setupLoggers()
     static SimpleFileLog fileLogger(32768);
     static TeeLog teeLogger(&Serial, &fileLogger);
 
-    Log.begin(LOG_LEVEL_VERBOSE, &teeLogger, true);
+    Log.begin(LOG_RUNTIME_LEVEL, &teeLogger, true);
 
     Log.setPrefix(
         [](Print* _logOutput, int logLevel)
