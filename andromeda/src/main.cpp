@@ -47,6 +47,19 @@ void setup()
     FastLED.setCorrection(TypicalLEDStrip);
     seedRNGs();
 
+    // Restore the last brightness configured via the web UI before running
+    // any boot-status indicator below. WiFiConnectingAnimation/
+    // WiFiSuccessAnimation/ErrorAnimation call FASTLED_SHOW() directly
+    // rather than going through MissionControl::update() (which hasn't
+    // started yet), so without this they always render at FastLED's
+    // power-on default (full brightness) regardless of what's configured -
+    // the very first thing the device ever lights up ignored the stored
+    // value. 64 is the fallback for a never-configured device, to avoid
+    // burning my eyes while working at the Social Hub's desk.
+    uint8_t maxBrightness = BrightnessConfig::load(64);
+    MissionControl::Instance().setMaxBrightness(maxBrightness);
+    FastLED.setBrightness(dim8_raw(maxBrightness));
+
     WiFiConnectingAnimation connecting;
     connecting.run();
 
@@ -60,11 +73,6 @@ void setup()
         ErrorAnimation error;
         error.run();
     }
-
-    // Restore the last brightness configured via the web UI. 64 is the
-    // fallback for a never-configured device, to avoid burning my eyes while
-    // working at the Social Hub's desk.
-    MissionControl::Instance().setMaxBrightness(BrightnessConfig::load(64));
 
     MissionControl::Instance().setCpuFrequency(config->preferred_cpu_freq_mhz);
     MissionControl::Instance().setFrameDurationCap(config->min_frame_duration_ms);
