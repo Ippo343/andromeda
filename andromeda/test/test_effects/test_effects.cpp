@@ -329,6 +329,42 @@ void test_bezier_swarm_single_emitter_hue_changes_over_time()
 }
 
 // ---------------------------------------------------------------------------
+// MultiPendulum
+// ---------------------------------------------------------------------------
+
+void test_multi_pendulum_evaluates()
+{
+    MultiPendulum fx;
+    exerciseEvaluate(fx, 10000);
+    exerciseEvaluate(fx, 10016);  // second frame exercises chain-stepping with a real dt
+}
+
+void test_multi_pendulum_sets_rotate_space_hint()
+{
+    MultiPendulum fx;
+    TEST_ASSERT_TRUE(fx.controlHints & ControlHints::ROTATE_SPACE);
+}
+
+// Regression test: this file's setUp() uses SINGLE_STRIP_TEST_DEVICE, a deliberately
+// non-square (934x10mm) model - exactly the case that would expose a bug where
+// MultiPendulum sized its chain off GEOMETRY.getScreenRadius() (the *wider* half-
+// dimension) instead of the narrower one, letting bobs swing outside the strip's
+// actual 10mm-tall footprint. The chain's maximum possible reach from the anchor is
+// bounded by the sum of its rod lengths, which construction caps at ~0.9x the radius
+// it was sized from - so this holds deterministically right after construction,
+// before any simulation has run.
+void test_multi_pendulum_initial_reach_uses_narrower_screen_dimension()
+{
+    randomSeed(12);
+    float bound = (float)min(GEOMETRY.getScreenHalfWidth(), GEOMETRY.getScreenHalfHeight());
+    for (int attempt = 0; attempt < 20; attempt++)
+    {
+        MultiPendulum fx;
+        for (auto& p : fx.positions) TEST_ASSERT_TRUE(p.length() <= bound * 1.01f);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // HexagonalRippleGalaxy
 // ---------------------------------------------------------------------------
 
@@ -357,6 +393,11 @@ void test_hexagonal_ripple_galaxy_color_varies_with_position()
 {
     // Regression guard for the led->polar refactor: radius8/angle8 must
     // actually come from per-LED polar coordinates, not a constant.
+    // Explicitly reseeded: this test's outcome depends on this file's shared global
+    // RNG stream position, which shifts whenever tests earlier in the RUN_TEST order
+    // change (e.g. gain/lose a randomSeed() call) - pin it here so this test's result
+    // doesn't depend on what happens to run before it.
+    randomSeed(42);
     HexagonalRippleGalaxy fx;
     fx.precompute(1000);
     LedStrip& strip = GEOMETRY.getStrip(0);
@@ -517,7 +558,7 @@ void test_get_random_effect_produces_valid_effects()
         namesSeen.insert(fx->GetName());
         delete fx;
     }
-    // 12 possible effects; 300 draws (never repeating consecutively) should
+    // 13 possible effects; 300 draws (never repeating consecutively) should
     // realistically hit all of them.
     TEST_ASSERT_TRUE(namesSeen.size() >= 8);
 }
@@ -526,7 +567,7 @@ void test_get_random_effect_produces_valid_effects()
 // EFFECT_REGISTRY / createEffect()
 // ---------------------------------------------------------------------------
 
-void test_num_effects_matches_registry_length() { TEST_ASSERT_EQUAL_INT(12, NUM_EFFECTS); }
+void test_num_effects_matches_registry_length() { TEST_ASSERT_EQUAL_INT(13, NUM_EFFECTS); }
 
 void test_create_effect_matches_registry_name_for_every_entry()
 {
@@ -575,6 +616,10 @@ int main(int argc, char** argv)
     RUN_TEST(test_bezier_swarm_evaluates);
     RUN_TEST(test_bezier_swarm_sets_rotate_space_hint);
     RUN_TEST(test_bezier_swarm_single_emitter_hue_changes_over_time);
+
+    RUN_TEST(test_multi_pendulum_evaluates);
+    RUN_TEST(test_multi_pendulum_sets_rotate_space_hint);
+    RUN_TEST(test_multi_pendulum_initial_reach_uses_narrower_screen_dimension);
 
     RUN_TEST(test_hexagonal_ripple_galaxy_evaluates);
     RUN_TEST(test_hexagonal_ripple_galaxy_color_varies_with_time);
