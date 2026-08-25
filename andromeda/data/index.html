@@ -110,6 +110,17 @@
             <div class="settings-drawer" id="settingsDrawer">
                 <div class="settings-content">
                     <div class="slider-container">
+                        <label class="slider-label">Device Name</label>
+                        <div class="model-row" id="deviceNameRow">
+                            <input type="text" class="model-select" id="deviceNameInput"
+                                   maxlength="32" placeholder="Andromeda-XXXX">
+                            <button id="deviceNameRebootBtn" class="reboot-btn" title="Reboot Device">
+                                Reboot
+                            </button>
+                        </div>
+                        <div class="device-uid-hint" id="deviceUidHint"></div>
+                    </div>
+                    <div class="slider-container">
                         <label class="slider-label">Model Selection</label>
                         <!-- Pre-JS fallback only: overwritten from the server's "models" list
                              in the state message pushed right after the WebSocket connects -->

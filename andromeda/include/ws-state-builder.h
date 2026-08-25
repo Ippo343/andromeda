@@ -2,6 +2,8 @@
 
 #include <ArduinoJson.h>
 
+#include <cstring>
+
 #include "effects.h"
 #include "geometry/model_config.h"
 #include "geometry/model_registry.h"
@@ -36,6 +38,9 @@ struct DeviceState
     ModelInfo runningModel;
     ModelInfo configuredModel;
     float fps;
+    const char* deviceUid;
+    const char* runningDeviceName;
+    const char* configuredDeviceName;
 };
 
 // StaticJsonDocument capacity for the schema below plus the full model and
@@ -90,6 +95,13 @@ inline size_t buildStateJson(const DeviceState& state, char* outBuffer, size_t o
     }
 
     doc["fps"] = state.fps;
+
+    JsonObject device = doc.createNestedObject("device");
+    device["uid"] = state.deviceUid;
+    device["name"] = state.configuredDeviceName;
+    device["runningName"] = state.runningDeviceName;
+    device["nameRebootRequired"] =
+        (strcmp(state.runningDeviceName, state.configuredDeviceName) != 0);
 
     if (doc.overflowed()) return 0;
     return serializeJson(doc, outBuffer, outBufferSize);

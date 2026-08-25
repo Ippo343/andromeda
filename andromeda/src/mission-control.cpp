@@ -2,6 +2,8 @@
 
 #include <Preferences.h>
 
+#include "device-identity.h"
+
 #ifndef UNIT_TEST
 #include <esp_system.h>  // esp_restart()
 #endif
@@ -88,6 +90,10 @@ void MissionControl::processWebCommands()
                     handleTransition(createEffect(static_cast<EffectId>(command.effectId)));
                     holdEffect();
                 }
+                break;
+            case CommandType::DEVICE_NAME:
+                DeviceIdentity::setDeviceName(command.deviceName);
+                stateDirty = true;
                 break;
         }
     }

@@ -54,6 +54,11 @@ class WiFiClass
     std::vector<int> scriptedScanRSSIs;
     wl_status_t scriptedStatus = WL_IDLE_STATUS;
 
+    // Test hook: the MAC address macAddress() reports - DeviceIdentity
+    // derives its UID from this, so tests can pin it to a known value
+    // instead of depending on real hardware.
+    uint8_t scriptedMac[6] = {0x24, 0x0A, 0xC4, 0x00, 0x01, 0x02};
+
     void mode(wifi_mode_t) {}
     void setHostname(const char*) {}
     bool config(IPAddress, IPAddress, IPAddress) { return true; }
@@ -84,6 +89,12 @@ class WiFiClass
     }
 
     IPAddress localIP() const { return IPAddress(192, 168, 1, 232); }
+
+    uint8_t* macAddress(uint8_t* mac) const
+    {
+        for (int i = 0; i < 6; i++) mac[i] = scriptedMac[i];
+        return mac;
+    }
 
     std::function<void(WiFiEvent_t, WiFiEventInfo_t)> lastEventCallback;
 };

@@ -572,6 +572,19 @@ void test_queue_model_command_updates_factory_config()
     TEST_ASSERT_EQUAL(ModelId::L70_MK1, FactoryConfig::getModelId());
 }
 
+void test_queue_device_name_command_persists_via_device_identity()
+{
+    MissionControl& mc = MissionControl::Instance();
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::DeviceName("Kitchen Lamp")));
+    mc.update(0);
+
+    TEST_ASSERT_TRUE(DeviceIdentity::isNameCustomized());
+    TEST_ASSERT_EQUAL_STRING("Kitchen-Lamp", DeviceIdentity::getDeviceName().c_str());
+
+    DeviceIdentity::setDeviceName("");  // reset for later tests
+}
+
 // ---------------------------------------------------------------------------
 // TRANSITIONING - the non-blocking replacement for the old blocking
 // runRandomAnimation(). These are interaction tests: they drive update()
@@ -969,6 +982,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_queue_effect_command_transitions_to_selected_effect_and_holds);
     RUN_TEST(test_queue_effect_command_with_out_of_range_id_is_ignored);
     RUN_TEST(test_queue_model_command_updates_factory_config);
+    RUN_TEST(test_queue_device_name_command_persists_via_device_identity);
     RUN_TEST(test_ws_json_color_command_flows_through_to_static_color);
     RUN_TEST(test_brightness_config_persists_and_reloads_value);
 

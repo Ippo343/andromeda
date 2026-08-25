@@ -7,6 +7,7 @@
 
 #include "WiFi.h"
 #include "comms-utils.h"
+#include "device-identity.h"
 #include "mission-control.h"
 #include "secrets.h"
 #include "utils.h"
@@ -36,6 +37,13 @@ class Comms
     TaskHandle_t webServerTaskHandle;
     DNSServer* dnsServer;
     bool isAPMode;
+
+    // The device name actually applied to the AP SSID / mDNS hostname at
+    // startup - captured once in startAPMode()/startStationMode() so the
+    // state broadcast can flag "rename pending reboot" the same way MODEL
+    // does (see buildCurrentStateJson()), even if DeviceIdentity::
+    // getDeviceName() has since changed via a live rename.
+    String runningDeviceName;
 
     EspWiFiConnector wifiConnector;
     EspPreferencesStore preferencesStore;

@@ -58,6 +58,15 @@ class Preferences
         }
     }
 
+    bool remove(const char* key)
+    {
+        const std::string fullKey = ns + "/" + key;
+        bool removed = false;
+        removed |= ushortStore().erase(fullKey) > 0;
+        removed |= stringStore().erase(fullKey) > 0;
+        return removed;
+    }
+
    private:
     std::string ns;
 

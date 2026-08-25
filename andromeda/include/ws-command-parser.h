@@ -26,6 +26,33 @@ inline bool findField(const char* json, const char* key, long& outValue)
     return true;
 }
 
+// Extracts a quoted JSON string value following `key` (e.g. `key` =
+// `"name":` matches `"name":"Kitchen"`) into `out` (a buffer of `outSize`
+// bytes), truncating if necessary. No escape-sequence handling - callers
+// (DeviceIdentity::setDeviceName) sanitize the result to a safe character
+// set anyway. Returns false if `key` isn't found or the value isn't a
+// properly quoted string.
+inline bool findStringField(const char* json, const char* key, char* out, size_t outSize)
+{
+    const char* p = strstr(json, key);
+    if (!p || outSize == 0) return false;
+    p += strlen(key);
+    if (*p != '"') return false;
+    p++;
+
+    // Keeps scanning past outSize (truncating what's written) so a value
+    // longer than the buffer still parses successfully instead of being
+    // rejected as malformed - only an actually-unterminated string fails.
+    size_t i = 0;
+    while (*p != '\0' && *p != '"')
+    {
+        if (i < outSize - 1) out[i++] = *p;
+        p++;
+    }
+    out[i] = '\0';
+    return *p == '"';
+}
+
 inline bool parse(const char* json, Command& out)
 {
     if (strstr(json, "\"type\":\"next\""))
@@ -86,6 +113,14 @@ inline bool parse(const char* json, Command& out)
         if (!findField(json, "\"id\":", id)) return false;
         if (id < 0 || id > 255) return false;
         out = Command::Effect(static_cast<uint8_t>(id));
+        return true;
+    }
+
+    if (strstr(json, "\"type\":\"device_name\""))
+    {
+        char name[DeviceUid::MAX_NAME_LENGTH + 1];
+        if (!findStringField(json, "\"name\":", name, sizeof(name))) return false;
+        out = Command::DeviceName(name);
         return true;
     }
 

@@ -25,6 +25,9 @@ DeviceState makeState()
     state.runningModel = ModelInfo{768, "L70"};
     state.configuredModel = ModelInfo{768, "L70"};
     state.fps = 42.5f;
+    state.deviceUid = "A1B2";
+    state.runningDeviceName = "Andromeda-A1B2";
+    state.configuredDeviceName = "Andromeda-A1B2";
     return state;
 }
 }  // namespace
@@ -177,6 +180,38 @@ void test_effects_array_matches_full_registry()
     }
 }
 
+void test_device_fields_round_trip()
+{
+    DeviceState state = makeState();
+    state.deviceUid = "F00D";
+    state.runningDeviceName = "Andromeda-F00D";
+    state.configuredDeviceName = "Andromeda-F00D";
+    char buf[WsStateBuilder::JSON_CAPACITY];
+    size_t len = WsStateBuilder::buildStateJson(state, buf, sizeof(buf));
+    TEST_ASSERT_GREATER_THAN(0, len);
+
+    StaticJsonDocument<WsStateBuilder::JSON_CAPACITY> doc;
+    TEST_ASSERT_FALSE(deserializeJson(doc, buf, len));
+    TEST_ASSERT_EQUAL_STRING("F00D", doc["device"]["uid"]);
+    TEST_ASSERT_EQUAL_STRING("Andromeda-F00D", doc["device"]["name"]);
+    TEST_ASSERT_EQUAL_STRING("Andromeda-F00D", doc["device"]["runningName"]);
+    TEST_ASSERT_FALSE(doc["device"]["nameRebootRequired"].as<bool>());
+}
+
+void test_device_name_reboot_required_true_when_names_differ()
+{
+    DeviceState state = makeState();
+    state.runningDeviceName = "Andromeda-F00D";
+    state.configuredDeviceName = "Kitchen-Lamp";
+    char buf[WsStateBuilder::JSON_CAPACITY];
+    size_t len = WsStateBuilder::buildStateJson(state, buf, sizeof(buf));
+
+    StaticJsonDocument<WsStateBuilder::JSON_CAPACITY> doc;
+    deserializeJson(doc, buf, len);
+    TEST_ASSERT_TRUE(doc["device"]["nameRebootRequired"].as<bool>());
+    TEST_ASSERT_EQUAL_STRING("Kitchen-Lamp", doc["device"]["name"]);
+}
+
 void test_fps_serializes_as_number()
 {
     DeviceState state = makeState();
@@ -204,6 +239,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_reboot_required_true_when_models_differ);
     RUN_TEST(test_models_array_matches_full_registry);
     RUN_TEST(test_effects_array_matches_full_registry);
+    RUN_TEST(test_device_fields_round_trip);
+    RUN_TEST(test_device_name_reboot_required_true_when_names_differ);
     RUN_TEST(test_fps_serializes_as_number);
 
     return UNITY_END();

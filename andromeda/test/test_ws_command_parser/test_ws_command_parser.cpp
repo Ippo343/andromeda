@@ -1,5 +1,7 @@
 #include <unity.h>
 
+#include <string>
+
 #include "ws-command-parser.h"
 
 void setUp() {}
@@ -151,6 +153,36 @@ void test_rejects_effect_with_out_of_range_id()
     TEST_ASSERT_FALSE(WsCommandParser::parse("{\"type\":\"effect\",\"id\":256}", out));
 }
 
+void test_parses_device_name()
+{
+    Command out;
+    TEST_ASSERT_TRUE(
+        WsCommandParser::parse("{\"type\":\"device_name\",\"name\":\"Kitchen\"}", out));
+    TEST_ASSERT_EQUAL(static_cast<int>(CommandType::DEVICE_NAME), static_cast<int>(out.type));
+    TEST_ASSERT_EQUAL_STRING("Kitchen", out.deviceName);
+}
+
+void test_parses_device_name_truncates_to_buffer_size()
+{
+    Command out;
+    std::string longName(DeviceUid::MAX_NAME_LENGTH + 20, 'x');
+    std::string json = "{\"type\":\"device_name\",\"name\":\"" + longName + "\"}";
+    TEST_ASSERT_TRUE(WsCommandParser::parse(json.c_str(), out));
+    TEST_ASSERT_EQUAL(DeviceUid::MAX_NAME_LENGTH, strlen(out.deviceName));
+}
+
+void test_rejects_device_name_with_missing_field()
+{
+    Command out;
+    TEST_ASSERT_FALSE(WsCommandParser::parse("{\"type\":\"device_name\"}", out));
+}
+
+void test_rejects_device_name_unterminated_string()
+{
+    Command out;
+    TEST_ASSERT_FALSE(WsCommandParser::parse("{\"type\":\"device_name\",\"name\":\"Kitchen}", out));
+}
+
 void test_rejects_unrecognized_type()
 {
     Command out;
@@ -186,6 +218,10 @@ int main(int argc, char** argv)
     RUN_TEST(test_rejects_effect_with_missing_id);
     RUN_TEST(test_rejects_effect_with_negative_id);
     RUN_TEST(test_rejects_effect_with_out_of_range_id);
+    RUN_TEST(test_parses_device_name);
+    RUN_TEST(test_parses_device_name_truncates_to_buffer_size);
+    RUN_TEST(test_rejects_device_name_with_missing_field);
+    RUN_TEST(test_rejects_device_name_unterminated_string);
     RUN_TEST(test_rejects_unrecognized_type);
     RUN_TEST(test_rejects_malformed_message);
 

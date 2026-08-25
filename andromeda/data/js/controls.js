@@ -231,6 +231,10 @@ let deviceIsHolding = false;
 // the slider out from under the user mid-drag.
 let sliderActivelyDragging = false;
 
+// True while the device name input has focus, so an incoming state
+// broadcast doesn't overwrite what the user is currently typing.
+let deviceNameEditing = false;
+
 // True until the first state message after a (re)connect has picked the
 // initial mode tab (see pickInitialTab() in controls-logic.js) - after
 // that, tab switching is 100% user-driven (clicking a tab or a shuffle
@@ -308,20 +312,22 @@ function applyHoldState(isHolding) {
         : '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
 }
 
-// Shows/hides the "model change needs a reboot to take effect" indicator -
-// used both by the model select's own change handler and by state
-// broadcasts (so it's correct on load, before anyone has touched anything).
-function setRebootIndicator(show) {
-    const rebootBtn = document.getElementById('rebootBtn');
-    const modelRow = document.getElementById('modelRow');
-    if (!rebootBtn || !modelRow) return;
+// Shows/hides a "this change needs a reboot to take effect" indicator -
+// used both by the model select/device name input's own change handlers and
+// by state broadcasts (so it's correct on load, before anyone has touched
+// anything). Shared by the model row (rebootBtn/modelRow) and the device
+// name row (deviceNameRebootBtn/deviceNameRow).
+function setRebootIndicator(rowId, btnId, show) {
+    const rebootBtn = document.getElementById(btnId);
+    const row = document.getElementById(rowId);
+    if (!rebootBtn || !row) return;
 
     if (show) {
         rebootBtn.classList.add('visible');
-        modelRow.classList.add('has-reboot');
+        row.classList.add('has-reboot');
     } else {
         rebootBtn.classList.remove('visible');
-        modelRow.classList.remove('has-reboot');
+        row.classList.remove('has-reboot');
     }
 }
 
@@ -361,7 +367,17 @@ function handleServerMessage(raw) {
         }
         if (msg.model) modelSelect.value = String(msg.model.configured.id);
     }
-    if (msg.model) setRebootIndicator(msg.model.rebootRequired);
+    if (msg.model) setRebootIndicator('modelRow', 'rebootBtn', msg.model.rebootRequired);
+
+    if (msg.device) {
+        const deviceNameInput = document.getElementById('deviceNameInput');
+        if (deviceNameInput && !deviceNameEditing) deviceNameInput.value = msg.device.name;
+
+        const deviceUidHint = document.getElementById('deviceUidHint');
+        if (deviceUidHint) deviceUidHint.textContent = `Device ID: ${msg.device.uid}`;
+
+        setRebootIndicator('deviceNameRow', 'deviceNameRebootBtn', msg.device.nameRebootRequired);
+    }
 
     const effectSelect = document.getElementById('effectSelect');
     if (effectSelect && Array.isArray(msg.effects)) {
@@ -509,10 +525,27 @@ function initControlsPage() {
             }));
         }
 
-        setRebootIndicator(true);
+        setRebootIndicator('modelRow', 'rebootBtn', true);
     });
 
-    document.getElementById('rebootBtn').addEventListener('click', function() {
+    // Device Name input: commits on blur/Enter (not on every keystroke) -
+    // same "commit on release" idea as the brightness slider's drag-end.
+    const deviceNameInput = document.getElementById('deviceNameInput');
+    deviceNameInput.addEventListener('focus', () => { deviceNameEditing = true; });
+    const commitDeviceName = () => {
+        deviceNameEditing = false;
+        const name = deviceNameInput.value.trim();
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'device_name', name: name }));
+        }
+        setRebootIndicator('deviceNameRow', 'deviceNameRebootBtn', true);
+    };
+    deviceNameInput.addEventListener('blur', commitDeviceName);
+    deviceNameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') deviceNameInput.blur();
+    });
+
+    const rebootDevice = function() {
         this.innerHTML = "Rebooting...";
         this.style.opacity = "0.5";
 
@@ -521,7 +554,9 @@ function initControlsPage() {
         }
 
         setTimeout(() => location.reload(), 4000);
-    });
+    };
+    document.getElementById('rebootBtn').addEventListener('click', rebootDevice);
+    document.getElementById('deviceNameRebootBtn').addEventListener('click', rebootDevice);
 
     // Button ripple effects
     document.querySelectorAll('.btn').forEach(btn => {

@@ -36,6 +36,7 @@ bool Comms::setup()
 bool Comms::startAPMode()
 {
     isAPMode = true;
+    runningDeviceName = DeviceIdentity::getDeviceName();
     wifiConnector.enterAPMode();
 
     IPAddress apIP = WiFi.softAPIP();
@@ -62,7 +63,8 @@ bool Comms::startAPMode()
 bool Comms::startStationMode()
 {
     isAPMode = false;
-    if (!MDNS.begin("andromeda")) { Log.errorln("MDNS failed"); }
+    runningDeviceName = DeviceIdentity::getDeviceName();
+    if (!MDNS.begin(DeviceIdentity::getMdnsHostname().c_str())) { Log.errorln("MDNS failed"); }
     createWebServerTask();
     printWifiStatus();
     return true;
@@ -275,6 +277,7 @@ size_t Comms::buildCurrentStateJson(char* outBuffer, size_t outBufferSize)
     ModelId configuredId =
         FactoryConfig::isConfigured() ? FactoryConfig::getModelId() : runningConfig->id;
     const ModelConfig* configuredConfig = getModelConfig(configuredId);
+    String configuredDeviceName = DeviceIdentity::getDeviceName();
 
     WsStateBuilder::DeviceState state{
         .power = mc.isOn(),
@@ -289,6 +292,9 @@ size_t Comms::buildCurrentStateJson(char* outBuffer, size_t outBufferSize)
         .configuredModel = {static_cast<uint16_t>(configuredId),
                             configuredConfig ? configuredConfig->name : "Unknown"},
         .fps = PerformanceMonitor::Instance().fps(),
+        .deviceUid = DeviceIdentity::getUid(),
+        .runningDeviceName = runningDeviceName.c_str(),
+        .configuredDeviceName = configuredDeviceName.c_str(),
     };
     return WsStateBuilder::buildStateJson(state, outBuffer, outBufferSize);
 }

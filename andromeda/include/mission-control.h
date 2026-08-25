@@ -5,8 +5,11 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
+#include <cstring>
+
 #include "animations.h"
 #include "control-hints.h"
+#include "device-uid.h"
 #include "effects.h"
 #include "geometry/geometry.h"
 #include "moodlight.h"
@@ -43,7 +46,8 @@ enum class CommandType : uint8_t
     COLOR,
     MODEL,
     REBOOT,
-    EFFECT
+    EFFECT,
+    DEVICE_NAME
 };
 
 inline const char* commandTypeToString(CommandType type)
@@ -68,6 +72,8 @@ inline const char* commandTypeToString(CommandType type)
             return "REBOOT";
         case CommandType::EFFECT:
             return "EFFECT";
+        case CommandType::DEVICE_NAME:
+            return "DEVICE_NAME";
     }
     return "UNKNOWN";
 }
@@ -79,9 +85,10 @@ inline const char* commandTypeToString(CommandType type)
 struct Command
 {
     CommandType type;
-    uint8_t r = 0, g = 0, b = 0;  // COLOR
-    uint16_t modelId = 0;         // MODEL
-    uint8_t effectId = 0;         // EFFECT
+    uint8_t r = 0, g = 0, b = 0;                            // COLOR
+    uint16_t modelId = 0;                                   // MODEL
+    uint8_t effectId = 0;                                   // EFFECT
+    char deviceName[DeviceUid::MAX_NAME_LENGTH + 1] = {0};  // DEVICE_NAME
 
     static Command Next() { return {CommandType::NEXT}; }
     static Command Hold() { return {CommandType::HOLD}; }
@@ -107,6 +114,12 @@ struct Command
     {
         Command c{CommandType::EFFECT};
         c.effectId = id;
+        return c;
+    }
+    static Command DeviceName(const char* name)
+    {
+        Command c{CommandType::DEVICE_NAME};
+        strncpy(c.deviceName, name, sizeof(c.deviceName) - 1);
         return c;
     }
 };

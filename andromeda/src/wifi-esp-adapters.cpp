@@ -5,9 +5,10 @@
 #include <WiFi.h>
 #include <esp_netif.h>
 
+#include "device-identity.h"
+
 namespace
 {
-constexpr const char* AP_SSID = "Andromeda-Setup";
 constexpr const char* AP_PASSWORD = "";
 constexpr const char* PREFERENCES_NAMESPACE = "wifi";
 }  // namespace
@@ -15,7 +16,7 @@ constexpr const char* PREFERENCES_NAMESPACE = "wifi";
 bool EspWiFiConnector::connect(const char* ssid, const char* password)
 {
     WiFi.mode(WIFI_STA);
-    WiFi.setHostname("Andromeda");
+    WiFi.setHostname(DeviceIdentity::getDeviceName().c_str());
 
     // Configure static IP
     // TODO: this should be configurable
@@ -71,7 +72,7 @@ void EspWiFiConnector::enterAPMode()
 {
     WiFi.disconnect();
     WiFi.mode(WIFI_AP);
-    WiFi.softAP(AP_SSID, AP_PASSWORD);
+    WiFi.softAP(DeviceIdentity::getDeviceName().c_str(), AP_PASSWORD);
 
     // The AP-mode DHCP server doesn't offer a DNS-server option by default, so
     // joining phones never learn to query us for DNS and skip captive-portal
