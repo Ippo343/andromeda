@@ -125,6 +125,32 @@ void test_rejects_model_with_negative_id()
     TEST_ASSERT_FALSE(WsCommandParser::parse("{\"type\":\"model\",\"id\":-1}", out));
 }
 
+void test_parses_effect()
+{
+    Command out;
+    TEST_ASSERT_TRUE(WsCommandParser::parse("{\"type\":\"effect\",\"id\":5}", out));
+    TEST_ASSERT_EQUAL(static_cast<int>(CommandType::EFFECT), static_cast<int>(out.type));
+    TEST_ASSERT_EQUAL(5, out.effectId);
+}
+
+void test_rejects_effect_with_missing_id()
+{
+    Command out;
+    TEST_ASSERT_FALSE(WsCommandParser::parse("{\"type\":\"effect\"}", out));
+}
+
+void test_rejects_effect_with_negative_id()
+{
+    Command out;
+    TEST_ASSERT_FALSE(WsCommandParser::parse("{\"type\":\"effect\",\"id\":-1}", out));
+}
+
+void test_rejects_effect_with_out_of_range_id()
+{
+    Command out;
+    TEST_ASSERT_FALSE(WsCommandParser::parse("{\"type\":\"effect\",\"id\":256}", out));
+}
+
 void test_rejects_unrecognized_type()
 {
     Command out;
@@ -156,6 +182,10 @@ int main(int argc, char** argv)
     RUN_TEST(test_generic_parse_rejects_brightness);
     RUN_TEST(test_parses_model);
     RUN_TEST(test_rejects_model_with_negative_id);
+    RUN_TEST(test_parses_effect);
+    RUN_TEST(test_rejects_effect_with_missing_id);
+    RUN_TEST(test_rejects_effect_with_negative_id);
+    RUN_TEST(test_rejects_effect_with_out_of_range_id);
     RUN_TEST(test_rejects_unrecognized_type);
     RUN_TEST(test_rejects_malformed_message);
 

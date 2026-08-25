@@ -518,6 +518,50 @@ void test_color_command_mid_transition_cancels_transition_and_applies_color()
     TEST_ASSERT_EQUAL_UINT8(90, mc.staticColor.b);
 }
 
+// Selecting a specific effect by id must start a transition to that exact
+// effect (not a random one) and implicitly hold it once landed - mirroring
+// how COLOR's transitionToStaticColor() reuses handleTransition()+holdEffect().
+void test_queue_effect_command_transitions_to_selected_effect_and_holds()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setEffect(mc, new ElectricSparks());
+    MissionControlTestAccess::setMode(mc, RenderMode::FX_LOOP);
+
+    TEST_ASSERT_TRUE(
+        mc.queueWebCommand(Command::Effect(static_cast<uint8_t>(EffectId::NinjaStar))));
+    mc.update(0);
+
+    // handleTransition() kicks off a real TRANSITIONING window (an actual
+    // animation is picked, not a controllable stub), with the selected
+    // effect parked as pendingEffect until it lands.
+    TEST_ASSERT_EQUAL(RenderMode::TRANSITIONING, MissionControlTestAccess::getMode(mc));
+    AbstractEffect* pending = MissionControlTestAccess::getPendingEffect(mc);
+    TEST_ASSERT_NOT_NULL(pending);
+    TEST_ASSERT_EQUAL_STRING("NinjaStar", pending->GetName());
+    // holdEffect() ran immediately after handleTransition(), while mode was
+    // already TRANSITIONING, so the hold is deferred rather than applied yet.
+    TEST_ASSERT_TRUE(MissionControlTestAccess::holdPending(mc));
+
+    // Clean up the in-flight transition this test intentionally left mid-way
+    // through, so it doesn't leak pendingEffect/holdPending/animation state
+    // into whichever test runs next against the shared MissionControl
+    // singleton (setUp() only resets effect/animation/mode).
+    MissionControlTestAccess::cancelTransition(mc);
+}
+
+void test_queue_effect_command_with_out_of_range_id_is_ignored()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setEffect(mc, new ElectricSparks());
+    MissionControlTestAccess::setMode(mc, RenderMode::FX_LOOP);
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Effect(255)));
+    mc.update(0);
+
+    TEST_ASSERT_EQUAL(RenderMode::FX_LOOP, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_NULL(MissionControlTestAccess::getPendingEffect(mc));
+}
+
 void test_queue_model_command_updates_factory_config()
 {
     MissionControl& mc = MissionControl::Instance();
@@ -922,6 +966,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_queue_color_command_sets_static_color_and_enters_static_mode);
     RUN_TEST(test_queue_color_command_while_already_in_static_mode_updates_color);
     RUN_TEST(test_color_command_mid_transition_cancels_transition_and_applies_color);
+    RUN_TEST(test_queue_effect_command_transitions_to_selected_effect_and_holds);
+    RUN_TEST(test_queue_effect_command_with_out_of_range_id_is_ignored);
     RUN_TEST(test_queue_model_command_updates_factory_config);
     RUN_TEST(test_ws_json_color_command_flows_through_to_static_color);
     RUN_TEST(test_brightness_config_persists_and_reloads_value);

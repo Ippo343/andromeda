@@ -42,7 +42,8 @@ enum class CommandType : uint8_t
     POWER_ON,
     COLOR,
     MODEL,
-    REBOOT
+    REBOOT,
+    EFFECT
 };
 
 inline const char* commandTypeToString(CommandType type)
@@ -65,6 +66,8 @@ inline const char* commandTypeToString(CommandType type)
             return "MODEL";
         case CommandType::REBOOT:
             return "REBOOT";
+        case CommandType::EFFECT:
+            return "EFFECT";
     }
     return "UNKNOWN";
 }
@@ -78,6 +81,7 @@ struct Command
     CommandType type;
     uint8_t r = 0, g = 0, b = 0;  // COLOR
     uint16_t modelId = 0;         // MODEL
+    uint8_t effectId = 0;         // EFFECT
 
     static Command Next() { return {CommandType::NEXT}; }
     static Command Hold() { return {CommandType::HOLD}; }
@@ -97,6 +101,12 @@ struct Command
     {
         Command c{CommandType::MODEL};
         c.modelId = id;
+        return c;
+    }
+    static Command Effect(uint8_t id)
+    {
+        Command c{CommandType::EFFECT};
+        c.effectId = id;
         return c;
     }
 };

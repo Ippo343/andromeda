@@ -82,6 +82,13 @@ void MissionControl::processWebCommands()
             case CommandType::REBOOT:
                 esp_restart();
                 break;
+            case CommandType::EFFECT:
+                if (command.effectId < NUM_EFFECTS)
+                {
+                    handleTransition(createEffect(static_cast<EffectId>(command.effectId)));
+                    holdEffect();
+                }
+                break;
         }
     }
 }

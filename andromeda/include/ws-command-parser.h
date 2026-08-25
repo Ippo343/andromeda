@@ -80,6 +80,15 @@ inline bool parse(const char* json, Command& out)
         return true;
     }
 
+    if (strstr(json, "\"type\":\"effect\""))
+    {
+        long id;
+        if (!findField(json, "\"id\":", id)) return false;
+        if (id < 0 || id > 255) return false;
+        out = Command::Effect(static_cast<uint8_t>(id));
+        return true;
+    }
+
     return false;
 }
 
