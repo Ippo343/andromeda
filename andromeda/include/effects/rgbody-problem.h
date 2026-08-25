@@ -36,7 +36,7 @@ class RGBodyProblem : public AbstractEffect
     {
         controlHints = ControlHints::ROTATE_SPACE;
 
-        for (size_t i; i < emittersCount; i++)
+        for (size_t i = 0; i < emittersCount; i++)
         {
             locations[i] = CartesianCoordinates();
             sx[i] = RandSine<1, 20>();

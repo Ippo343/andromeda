@@ -97,6 +97,25 @@ void test_saturation_glow_evaluates()
     exerciseEvaluate(fx, 2000);
 }
 
+void test_saturation_glow_evaluate_matches_precomputed_color()
+{
+    SaturationGlow fx;
+    fx.precompute(2000);
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    CRGB c = fx.evaluate(&strip, &strip.leds[0], 0, 2000);
+    TEST_ASSERT_TRUE(c == fx.color[0]);
+}
+
+void test_saturation_glow_amplitude_keeps_center_wave_in_range()
+{
+    SaturationGlow fx;
+    // saturationCenter in [100,156]; amplitude is chosen so center +/- amplitude
+    // never leaves [0,255], which is what keeps precompute()'s constrain() a no-op.
+    int center = fx.saturationCenter;
+    TEST_ASSERT_TRUE(center - (int)fx.saturationAmplitude >= 0);
+    TEST_ASSERT_TRUE(center + (int)fx.saturationAmplitude <= 255);
+}
+
 // ---------------------------------------------------------------------------
 // PaletteWave
 // ---------------------------------------------------------------------------
@@ -116,6 +135,17 @@ void test_ninja_star_evaluates()
 {
     NinjaStar fx;
     exerciseEvaluate(fx, 4000);
+}
+
+void test_ninja_star_pow16_lut_fixed_points_and_shrinks_midrange()
+{
+    // 0 and 255 are fixed points of scale8(v, v) applied any number of times;
+    // a mid-range value should shrink towards 0 (repeated squaring of a
+    // fraction < 1), confirming the LUT actually reproduces the pow curve
+    // instead of e.g. an off-by-one identity table.
+    TEST_ASSERT_EQUAL_UINT8(0, NinjaStar::pow16(0));
+    TEST_ASSERT_EQUAL_UINT8(255, NinjaStar::pow16(255));
+    TEST_ASSERT_TRUE(NinjaStar::pow16(128) < 128);
 }
 
 // ---------------------------------------------------------------------------
@@ -167,6 +197,23 @@ void test_polar_moodlight_evaluates()
     exerciseEvaluate(fx, 6000);
 }
 
+void test_polar_moodlight_same_radius_gives_same_color()
+{
+    // evaluate() is a pure function of polar.radius (per-channel RandSine, no
+    // dependency on cartesian position) - two LEDs at the same radius must
+    // land on the same color.
+    PolarMoodlight fx;
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    Led ledA = strip.leds[0];
+    Led ledB = strip.leds[0];
+    ledA.polar.radius = 100;
+    ledB.polar.radius = 100;
+
+    CRGB a = fx.evaluate(&strip, &ledA, 0, 1000);
+    CRGB b = fx.evaluate(&strip, &ledB, 0, 1000);
+    TEST_ASSERT_TRUE(a == b);
+}
+
 // ---------------------------------------------------------------------------
 // RGBodyProblem
 // ---------------------------------------------------------------------------
@@ -177,6 +224,29 @@ void test_rgbody_problem_evaluates()
     exerciseEvaluate(fx, 7000);
 }
 
+void test_rgbody_problem_brighter_near_an_emitter_than_far_away()
+{
+    RGBodyProblem fx;
+    fx.precompute(1000);
+
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    Led nearLed = strip.leds[0];
+    nearLed.cartesian.x = fx.locations[0].x + 5;
+    nearLed.cartesian.y = fx.locations[0].y;
+
+    Led farLed = strip.leds[0];
+    short farCoord = GEOMETRY.getScreenRadius() * 10;
+    farLed.cartesian.x = farCoord;
+    farLed.cartesian.y = farCoord;
+
+    CRGB near = fx.evaluate(&strip, &nearLed, 0, 1000);
+    CRGB far = fx.evaluate(&strip, &farLed, 0, 1000);
+
+    int nearSum = (int)near.r + near.g + near.b;
+    int farSum = (int)far.r + far.g + far.b;
+    TEST_ASSERT_TRUE(nearSum > farSum);
+}
+
 // ---------------------------------------------------------------------------
 // HexagonalRippleGalaxy
 // ---------------------------------------------------------------------------
@@ -185,6 +255,33 @@ void test_hexagonal_ripple_galaxy_evaluates()
 {
     HexagonalRippleGalaxy fx;
     exerciseEvaluate(fx, 8000);
+}
+
+void test_hexagonal_ripple_galaxy_color_varies_with_time()
+{
+    HexagonalRippleGalaxy fx;
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    Led& led = strip.leds[3];
+
+    fx.precompute(0);
+    CRGB early = fx.evaluate(&strip, &led, 3, 0);
+
+    fx.precompute(500000);
+    CRGB late = fx.evaluate(&strip, &led, 3, 500000);
+
+    TEST_ASSERT_FALSE(early == late);
+}
+
+void test_hexagonal_ripple_galaxy_color_varies_with_position()
+{
+    // Regression guard for the led->polar refactor: radius8/angle8 must
+    // actually come from per-LED polar coordinates, not a constant.
+    HexagonalRippleGalaxy fx;
+    fx.precompute(1000);
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    CRGB a = fx.evaluate(&strip, &strip.leds[0], 0, 1000);
+    CRGB b = fx.evaluate(&strip, &strip.leds[strip.num_leds / 2], strip.num_leds / 2, 1000);
+    TEST_ASSERT_FALSE(a == b);
 }
 
 // ---------------------------------------------------------------------------
@@ -375,19 +472,26 @@ int main(int argc, char** argv)
     RUN_TEST(test_electric_sparks_avg38_clamps);
 
     RUN_TEST(test_saturation_glow_evaluates);
+    RUN_TEST(test_saturation_glow_evaluate_matches_precomputed_color);
+    RUN_TEST(test_saturation_glow_amplitude_keeps_center_wave_in_range);
 
     RUN_TEST(test_palette_wave_sets_rotate_space_hint);
 
     RUN_TEST(test_ninja_star_evaluates);
+    RUN_TEST(test_ninja_star_pow16_lut_fixed_points_and_shrinks_midrange);
 
     RUN_TEST(test_polar_swipe_evaluates_both_flip_directions);
     RUN_TEST(test_polar_swipe_get_brightness_bounds);
 
     RUN_TEST(test_polar_moodlight_evaluates);
+    RUN_TEST(test_polar_moodlight_same_radius_gives_same_color);
 
     RUN_TEST(test_rgbody_problem_evaluates);
+    RUN_TEST(test_rgbody_problem_brighter_near_an_emitter_than_far_away);
 
     RUN_TEST(test_hexagonal_ripple_galaxy_evaluates);
+    RUN_TEST(test_hexagonal_ripple_galaxy_color_varies_with_time);
+    RUN_TEST(test_hexagonal_ripple_galaxy_color_varies_with_position);
 
     RUN_TEST(test_individual_strip_drift_transitions_to_new_target);
 
