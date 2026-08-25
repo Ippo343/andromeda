@@ -9,6 +9,7 @@
 #include "physics/frame-clock.h"
 #include "physics/physics-random.h"
 #include "physics/vec2f.h"
+#include "physics/verlet-chain.h"
 
 // Realistic square-ish model, unlike the degenerate 10x934mm strip test_effects.cpp
 // uses - needed here because bounds-containment tests (added in later commits) care
@@ -323,6 +324,115 @@ void test_bezier_path_step_preserves_leftover_time_across_segment_rollover()
     TEST_ASSERT_EQUAL_UINT32(overshoot, path.elapsedMs);
 }
 
+// ---------------------------------------------------------------------------
+// VerletChain
+// ---------------------------------------------------------------------------
+
+static float rodActualLength(const VerletChain& chain, size_t i)
+{
+    Vec2f a = i == 0 ? chain.anchor : chain.curr[i - 1];
+    return (chain.curr[i] - a).length();
+}
+
+static void assertRodLengthsHold(const VerletChain& chain, float tolerance)
+{
+    for (size_t i = 0; i < chain.curr.size(); i++)
+        TEST_ASSERT_FLOAT_WITHIN(chain.rodLength[i] * tolerance, chain.rodLength[i],
+                                 rodActualLength(chain, i));
+}
+
+static void assertAllFinite(const VerletChain& chain)
+{
+    for (size_t i = 0; i < chain.curr.size(); i++)
+    {
+        TEST_ASSERT_FALSE(std::isnan(chain.curr[i].x) || std::isinf(chain.curr[i].x));
+        TEST_ASSERT_FALSE(std::isnan(chain.curr[i].y) || std::isinf(chain.curr[i].y));
+    }
+}
+
+static float chainTotalMechanicalEnergy(const VerletChain& chain, float lastSubstepDtSeconds)
+{
+    float energy = 0.0f;
+    for (size_t i = 0; i < chain.curr.size(); i++)
+    {
+        float mass = 1.0f / chain.invMass[i];
+        Vec2f velocity = (chain.curr[i] - chain.prev[i]) * (1.0f / lastSubstepDtSeconds);
+        float ke = 0.5f * mass * velocity.lengthSquared();
+        float pe = -mass * VerletChain::GRAVITY_MM_PER_S2 * chain.curr[i].y;
+        energy += ke + pe;
+    }
+    return energy;
+}
+
+void test_verlet_chain_preserves_rod_lengths_n2()
+{
+    randomSeed(11);
+    VerletChain chain;
+    chain.initRandom(2, Vec2f(0, 0), 50.0f, 100.0f, 1.0f, 3.0f);
+    for (int i = 0; i < 10000; i++) chain.step(16);
+    assertRodLengthsHold(chain, 0.02f);
+    assertAllFinite(chain);
+}
+
+void test_verlet_chain_preserves_rod_lengths_n6()
+{
+    randomSeed(12);
+    VerletChain chain;
+    chain.initRandom(6, Vec2f(0, 0), 30.0f, 60.0f, 1.0f, 4.0f);
+    for (int i = 0; i < 10000; i++) chain.step(16);
+    // Looser tolerance than the n=2 case: a fixed Gauss-Seidel iteration count
+    // converges less completely on a longer chain, so a bit more per-step slack
+    // accumulates over 10,000 steps (160s of simulated time).
+    assertRodLengthsHold(chain, 0.05f);
+    assertAllFinite(chain);
+}
+
+void test_verlet_chain_stable_under_irregular_dt()
+{
+    randomSeed(13);
+    VerletChain chain;
+    chain.initRandom(4, Vec2f(0, 0), 40.0f, 80.0f, 1.0f, 3.0f);
+
+    milliseconds_t pattern[] = {16, 200, 5, 1000};
+    for (int i = 0; i < 200; i++) chain.step(pattern[i % 4]);
+
+    assertAllFinite(chain);
+    assertRodLengthsHold(chain, 0.05f);
+}
+
+void test_verlet_chain_bounded_reach_from_anchor()
+{
+    randomSeed(14);
+    VerletChain chain;
+    chain.initRandom(5, Vec2f(0, 0), 20.0f, 50.0f, 1.0f, 3.0f);
+    float totalRod = 0;
+    for (float len : chain.rodLength) totalRod += len;
+
+    for (int i = 0; i < 2000; i++)
+    {
+        chain.step(16);
+        float reach = (chain.curr.back() - chain.anchor).length();
+        TEST_ASSERT_TRUE(reach <= totalRod * 1.05f);
+    }
+}
+
+void test_verlet_chain_energy_stays_bounded_over_long_frictionless_run()
+{
+    randomSeed(15);
+    VerletChain chain;
+    chain.initRandom(3, Vec2f(0, 0), 40.0f, 80.0f, 1.0f, 3.0f);
+
+    chain.step(16);  // settle one substep so curr/prev reflect real motion
+    float initialEnergy = fabsf(chainTotalMechanicalEnergy(chain, 0.016f));
+    float scale = initialEnergy + 1.0f;  // +1 guards against a near-zero initial energy
+
+    for (int i = 0; i < 20000; i++) chain.step(16);
+
+    float laterEnergy = fabsf(chainTotalMechanicalEnergy(chain, 0.016f));
+    TEST_ASSERT_TRUE(laterEnergy < scale * 100.0f);
+    assertAllFinite(chain);
+}
+
 int main(int argc, char** argv)
 {
     UNITY_BEGIN();
@@ -355,6 +465,12 @@ int main(int argc, char** argv)
     RUN_TEST(test_bezier_path_stays_within_screen_bounds);
     RUN_TEST(test_bezier_path_large_dt_does_not_get_stuck_past_segment_end);
     RUN_TEST(test_bezier_path_step_preserves_leftover_time_across_segment_rollover);
+
+    RUN_TEST(test_verlet_chain_preserves_rod_lengths_n2);
+    RUN_TEST(test_verlet_chain_preserves_rod_lengths_n6);
+    RUN_TEST(test_verlet_chain_stable_under_irregular_dt);
+    RUN_TEST(test_verlet_chain_bounded_reach_from_anchor);
+    RUN_TEST(test_verlet_chain_energy_stays_bounded_over_long_frictionless_run);
 
     return UNITY_END();
 }
