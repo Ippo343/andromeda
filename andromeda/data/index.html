@@ -20,15 +20,39 @@
             <a href="http://192.168.4.1/wifi" target="_blank" style="color: #64b5f6; text-decoration: underline;">Open WiFi Setup</a>
         </div>
 
-        <div class="button-grid">
-            <button class="btn next"  data-cmd="next">Next</button>
-            <button class="btn hold" id="holdBtn" data-cmd="hold">Hold</button>
-            <button class="btn off" id="powerBtn" data-cmd="power_off">Off</button>
-            <button class="btn color-picker-toggle" id="colorPickerToggle">Color</button>
+        <!-- Mode selector: Random rotation / a specific pinned Effect / a
+             pinned static Color are mutually exclusive "what's on screen"
+             states - see data/js/controls.js for the tab-switch logic. -->
+        <div class="mode-tabs">
+            <button class="mode-tab active" data-tab="random">Random</button>
+            <button class="mode-tab" data-tab="effect">Effect</button>
+            <button class="mode-tab" data-tab="color">Color</button>
         </div>
 
-        <!-- Color Wheel Drawer -->
-        <div class="color-wheel-drawer" id="colorWheelDrawer">
+        <button class="btn off" id="powerBtn" data-cmd="power_off">Off</button>
+
+        <!-- Random panel: transport controls for the random rotation -->
+        <div class="mode-panel active" id="randomPanel" data-panel="random">
+            <div class="transport-row">
+                <button class="btn icon-btn" id="holdBtn" data-cmd="hold" title="Pause" aria-label="Pause rotation">
+                    <svg class="icon" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                </button>
+                <button class="btn icon-btn next" data-cmd="next" title="Next" aria-label="Skip to next effect">
+                    <svg class="icon" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Effect panel: pick one specific effect by name (implicitly holds it) -->
+        <div class="mode-panel" id="effectPanel" data-panel="effect">
+            <select class="model-select" id="effectSelect"></select>
+            <button class="btn icon-btn shuffle-btn" id="effectShuffleBtn" title="Resume random rotation" aria-label="Resume random rotation">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+            </button>
+        </div>
+
+        <!-- Color panel: pin a static color (implicitly holds it) -->
+        <div class="mode-panel" id="colorPanel" data-panel="color">
             <div class="color-wheel-content">
                 <div class="color-wheel-wrapper">
                     <canvas class="color-wheel" id="colorWheel" width="240" height="240"></canvas>
@@ -36,7 +60,6 @@
                 </div>
                 <div class="color-preview" id="colorPreview"></div>
                 <div class="color-info-toggle" id="colorInfoToggle">
-                    <div class="color-info" id="colorInfo">RGB: 255, 255, 255</div>
                     <div class="color-histogram" id="colorHistogram">
                         <div class="histogram-row">
                             <span class="histogram-track"><span class="histogram-fill r" id="histFillR"></span></span>
@@ -48,7 +71,11 @@
                             <span class="histogram-track"><span class="histogram-fill b" id="histFillB"></span></span>
                         </div>
                     </div>
+                    <div class="color-info" id="colorInfo">RGB: 255, 255, 255</div>
                 </div>
+                <button class="btn icon-btn shuffle-btn" id="colorShuffleBtn" title="Resume random rotation" aria-label="Resume random rotation">
+                    <svg class="icon" viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+                </button>
             </div>
         </div>
 
@@ -122,6 +149,7 @@
 
     <!-- External JavaScript -->
     <script src="js/utils.js"></script>
+    <script src="js/controls-logic.js"></script>
     <script src="js/controls.js"></script>
 
     <!-- FPS monitoring -->

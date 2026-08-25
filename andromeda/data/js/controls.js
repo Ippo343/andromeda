@@ -43,12 +43,13 @@ function applyColorDisplay(r, g, b) {
             `<span style="color: #6b6bff">${b}</span>`;
     }
 
+    const widths = rgbToHistogramWidths(r, g, b);
     const histFillR = document.getElementById('histFillR');
     const histFillG = document.getElementById('histFillG');
     const histFillB = document.getElementById('histFillB');
-    if (histFillR) histFillR.style.width = `${(r / 255) * 100}%`;
-    if (histFillG) histFillG.style.width = `${(g / 255) * 100}%`;
-    if (histFillB) histFillB.style.width = `${(b / 255) * 100}%`;
+    if (histFillR) histFillR.style.width = `${widths.r}%`;
+    if (histFillG) histFillG.style.width = `${widths.g}%`;
+    if (histFillB) histFillB.style.width = `${widths.b}%`;
 }
 
 // Color Wheel Class
@@ -88,7 +89,7 @@ class ColorWheel {
                     const hue = (angle * 180 / Math.PI + 360) % 360;
                     const saturation = distance / this.radius;
 
-                    const rgb = this.hsvToRgb(hue, saturation, 1);
+                    const rgb = hsvToRgb(hue, saturation, 1);
 
                     const index = (y * this.canvas.width + x) * 4;
                     data[index] = rgb[0];
@@ -103,27 +104,6 @@ class ColorWheel {
         }
 
         this.ctx.putImageData(imageData, 0, 0);
-    }
-
-    hsvToRgb(h, s, v) {
-        const c = v * s;
-        const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-        const m = v - c;
-
-        let r = 0, g = 0, b = 0;
-
-        if (h >= 0 && h < 60) { r = c; g = x; b = 0; }
-        else if (h >= 60 && h < 120) { r = x; g = c; b = 0; }
-        else if (h >= 120 && h < 180) { r = 0; g = c; b = x; }
-        else if (h >= 180 && h < 240) { r = 0; g = x; b = c; }
-        else if (h >= 240 && h < 300) { r = x; g = 0; b = c; }
-        else if (h >= 300 && h < 360) { r = c; g = 0; b = x; }
-
-        return [
-            Math.round((r + m) * 255),
-            Math.round((g + m) * 255),
-            Math.round((b + m) * 255)
-        ];
     }
 
     attachEvents() {
@@ -207,7 +187,7 @@ class ColorWheel {
         const hue = (angle * 180 / Math.PI + 360) % 360;
         const saturation = Math.min(distance / radius, 1);
 
-        const [r, g, b] = this.hsvToRgb(hue, saturation, 1);
+        const [r, g, b] = hsvToRgb(hue, saturation, 1);
 
         const colorString = `rgb(${r}, ${g}, ${b})`;
 
@@ -252,15 +232,44 @@ let deviceIsHolding = false;
 // the slider out from under the user mid-drag.
 let sliderActivelyDragging = false;
 
+// True until the first state message after a (re)connect has picked the
+// initial mode tab (see pickInitialTab() in controls-logic.js) - after
+// that, tab switching is 100% user-driven (clicking a tab or a shuffle
+// button), never re-derived from later state broadcasts.
+let awaitingInitialTab = true;
+
+// Lazily constructed on the Color tab's first activation, exactly like the
+// old color-picker drawer used to defer building the wheel until opened.
+let colorWheel = null;
+
 function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-    ws.onopen = () => document.body.classList.remove('ws-disconnected');
+    ws.onopen = () => {
+        document.body.classList.remove('ws-disconnected');
+        awaitingInitialTab = true;
+    };
     ws.onclose = () => {
         document.body.classList.add('ws-disconnected');
         setTimeout(connectWebSocket, 2000);
     };
     ws.onmessage = (event) => handleServerMessage(event.data);
+}
+
+// Shows the panel for `tab` ('random' | 'effect' | 'color') and highlights
+// its tab button. Never sends a command by itself - purely a local view
+// switch, whether triggered by a click or by pickInitialTab() on connect.
+function switchTab(tab) {
+    document.querySelectorAll('.mode-tab').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+    document.querySelectorAll('.mode-panel').forEach((panel) => {
+        panel.classList.toggle('active', panel.dataset.panel === tab);
+    });
+
+    if (tab === 'color' && !colorWheel) {
+        colorWheel = new ColorWheel('colorWheel', 'colorSelector', 'colorPreview', 'colorInfo');
+    }
 }
 
 // Updates the power button's DOM/label/dataset to reflect isOn, without
@@ -284,23 +293,25 @@ function applyPowerState(isOn) {
     }
 }
 
-// Updates the hold button's DOM/label/dataset to reflect isHolding, without
-// sending any command - used both after a local click and when a state
-// broadcast reports the device changed hold state from elsewhere.
+// Updates the Random panel's play/pause icon button to reflect isHolding,
+// without sending any command - used both after a local click and when a
+// state broadcast reports the device changed hold state from elsewhere.
+// This always shows the true holding state, regardless of *why* the device
+// is holding (a plain Hold press, or a specific effect/color pinned from
+// the other tabs) - see controls-logic.js's holdIcon().
 function applyHoldState(isHolding) {
     deviceIsHolding = isHolding;
     const holdBtn = document.getElementById('holdBtn');
     if (!holdBtn) return;
 
-    if (isHolding) {
-        holdBtn.textContent = 'FX Loop';
-        holdBtn.dataset.cmd = 'resume';
-        holdBtn.classList.add('holding');
-    } else {
-        holdBtn.textContent = 'Hold';
-        holdBtn.dataset.cmd = 'hold';
-        holdBtn.classList.remove('holding');
-    }
+    const { icon, nextCmd } = holdIcon(isHolding);
+    holdBtn.dataset.cmd = nextCmd;
+    holdBtn.classList.toggle('holding', isHolding);
+    holdBtn.setAttribute('aria-label', icon === 'play' ? 'Resume rotation' : 'Pause rotation');
+    holdBtn.title = icon === 'play' ? 'Resume' : 'Pause';
+    holdBtn.querySelector('.icon').innerHTML = icon === 'play'
+        ? '<path d="M8 5v14l11-7z"/>'
+        : '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
 }
 
 // Shows/hides the "model change needs a reboot to take effect" indicator -
@@ -357,6 +368,29 @@ function handleServerMessage(raw) {
         if (msg.model) modelSelect.value = String(msg.model.configured.id);
     }
     if (msg.model) setRebootIndicator(msg.model.rebootRequired);
+
+    const effectSelect = document.getElementById('effectSelect');
+    if (effectSelect && Array.isArray(msg.effects)) {
+        if (effectSelect.options.length !== msg.effects.length) {
+            effectSelect.innerHTML = '';
+            for (const effect of msg.effects) {
+                const option = document.createElement('option');
+                option.value = effect.id;
+                option.textContent = effect.name;
+                effectSelect.appendChild(option);
+            }
+        }
+        // Keeps the dropdown's selection in sync with whatever effect is
+        // actually running (however it got there), regardless of which tab
+        // is currently visible - cheap, non-disruptive.
+        const selectedId = findEffectIdByName(msg.effects, msg.effect);
+        if (selectedId !== null) effectSelect.value = String(selectedId);
+    }
+
+    if (awaitingInitialTab) {
+        awaitingInitialTab = false;
+        switchTab(pickInitialTab(msg));
+    }
 }
 
 // Initialize page
@@ -376,29 +410,37 @@ function initControlsPage() {
         fpsEl.classList.toggle('hidden');
     });
 
-    // Color Picker toggle
-    const colorPickerToggle = document.getElementById('colorPickerToggle');
-    const colorWheelDrawer = document.getElementById('colorWheelDrawer');
-    let colorWheel = null;
+    // Mode tabs: Random / Effect / Color - purely local view switches, see
+    // switchTab(). The tab that's active on load is later overridden once
+    // by the first state broadcast's pickInitialTab() (handleServerMessage).
+    document.querySelectorAll('.mode-tab').forEach((tabBtn) => {
+        tabBtn.addEventListener('click', () => switchTab(tabBtn.dataset.tab));
+    });
 
-    colorPickerToggle.addEventListener('click', () => {
-        const isExpanded = colorWheelDrawer.classList.contains('expanded');
-
-        if (isExpanded) {
-            colorWheelDrawer.classList.remove('expanded');
-        } else {
-            colorWheelDrawer.classList.add('expanded');
-
-            if (!colorWheel) {
-                colorWheel = new ColorWheel('colorWheel', 'colorSelector', 'colorPreview', 'colorInfo');
-            }
+    // Effect dropdown: picking an option sends the effect command (which
+    // implicitly holds it server-side - the Random tab's play/pause icon
+    // will reflect that next state broadcast).
+    document.getElementById('effectSelect').addEventListener('change', function () {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'effect', id: parseInt(this.value) }));
         }
     });
 
-    // RGB label <-> histogram toggle
+    // Shuffle buttons (Effect and Color panels): resume the random rotation
+    // and switch back to the Random tab.
+    ['effectShuffleBtn', 'colorShuffleBtn'].forEach((id) => {
+        document.getElementById(id).addEventListener('click', () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'resume' }));
+            }
+            switchTab('random');
+        });
+    });
+
+    // RGB label <-> histogram toggle (histogram is the default view)
     const colorInfoToggle = document.getElementById('colorInfoToggle');
     colorInfoToggle.addEventListener('click', () => {
-        colorInfoToggle.classList.toggle('showing-histogram');
+        colorInfoToggle.classList.toggle('showing-rgb');
     });
 
     // Settings toggle

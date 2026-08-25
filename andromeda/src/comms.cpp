@@ -149,6 +149,7 @@ void Comms::setupRoutes()
     STATIC_FILE_ROUTE("/wifi-setup.html", "text/html");
     STATIC_FILE_ROUTE("/fonts/cinzel.woff2", "font/woff2");
     STATIC_FILE_ROUTE("/js/utils.js", "application/javascript");
+    STATIC_FILE_ROUTE("/js/controls-logic.js", "application/javascript");
     STATIC_FILE_ROUTE("/js/controls.js", "application/javascript");
     STATIC_FILE_ROUTE("/js/wifi.js", "application/javascript");
     STATIC_FILE_ROUTE("/css/common.css", "text/css");
