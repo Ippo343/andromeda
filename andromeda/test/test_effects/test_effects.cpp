@@ -3,12 +3,7 @@
 #include <set>
 #include <string>
 
-// effects.cpp declares most of its effect classes locally (not in a header),
-// so we #include the .cpp directly to reach them for white-box testing.
-// This is a test-only decision - effects.cpp is deliberately excluded from
-// platformio.ini's native build_src_filter to avoid a duplicate-symbol link
-// error (see the comment there).
-#include "../../src/effects.cpp"
+#include "../../include/effects.h"
 
 void setUp() { GEOMETRY.initializeForTest(ModelId::SINGLE_STRIP_TEST_DEVICE); }
 void tearDown() {}
@@ -28,7 +23,7 @@ static void exerciseEvaluate(AbstractEffect& fx, milliseconds_t t)
 }
 
 // ---------------------------------------------------------------------------
-// ErrorEffect / StaticColor (declared in effects.h)
+// ErrorEffect / StaticColor
 // ---------------------------------------------------------------------------
 
 void test_error_effect_strip0_is_red_others_black()

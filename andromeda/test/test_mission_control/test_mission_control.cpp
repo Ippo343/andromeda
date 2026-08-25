@@ -1,14 +1,12 @@
 #include <unity.h>
 
-// mission-control.cpp and effects.cpp are #included directly (not compiled
-// via platformio.ini's build_src_filter) so this test binary stays fully
-// self-contained: mission-control.cpp needs getRandomEffect() (effects.cpp)
-// and getRandomAnimation() (stubbed below, see the comment further down) to
-// even link, and effects.cpp's concrete effect classes are file-local so
-// they must be reached this way. Since PlatformIO builds each test_xxx
-// directory as its own separate program, this doesn't conflict with
-// test_effects.cpp doing the same #include independently.
-#include "../../src/effects.cpp"
+// mission-control.cpp is #included directly (not compiled via
+// platformio.ini's build_src_filter) so this test binary stays fully
+// self-contained: it needs getRandomEffect() (declared in effects.h,
+// defined by effects/effects-registry.cpp - which is part of the shared
+// build_src_filter) and getRandomAnimation() (stubbed below, see the
+// comment further down) to even link.
+#include "../../include/effects.h"
 #include "animation-base.h"
 #include "animation-frame-base.h"
 #include "platforms/stub/time_stub.h"

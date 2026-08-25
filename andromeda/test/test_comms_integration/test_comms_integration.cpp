@@ -7,13 +7,15 @@
 
 // comms.cpp transitively needs MissionControl (getMaxBrightness, the WS
 // command queue) and PerformanceMonitor, so this test binary assembles the
-// same self-contained chain test_mission_control.cpp does (effects.cpp for
-// getRandomEffect(), a stub getRandomAnimation() so animations.cpp isn't
-// needed, then mission-control.cpp), with comms.cpp #included on top.
-// comms.cpp can't go through platformio.ini's shared native build_src_filter
-// at all - every native test target links against that filter, and most
-// don't define MissionControl/PerformanceMonitor.
-#include "../../src/effects.cpp"
+// same self-contained chain test_mission_control.cpp does (effects.h for
+// getRandomEffect() - defined by effects/effects-registry.cpp, which is part
+// of platformio.ini's shared native build_src_filter - plus a stub
+// getRandomAnimation() so animations.cpp isn't needed, then
+// mission-control.cpp), with comms.cpp #included on top. comms.cpp itself
+// can't go through that shared build_src_filter at all - every native test
+// target links against it, and most don't define
+// MissionControl/PerformanceMonitor.
+#include "../../include/effects.h"
 #include "animation-base.h"
 #include "animation-frame-base.h"
 
