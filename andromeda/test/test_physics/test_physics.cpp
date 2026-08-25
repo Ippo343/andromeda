@@ -7,6 +7,7 @@
 #include "geometry/geometry.h"
 #include "physics/bezier-path.h"
 #include "physics/frame-clock.h"
+#include "physics/nbody-system.h"
 #include "physics/physics-random.h"
 #include "physics/vec2f.h"
 #include "physics/verlet-chain.h"
@@ -433,6 +434,133 @@ void test_verlet_chain_energy_stays_bounded_over_long_frictionless_run()
     assertAllFinite(chain);
 }
 
+// ---------------------------------------------------------------------------
+// NBodySystem
+// ---------------------------------------------------------------------------
+
+static bool allFinite(const NBodySystem& sim)
+{
+    for (size_t i = 0; i < sim.pos.size(); i++)
+    {
+        if (std::isnan(sim.pos[i].x) || std::isinf(sim.pos[i].x)) return false;
+        if (std::isnan(sim.pos[i].y) || std::isinf(sim.pos[i].y)) return false;
+        if (std::isnan(sim.vel[i].x) || std::isinf(sim.vel[i].x)) return false;
+        if (std::isnan(sim.vel[i].y) || std::isinf(sim.vel[i].y)) return false;
+    }
+    return true;
+}
+
+void test_nbody_zero_net_momentum_after_init()
+{
+    for (size_t n = 3; n <= 8; n++)
+    {
+        randomSeed((unsigned long)n * 17 + 3);
+        NBodySystem sim;
+        sim.initRandom(n, 500.0f, 1.0f, 4.0f, 10.0f, 60.0f);
+
+        Vec2f totalP(0, 0);
+        for (size_t i = 0; i < n; i++) totalP += sim.vel[i] * sim.mass[i];
+
+        TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, totalP.x);
+        TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, totalP.y);
+    }
+}
+
+void test_nbody_softening_prevents_blowup_at_near_zero_separation()
+{
+    NBodySystem sim;
+    sim.pos = {Vec2f(0, 0), Vec2f(0.0001f, 0)};
+    sim.vel = {Vec2f(0, 0), Vec2f(0, 0)};
+    sim.mass = {2.0f, 2.0f};
+    sim.boundsRadius = 1000.0f;
+
+    for (int i = 0; i < 50; i++) sim.step(16);
+    TEST_ASSERT_TRUE(allFinite(sim));
+}
+
+void test_nbody_two_body_orbit_stays_bounded()
+{
+    NBodySystem sim;
+    float m1 = 2.0f, m2 = 3.0f, total = m1 + m2;
+    float d0 = 300.0f;
+
+    sim.mass = {m1, m2};
+    sim.pos = {Vec2f(-d0 * m2 / total, 0), Vec2f(d0 * m1 / total, 0)};
+
+    float vRel = sqrtf(NBodySystem::G * total / d0);
+    sim.vel = {Vec2f(0, -vRel * m2 / total), Vec2f(0, vRel * m1 / total)};
+    sim.boundsRadius = 1000.0f;  // comfortably larger than the orbit radius
+
+    float period = 2.0f * PI * sqrtf(d0 * d0 * d0 / (NBodySystem::G * total));
+    int steps = (int)(3.0f * period * 1000.0f / 16.0f);  // simulate ~3 orbital periods
+
+    float minSep = 1e9f, maxSep = 0;
+    for (int i = 0; i < steps; i++)
+    {
+        sim.step(16);
+        float sep = (sim.pos[1] - sim.pos[0]).length();
+        minSep = fminf(minSep, sep);
+        maxSep = fmaxf(maxSep, sep);
+    }
+
+    TEST_ASSERT_TRUE(allFinite(sim));
+    TEST_ASSERT_TRUE(minSep > d0 * 0.3f);
+    TEST_ASSERT_TRUE(maxSep < d0 * 3.0f);
+}
+
+void test_nbody_reseeds_when_a_body_permanently_escapes()
+{
+    randomSeed(21);
+    NBodySystem sim;
+    sim.initRandom(3, 300.0f, 1.0f, 3.0f, 10.0f, 30.0f);
+
+    // Force body 0 far outside the bounds, moving further outward with clearly
+    // positive specific energy (unbound).
+    sim.pos[0] = Vec2f(sim.boundsRadius * 10.0f, 0);
+    sim.vel[0] = Vec2f(5000.0f, 0);
+
+    bool reseeded = sim.step(16);
+    TEST_ASSERT_TRUE(reseeded);
+
+    for (size_t i = 0; i < sim.pos.size(); i++)
+        TEST_ASSERT_TRUE(sim.pos[i].length() <= sim.boundsRadius * 0.6f);
+}
+
+// Regression test: detectEscape()'s center-of-mass must exclude the body under test.
+// Including it pulls the COM toward that body, understating its true distance from
+// "the rest of the system" and making its potential energy look more bound than it
+// really is - masking a genuine escape. Numbers below are chosen so this case only
+// registers as an escape once the escaping body is excluded from its own COM.
+void test_nbody_detect_escape_excludes_self_from_center_of_mass()
+{
+    NBodySystem sim;
+    sim.initRandom(2, 100.0f, 1.0f, 1.0f, 1.0f, 1.0f);
+    sim.mass = {1.0f, 1.0f};
+    sim.boundsRadius = 100.0f;
+    sim.pos = {Vec2f(300.0f, 0.0f), Vec2f(0.0f, 0.0f)};
+    sim.vel = {Vec2f(sqrtf(16000.0f), 0.0f), Vec2f(0.0f, 0.0f)};
+
+    bool reseeded = sim.step(0);
+    TEST_ASSERT_TRUE(reseeded);
+}
+
+void test_nbody_bound_system_never_reseeds()
+{
+    randomSeed(22);
+    NBodySystem sim;
+    // Deliberately slow initial speeds relative to typical orbital/escape velocities
+    // at these separations (with this G/mass range), so the system should stay bound
+    // (helped further by the centering leash) for the whole run.
+    sim.initRandom(3, 500.0f, 1.0f, 3.0f, 5.0f, 15.0f);
+
+    for (int i = 0; i < 2000; i++)
+    {
+        bool reseeded = sim.step(16);
+        TEST_ASSERT_FALSE(reseeded);
+    }
+    TEST_ASSERT_TRUE(allFinite(sim));
+}
+
 int main(int argc, char** argv)
 {
     UNITY_BEGIN();
@@ -471,6 +599,13 @@ int main(int argc, char** argv)
     RUN_TEST(test_verlet_chain_stable_under_irregular_dt);
     RUN_TEST(test_verlet_chain_bounded_reach_from_anchor);
     RUN_TEST(test_verlet_chain_energy_stays_bounded_over_long_frictionless_run);
+
+    RUN_TEST(test_nbody_zero_net_momentum_after_init);
+    RUN_TEST(test_nbody_softening_prevents_blowup_at_near_zero_separation);
+    RUN_TEST(test_nbody_two_body_orbit_stays_bounded);
+    RUN_TEST(test_nbody_reseeds_when_a_body_permanently_escapes);
+    RUN_TEST(test_nbody_detect_escape_excludes_self_from_center_of_mass);
+    RUN_TEST(test_nbody_bound_system_never_reseeds);
 
     return UNITY_END();
 }
