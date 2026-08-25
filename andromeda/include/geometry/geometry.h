@@ -160,8 +160,11 @@ extern Geometry GEOMETRY;
 // Convenience macros for iterating over strips and LEDs
 // These now use the dynamic geometry
 #define FOR_EACH_STRIP for (size_t iStrip = 0; iStrip < GEOMETRY.getNumStrips(); iStrip++)
-#define FOR_EACH_LED(iStrip) \
-    for (size_t iLed = 0; iLed < GEOMETRY.getStrip(iStrip).num_leds; iLed++)
+// Reads num_leds once into the for-loop's own init-clause instead of
+// re-evaluating GEOMETRY.getStrip(iStrip) on every iteration.
+#define FOR_EACH_LED(iStrip)                                                     \
+    for (size_t iLed = 0, _forEachLedCount = GEOMETRY.getStrip(iStrip).num_leds; \
+         iLed < _forEachLedCount; iLed++)
 
 // Factory configuration functions
 namespace FactoryConfig
