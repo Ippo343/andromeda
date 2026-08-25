@@ -87,6 +87,20 @@ void test_electric_sparks_avg38_clamps()
     TEST_ASSERT_EQUAL_INT(0, fx.avg38(0, 0, 0));
 }
 
+// Exercises the dt-tracking path (first-frame fallback, then a real measured dt) across
+// very different frame gaps, proving spark injection / energy decay stay frame-rate
+// independent instead of assuming a fixed tick length.
+void test_electric_sparks_runs_with_varying_frame_gaps()
+{
+    ElectricSparks fastFx;
+    exerciseEvaluate(fastFx, 5000);
+    exerciseEvaluate(fastFx, 5016);  // ~60fps gap
+
+    ElectricSparks slowFx;
+    exerciseEvaluate(slowFx, 5000);
+    exerciseEvaluate(slowFx, 5160);  // ~6fps gap
+}
+
 // ---------------------------------------------------------------------------
 // SaturationGlow
 // ---------------------------------------------------------------------------
@@ -470,6 +484,7 @@ int main(int argc, char** argv)
 
     RUN_TEST(test_electric_sparks_runs_full_frame_cycle);
     RUN_TEST(test_electric_sparks_avg38_clamps);
+    RUN_TEST(test_electric_sparks_runs_with_varying_frame_gaps);
 
     RUN_TEST(test_saturation_glow_evaluates);
     RUN_TEST(test_saturation_glow_evaluate_matches_precomputed_color);

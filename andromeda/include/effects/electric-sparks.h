@@ -26,17 +26,36 @@ class ElectricSparks : public AbstractEffect
     // Current base hue (updated based on perlin noise)
     uint8_t hue;
 
-    // This is tricky to figure out if not by trial and error.
-    // We roll a dice every frame for every led, so the chance must be really small.
-    // These are values that I like experimentally, I cannot justify them.
-    // TODO: better way to define the frequency
+    // Frame-rate independent spark injection: sparkRateMilliHz is the expected number of
+    // new sparks per LED per second, in thousandths (i.e. rate = sparkRateMilliHz/1000.0).
+    // Each frame we convert it, via the actual elapsed dt, into a threshold for a single
+    // random(DICE_LIMIT) roll per LED - see rateToThreshold(). These bounds carry over the
+    // same tuned digits as the old per-tick chance (5-26), just reinterpreted as a rate.
     constexpr static unsigned int DICE_LIMIT = 100000;
-    EnergyParam<int, 5, 26> sparkChance;
+    EnergyParam<int, 5, 26> sparkRateMilliHz;
+    uint32_t sparkThreshold = 0;
 
     // Chance that a spark becomes bigger, rolled out of 100.
     // If the roll is successful, the width is doubled and then rolled again until it fails.
     // Potentially going up to the full strip in rare cases.
+    // Not frame-rate coupled: this only rolls once a spark has already fired, so its
+    // expected value doesn't depend on how often evaluate() is called.
     EnergyParam<int, 40, 70> bigSparkChance;
+
+    // Frame-rate independent energy dissipation: fraction of the accumulated energy lost
+    // per second, converted each frame into a scale8 fade amount via dt - see
+    // accumulateFadeAmount(). Starting point equivalent to the old fixed scale8(x, 254)
+    // decay at a ~60fps reference; needs a visual pass on real hardware to retune.
+    constexpr static float ENERGY_LOSS_RATE_PER_SECOND = 0.235f;
+    float decayDebt = 0;
+
+    // Elapsed time (dt) since the previous frame, used to keep spark injection and energy
+    // decay frame-rate independent. Computed once in precompute() and reused in
+    // postprocess() (same t for both, one tick). hasLastT guards the first frame, where
+    // there's no prior sample to diff against.
+    milliseconds_t lastT = 0;
+    bool hasLastT = false;
+    milliseconds_t currentDt = 16;
 
     ElectricSparks()
     {
@@ -80,6 +99,12 @@ class ElectricSparks : public AbstractEffect
 
     void precompute(milliseconds_t t) override
     {
+        currentDt = hasLastT ? (t - lastT) : 16;
+        lastT = t;
+        hasLastT = true;
+
+        sparkThreshold = rateToThreshold(sparkRateMilliHz / 1000.0f, currentDt, DICE_LIMIT);
+
         EVERY_N_MILLISECONDS(100)
         {
             hue = inoise8(t / hueTimeScale);
@@ -100,7 +125,7 @@ class ElectricSparks : public AbstractEffect
     CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
     {
         // Random injection of new spikes
-        if (random(DICE_LIMIT) < sparkChance)
+        if (random(DICE_LIMIT) < sparkThreshold)
         {
             int width = 1;
 
@@ -121,12 +146,15 @@ class ElectricSparks : public AbstractEffect
     void postprocess(milliseconds_t t) override
     {
         // Dissipate the energy to lower values
+        uint8_t fadeAmount =
+            accumulateFadeAmount(decayDebt, ENERGY_LOSS_RATE_PER_SECOND, currentDt);
+
         FOR_EACH_STRIP
         {
             size_t stripLen = GEOMETRY.getStrip(iStrip).num_leds;
             for (size_t iLed = 0; iLed < stripLen; iLed++)
             {
-                newValues[iStrip][iLed] = scale8(newValues[iStrip][iLed], 254);
+                newValues[iStrip][iLed] = scale8(newValues[iStrip][iLed], 255 - fadeAmount);
             }
         }
 
