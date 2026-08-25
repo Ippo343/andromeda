@@ -36,7 +36,7 @@
 
 .mode-tab {
     flex: 1;
-    padding: 0.7rem;
+    padding: 1.1rem 0.75rem;
     margin-bottom: 0;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -44,7 +44,7 @@
     color: rgba(255, 255, 255, 0.7);
     cursor: pointer;
     font-weight: bold;
-    font-size: 0.95rem;
+    font-size: 1.05rem;
     transition: all 0.3s ease;
 }
 
@@ -94,6 +94,26 @@
 .shuffle-btn {
     margin-top: 0.75rem;
     margin-bottom: 0;
+}
+
+/* Power toggle: small and centered, set apart from the mode tabs/panels
+   above it rather than competing with them for visual weight. */
+.power-row {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.25rem;
+}
+
+.power-btn {
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    border-radius: 50%;
+}
+
+.power-btn .icon {
+    width: 24px;
+    height: 24px;
 }
 
 /* Brightness slider section */

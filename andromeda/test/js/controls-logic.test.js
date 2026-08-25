@@ -4,6 +4,7 @@ const {
     pickInitialTab,
     findEffectIdByName,
     holdIcon,
+    powerButtonState,
     rgbToHistogramWidths,
     hsvToRgb,
 } = require('../../data/js/controls-logic.js');
@@ -48,6 +49,24 @@ describe('holdIcon', () => {
 
     test('shows play and sends resume when holding', () => {
         assert.deepEqual(holdIcon(true), { icon: 'play', nextCmd: 'resume' });
+    });
+});
+
+describe('powerButtonState', () => {
+    test('when on, next click turns it off', () => {
+        assert.deepEqual(powerButtonState(true), {
+            nextCmd: 'power_off',
+            cssClass: 'off',
+            label: 'Turn off',
+        });
+    });
+
+    test('when off, next click turns it on', () => {
+        assert.deepEqual(powerButtonState(false), {
+            nextCmd: 'power_on',
+            cssClass: 'on',
+            label: 'Turn on',
+        });
     });
 });
 

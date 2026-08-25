@@ -32,6 +32,15 @@ function holdIcon(holding) {
     return holding ? { icon: 'play', nextCmd: 'resume' } : { icon: 'pause', nextCmd: 'hold' };
 }
 
+// Drives the small power toggle button: its label/cssClass always describe
+// the action a click will perform next (matching the existing .btn.off/.btn.on
+// color convention), not the device's current power state.
+function powerButtonState(isOn) {
+    return isOn
+        ? { nextCmd: 'power_off', cssClass: 'off', label: 'Turn off' }
+        : { nextCmd: 'power_on', cssClass: 'on', label: 'Turn on' };
+}
+
 // Factors out the repeated `(x / 255) * 100` from controls.js's
 // applyColorDisplay(), used to size the RGB histogram bars.
 function rgbToHistogramWidths(r, g, b) {
@@ -66,5 +75,12 @@ function hsvToRgb(h, s, v) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { pickInitialTab, findEffectIdByName, holdIcon, rgbToHistogramWidths, hsvToRgb };
+    module.exports = {
+        pickInitialTab,
+        findEffectIdByName,
+        holdIcon,
+        powerButtonState,
+        rgbToHistogramWidths,
+        hsvToRgb,
+    };
 }

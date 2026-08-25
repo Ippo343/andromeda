@@ -280,17 +280,12 @@ function applyPowerState(isOn) {
     const powerBtn = document.getElementById('powerBtn');
     if (!powerBtn) return;
 
-    if (isOn) {
-        powerBtn.textContent = 'Off';
-        powerBtn.dataset.cmd = 'power_off';
-        powerBtn.classList.remove('on');
-        powerBtn.classList.add('off');
-    } else {
-        powerBtn.textContent = 'On';
-        powerBtn.dataset.cmd = 'power_on';
-        powerBtn.classList.remove('off');
-        powerBtn.classList.add('on');
-    }
+    const { nextCmd, cssClass, label } = powerButtonState(isOn);
+    powerBtn.dataset.cmd = nextCmd;
+    powerBtn.classList.remove('on', 'off');
+    powerBtn.classList.add(cssClass);
+    powerBtn.title = label;
+    powerBtn.setAttribute('aria-label', label);
 }
 
 // Updates the Random panel's play/pause icon button to reflect isHolding,

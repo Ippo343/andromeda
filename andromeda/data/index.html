@@ -29,8 +29,6 @@
             <button class="mode-tab" data-tab="color">Color</button>
         </div>
 
-        <button class="btn off" id="powerBtn" data-cmd="power_off">Off</button>
-
         <!-- Random panel: transport controls for the random rotation -->
         <div class="mode-panel active" id="randomPanel" data-panel="random">
             <div class="transport-row">
@@ -77,6 +75,14 @@
                     <svg class="icon" viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
                 </button>
             </div>
+        </div>
+
+        <!-- Power toggle: deliberately small and set apart from the mode
+             tabs above, which are the primary control surface. -->
+        <div class="power-row">
+            <button class="btn icon-btn power-btn off" id="powerBtn" data-cmd="power_off" title="Turn off" aria-label="Turn off">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42A6.92 6.92 0 0 1 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7a6.92 6.92 0 0 1 2.59-5.41L6.17 5.17A8.93 8.93 0 0 0 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9a8.93 8.93 0 0 0-3.17-6.83z"/></svg>
+            </button>
         </div>
 
         <!-- Brightness Slider -->
