@@ -3,6 +3,7 @@
 #include <set>
 #include <vector>
 
+#include "energy-param.h"
 #include "utils.h"
 
 void setUp() {}
@@ -175,6 +176,44 @@ void test_rand_sign_randomize_never_zero()
     }
 }
 
+// ---------------------------------------------------------------------------
+// seedRNGs
+// ---------------------------------------------------------------------------
+
+void test_seed_rngs_runs_and_random_still_works()
+{
+    seedRNGs();
+    // Sanity: normal random() calls still behave within bounds afterward -
+    // seedRNGs() itself has no return value/observable state to assert on
+    // beyond "doesn't crash and doesn't break the RNGs it reseeds".
+    for (int i = 0; i < 20; i++)
+    {
+        long v = random(0, 10);
+        TEST_ASSERT_TRUE(v >= 0 && v < 10);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Energy / EnergyParam
+// ---------------------------------------------------------------------------
+
+void test_energy_get_set_round_trips()
+{
+    Energy::set(42);
+    TEST_ASSERT_EQUAL_UINT8(42, Energy::get());
+}
+
+void test_energy_param_maps_energy_range_to_its_own_range()
+{
+    EnergyParam<int, 10, 20> p;
+
+    Energy::set(0);
+    TEST_ASSERT_EQUAL_INT(10, (int)p);
+
+    Energy::set(255);
+    TEST_ASSERT_EQUAL_INT(20, (int)p);
+}
+
 int main(int argc, char** argv)
 {
     UNITY_BEGIN();
@@ -203,6 +242,11 @@ int main(int argc, char** argv)
     RUN_TEST(test_rand_bool_values_are_0_or_1);
     RUN_TEST(test_rand_sign_never_zero);
     RUN_TEST(test_rand_sign_randomize_never_zero);
+
+    RUN_TEST(test_seed_rngs_runs_and_random_still_works);
+
+    RUN_TEST(test_energy_get_set_round_trips);
+    RUN_TEST(test_energy_param_maps_energy_range_to_its_own_range);
 
     return UNITY_END();
 }
