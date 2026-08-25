@@ -45,13 +45,13 @@ class BezierSwarm : public EmitterFieldEffect
         }
         else { colors = randomComplementaryColors((int)positions.size()); }
 
-        syncPositions();
+        syncPositions([this](size_t i) { return paths[i].position(); });
     }
 
     void updatePositions(milliseconds_t t, milliseconds_t dt) override
     {
         for (auto& path : paths) path.step(dt);
-        syncPositions();
+        syncPositions([this](size_t i) { return paths[i].position(); });
     }
 
     void updateColors(milliseconds_t t, milliseconds_t dt) override
@@ -65,10 +65,5 @@ class BezierSwarm : public EmitterFieldEffect
     static CHSV hueToColor(float degrees)
     {
         return CHSV((uint8_t)(degrees / 360.0f * 255.0f), 255, 255);
-    }
-
-    void syncPositions()
-    {
-        for (size_t i = 0; i < positions.size(); i++) positions[i] = paths[i].position();
     }
 };

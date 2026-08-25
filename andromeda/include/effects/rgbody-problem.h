@@ -36,18 +36,12 @@ class RGBodyProblem : public EmitterFieldEffect
             (float)min(GEOMETRY.getScreenHalfWidth(), GEOMETRY.getScreenHalfHeight());
         sim.initRandom(positions.size(), boundsRadius, MIN_MASS, MAX_MASS, MIN_SPEED_MM_S,
                        MAX_SPEED_MM_S);
-        syncPositions();
+        syncPositions([this](size_t i) { return sim.pos[i]; });
     }
 
     void updatePositions(milliseconds_t, milliseconds_t dt) override
     {
         sim.step(dt);
-        syncPositions();
-    }
-
-   private:
-    void syncPositions()
-    {
-        for (size_t i = 0; i < positions.size(); i++) positions[i] = sim.pos[i];
+        syncPositions([this](size_t i) { return sim.pos[i]; });
     }
 };

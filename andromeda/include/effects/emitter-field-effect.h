@@ -58,6 +58,18 @@ class EmitterFieldEffect : public AbstractEffect
         return finalColor;
     }
 
+   protected:
+    // Shared "copy the physics state into positions[]" step every subclass's
+    // updatePositions() needs. `elementAt(i)` returns the Vec2f for emitter i - a
+    // lambda rather than a plain container reference, since not every subclass's
+    // source is directly indexable to a Vec2f (e.g. BezierSwarm's is a per-element
+    // BezierPath::position() call).
+    template <class F>
+    void syncPositions(F&& elementAt)
+    {
+        for (size_t i = 0; i < positions.size(); i++) positions[i] = elementAt(i);
+    }
+
    private:
     vector<CartesianCoordinates> cartesianPositions_;
 };

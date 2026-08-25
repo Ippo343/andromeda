@@ -34,18 +34,12 @@ class MultiPendulum : public EmitterFieldEffect
         float avgLink = (radius * 0.9f) / (float)positions.size();
         chain.initRandom(positions.size(), Vec2f(0, 0), avgLink * 0.6f, avgLink * 1.0f, MIN_MASS,
                          MAX_MASS);
-        syncPositions();
+        syncPositions([this](size_t i) { return chain.curr[i]; });
     }
 
     void updatePositions(milliseconds_t, milliseconds_t dt) override
     {
         chain.step(dt);
-        syncPositions();
-    }
-
-   private:
-    void syncPositions()
-    {
-        for (size_t i = 0; i < positions.size(); i++) positions[i] = chain.curr[i];
+        syncPositions([this](size_t i) { return chain.curr[i]; });
     }
 };
