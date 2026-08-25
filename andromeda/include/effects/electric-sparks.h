@@ -4,6 +4,7 @@
 
 #include "effects-base.h"
 #include "energy-param.h"
+#include "physics/frame-clock.h"
 #include "utils.h"
 
 using std::vector;
@@ -51,10 +52,8 @@ class ElectricSparks : public AbstractEffect
 
     // Elapsed time (dt) since the previous frame, used to keep spark injection and energy
     // decay frame-rate independent. Computed once in precompute() and reused in
-    // postprocess() (same t for both, one tick). hasLastT guards the first frame, where
-    // there's no prior sample to diff against.
-    milliseconds_t lastT = 0;
-    bool hasLastT = false;
+    // postprocess() (same t for both, one tick).
+    FrameClock clock;
     milliseconds_t currentDt = 16;
 
     ElectricSparks()
@@ -99,9 +98,7 @@ class ElectricSparks : public AbstractEffect
 
     void precompute(milliseconds_t t) override
     {
-        currentDt = hasLastT ? (t - lastT) : 16;
-        lastT = t;
-        hasLastT = true;
+        currentDt = clock.tick(t);
 
         sparkThreshold = rateToThreshold(sparkRateMilliHz / 1000.0f, currentDt, DICE_LIMIT);
 
