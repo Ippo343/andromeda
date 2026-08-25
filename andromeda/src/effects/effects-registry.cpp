@@ -1,5 +1,3 @@
-#include <optional>
-
 #include "effects.h"
 
 const EffectInfo EFFECT_REGISTRY[] = {
@@ -50,7 +48,8 @@ AbstractEffect* createEffect(EffectId id)
 }
 
 // Set this to force a specific effect while testing (e.g. EffectId::NinjaStar).
-constexpr std::optional<EffectId> forcedSelection = std::nullopt;
+// EffectId::None means "no forced selection" - see its definition in effects.h.
+constexpr EffectId forcedSelection = EffectId::None;
 
 // Picks a new random effect and randomizes it
 AbstractEffect* getRandomEffect()
@@ -58,8 +57,8 @@ AbstractEffect* getRandomEffect()
     static uint8_t previousSelection = 255;
 
     uint8_t selection;
-    if (forcedSelection)
-        selection = static_cast<uint8_t>(*forcedSelection);
+    if (forcedSelection != EffectId::None)
+        selection = static_cast<uint8_t>(forcedSelection);
     else
         do selection = random(NUM_EFFECTS);
         while (selection == previousSelection);

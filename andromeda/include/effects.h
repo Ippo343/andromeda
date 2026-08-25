@@ -35,6 +35,13 @@ enum class EffectId : uint8_t
     PolarSwipe,
     RGBodyProblem,
     SaturationGlow,
+
+    // Sentinel only - never in EFFECT_REGISTRY/NUM_EFFECTS, never a valid
+    // wire id. Used solely by getRandomEffect()'s forcedSelection to mean
+    // "no forced selection" (see effects-registry.cpp), without relying on
+    // std::optional - the ESP32 Arduino toolchain's C++17 support doesn't
+    // extend to <optional> despite platformio.ini requesting -std=c++17.
+    None,
 };
 
 struct EffectInfo
