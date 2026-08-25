@@ -158,6 +158,25 @@ void test_models_array_matches_full_registry()
     }
 }
 
+void test_effects_array_matches_full_registry()
+{
+    DeviceState state = makeState();
+    char buf[WsStateBuilder::JSON_CAPACITY];
+    size_t len = WsStateBuilder::buildStateJson(state, buf, sizeof(buf));
+
+    StaticJsonDocument<WsStateBuilder::JSON_CAPACITY> doc;
+    deserializeJson(doc, buf, len);
+    JsonArray effects = doc["effects"].as<JsonArray>();
+    TEST_ASSERT_EQUAL(NUM_EFFECTS, effects.size());
+
+    for (size_t i = 0; i < NUM_EFFECTS; i++)
+    {
+        TEST_ASSERT_EQUAL(static_cast<uint8_t>(EFFECT_REGISTRY[i].id),
+                          effects[i]["id"].as<uint8_t>());
+        TEST_ASSERT_EQUAL_STRING(EFFECT_REGISTRY[i].name, effects[i]["name"]);
+    }
+}
+
 void test_fps_serializes_as_number()
 {
     DeviceState state = makeState();
@@ -184,6 +203,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_reboot_required_false_when_models_match);
     RUN_TEST(test_reboot_required_true_when_models_differ);
     RUN_TEST(test_models_array_matches_full_registry);
+    RUN_TEST(test_effects_array_matches_full_registry);
     RUN_TEST(test_fps_serializes_as_number);
 
     return UNITY_END();

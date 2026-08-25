@@ -2,6 +2,7 @@
 
 #include <ArduinoJson.h>
 
+#include "effects.h"
 #include "geometry/model_config.h"
 #include "geometry/model_registry.h"
 
@@ -37,9 +38,10 @@ struct DeviceState
     float fps;
 };
 
-// StaticJsonDocument capacity for the schema below plus the full model
-// registry. Fixed, zero-heap - bump this if fields/models are added.
-constexpr size_t JSON_CAPACITY = 1536;
+// StaticJsonDocument capacity for the schema below plus the full model and
+// effect registries. Fixed, zero-heap - bump this if fields/models/effects
+// are added.
+constexpr size_t JSON_CAPACITY = 3072;
 
 // Serializes `state` plus the full MODEL_REGISTRY into `outBuffer` (of size
 // `outBufferSize`). Returns the number of bytes written (0 on failure, e.g.
@@ -77,6 +79,14 @@ inline size_t buildStateJson(const DeviceState& state, char* outBuffer, size_t o
         JsonObject m = models.createNestedObject();
         m["id"] = static_cast<uint16_t>(MODEL_REGISTRY[i]->id);
         m["name"] = MODEL_REGISTRY[i]->name;
+    }
+
+    JsonArray effects = doc.createNestedArray("effects");
+    for (size_t i = 0; i < NUM_EFFECTS; i++)
+    {
+        JsonObject e = effects.createNestedObject();
+        e["id"] = static_cast<uint8_t>(EFFECT_REGISTRY[i].id);
+        e["name"] = EFFECT_REGISTRY[i].name;
     }
 
     doc["fps"] = state.fps;
