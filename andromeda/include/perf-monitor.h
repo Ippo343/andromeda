@@ -5,14 +5,23 @@
 
 #include <limits>
 
+// Optional per-frame callback, set only by the native runtime
+// (src/native-runtime.cpp) to export the LED buffer to the browser
+// visualizer bridge after every real frame. nullptr (its default, and the
+// only value it ever has on firmware/test builds) makes this a single
+// pointer check - effectively free everywhere except env:native_runtime.
+using FrameCaptureHook = void (*)();
+inline FrameCaptureHook g_frameCaptureHook = nullptr;
+
 // Use this macro instead of calling FastLED.show()
 // So that we automatically count every frame, no matter where it's called from.
 // This fixes the annoying problem that the FPS of animations could not be measured
 // as only the main loop was being counted.
-#define FASTLED_SHOW()                         \
-    do {                                       \
-        FastLED.show();                        \
-        PerformanceMonitor::Instance().tick(); \
+#define FASTLED_SHOW()                                \
+    do {                                              \
+        FastLED.show();                               \
+        PerformanceMonitor::Instance().tick();        \
+        if (g_frameCaptureHook) g_frameCaptureHook(); \
     } while (0)
 
 // Simple performance monitor.

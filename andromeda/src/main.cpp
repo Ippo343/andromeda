@@ -59,6 +59,11 @@ void setup()
     // Skips bindHardwareDrivers() (the FastLED.addLeds<...> calls) - there's
     // no real/simulated LED hardware to bind to on the host.
     GEOMETRY.initializeForTest(model);
+    // Must run right after geometry loads and before anything can rotate it
+    // (see native-runtime.cpp's emitGeometryOnce() for why that ordering
+    // matters) - installs the frame-capture hook and emits the one-time
+    // geometry message for the visualizer bridge.
+    NativeRuntime::installProtocol();
 #else
     GEOMETRY.initialize(model);
 #endif
