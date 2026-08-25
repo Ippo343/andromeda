@@ -2,6 +2,10 @@
   "name": "andromeda-web",
   "private": true,
   "scripts": {
-    "test:web": "node --test test/js/*.test.js"
+    "test:web": "node --test test/js/*.test.js",
+    "start:sim": "node tools/native-bridge/server.js"
+  },
+  "dependencies": {
+    "ws": "^8.21.3"
   }
 }
