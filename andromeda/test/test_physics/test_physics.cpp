@@ -5,6 +5,7 @@
 
 #include "effects/emitter-field-effect.h"
 #include "geometry/geometry.h"
+#include "physics/bezier-path.h"
 #include "physics/frame-clock.h"
 #include "physics/physics-random.h"
 #include "physics/vec2f.h"
@@ -217,6 +218,111 @@ void test_emitter_field_effect_distant_emitter_contributes_almost_nothing()
     TEST_ASSERT_TRUE(sum < 5);
 }
 
+// ---------------------------------------------------------------------------
+// BezierPath
+// ---------------------------------------------------------------------------
+
+void test_bezier_evaluate_cubic_endpoints_match_control_points()
+{
+    Vec2f p0(0, 0), p1(1, 5), p2(4, 5), p3(5, 0);
+    Vec2f atStart = BezierPath::evaluateCubic(p0, p1, p2, p3, 0.0f);
+    Vec2f atEnd = BezierPath::evaluateCubic(p0, p1, p2, p3, 1.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, p0.x, atStart.x);
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, p0.y, atStart.y);
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, p3.x, atEnd.x);
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, p3.y, atEnd.y);
+}
+
+void test_bezier_ease_quintic_endpoints_and_monotonic()
+{
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, BezierPath::easeQuintic(0.0f));
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, BezierPath::easeQuintic(1.0f));
+
+    float prev = -1.0f;
+    for (int i = 0; i <= 20; i++)
+    {
+        float t = i / 20.0f;
+        float e = BezierPath::easeQuintic(t);
+        TEST_ASSERT_TRUE(e >= prev);
+        prev = e;
+    }
+}
+
+void test_bezier_ease_quintic_clamps_outside_unit_range()
+{
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, BezierPath::easeQuintic(-0.5f));
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, BezierPath::easeQuintic(1.5f));
+}
+
+void test_bezier_path_tangent_continuous_across_generated_segment()
+{
+    randomSeed(123);
+    BezierPath path;
+    Vec2f oldEndTangent = (path.p3 - path.p2).normalized();
+
+    // Force exactly one segment rollover.
+    path.step(path.segmentDurationMs + 1);
+
+    Vec2f newStartTangent = (path.p1 - path.p0).normalized();
+    // Only meaningful when the old tangent was well-defined (non-degenerate).
+    if (oldEndTangent.lengthSquared() > 0.5f)
+    {
+        TEST_ASSERT_FLOAT_WITHIN(0.01f, oldEndTangent.x, newStartTangent.x);
+        TEST_ASSERT_FLOAT_WITHIN(0.01f, oldEndTangent.y, newStartTangent.y);
+    }
+}
+
+void test_bezier_path_stays_within_screen_bounds()
+{
+    randomSeed(99);
+    float halfW = GEOMETRY.getScreenHalfWidth();
+    float halfH = GEOMETRY.getScreenHalfHeight();
+
+    for (int p = 0; p < 5; p++)
+    {
+        BezierPath path;
+        milliseconds_t t = 0;
+        for (int i = 0; i < 500; i++)
+        {
+            path.step(37);
+            t += 37;
+            Vec2f pos = path.position();
+            TEST_ASSERT_TRUE(fabsf(pos.x) <= halfW);
+            TEST_ASSERT_TRUE(fabsf(pos.y) <= halfH);
+        }
+    }
+}
+
+void test_bezier_path_large_dt_does_not_get_stuck_past_segment_end()
+{
+    randomSeed(5);
+    BezierPath path;
+    path.step(50000);  // spans many segments at once (frame-hitch simulation)
+    TEST_ASSERT_TRUE(path.elapsedMs < path.segmentDurationMs);
+
+    Vec2f pos = path.position();
+    TEST_ASSERT_FALSE(std::isnan(pos.x));
+    TEST_ASSERT_FALSE(std::isnan(pos.y));
+    TEST_ASSERT_TRUE(fabsf(pos.x) <= (float)GEOMETRY.getScreenHalfWidth());
+    TEST_ASSERT_TRUE(fabsf(pos.y) <= (float)GEOMETRY.getScreenHalfHeight());
+}
+
+// Regression test: generateNextSegment() must not reset elapsedMs to 0, or the
+// leftover time step()'s while loop just computed gets silently discarded on
+// every ordinary segment transition (and a large dt would only ever advance one
+// segment instead of catching up through all the ones that elapsed).
+void test_bezier_path_step_preserves_leftover_time_across_segment_rollover()
+{
+    randomSeed(7);
+    BezierPath path;
+    milliseconds_t duration = path.segmentDurationMs;
+    milliseconds_t overshoot = 37;  // well within any SEGMENT_MIN_MS-long next segment
+
+    path.step(duration + overshoot);
+
+    TEST_ASSERT_EQUAL_UINT32(overshoot, path.elapsedMs);
+}
+
 int main(int argc, char** argv)
 {
     UNITY_BEGIN();
@@ -241,6 +347,14 @@ int main(int argc, char** argv)
 
     RUN_TEST(test_emitter_field_effect_blends_colors_additively_at_zero_distance);
     RUN_TEST(test_emitter_field_effect_distant_emitter_contributes_almost_nothing);
+
+    RUN_TEST(test_bezier_evaluate_cubic_endpoints_match_control_points);
+    RUN_TEST(test_bezier_ease_quintic_endpoints_and_monotonic);
+    RUN_TEST(test_bezier_ease_quintic_clamps_outside_unit_range);
+    RUN_TEST(test_bezier_path_tangent_continuous_across_generated_segment);
+    RUN_TEST(test_bezier_path_stays_within_screen_bounds);
+    RUN_TEST(test_bezier_path_large_dt_does_not_get_stuck_past_segment_end);
+    RUN_TEST(test_bezier_path_step_preserves_leftover_time_across_segment_rollover);
 
     return UNITY_END();
 }
