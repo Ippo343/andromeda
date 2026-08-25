@@ -194,6 +194,17 @@ void test_swipe_finishes_within_a_bounded_duration()
     TEST_ASSERT_TRUE(frames > 1);
 }
 
+// Swipe's trail fade tracks dt between renderFrame() calls internally (see
+// accumulateFadeAmount() in animations.cpp), so drive it at a much finer step than the
+// default to exercise that dt-tracking path at a very different call cadence and confirm
+// it still finishes within a bounded duration.
+void test_swipe_finishes_within_a_bounded_duration_at_a_fine_step()
+{
+    Swipe anim;
+    int frames = driveToCompletion(anim, /*step=*/5);
+    TEST_ASSERT_TRUE(frames > 1);
+}
+
 // Swipe's swept color only lands within a narrow (step-wide) window of v per
 // frame, so coarsely-spaced samples (as in the bounded-duration test above)
 // can miss every real LED entirely by chance. Sample densely enough across
@@ -281,6 +292,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_radial_sweep_finishes_within_a_bounded_duration);
     RUN_TEST(test_sequential_fade_in_finishes_within_a_bounded_duration);
     RUN_TEST(test_swipe_finishes_within_a_bounded_duration);
+    RUN_TEST(test_swipe_finishes_within_a_bounded_duration_at_a_fine_step);
     RUN_TEST(test_swipe_actually_lights_up_a_led_somewhere_during_the_sweep);
     RUN_TEST(test_rotation_animations_render_first_frame_without_crashing);
     RUN_TEST(test_rotation_animations_report_done_far_past_their_duration);

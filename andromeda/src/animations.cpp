@@ -291,24 +291,39 @@ class Swipe : public SegmentedAnimation
         short vStart = -radius;
         short vEnd = stepLocal * radius;
 
-        addSegment(durationMs,
-                   [color, stepLocal, vStart, vEnd, durationMs](milliseconds_t segmentT)
-                   {
-                       short v = map(segmentT, 0, durationMs, vStart, vEnd);
+        // Trail fade rate, expressed as a fraction of energy lost per second instead of a
+        // fixed amount per renderFrame() call, so the trail length in real time doesn't
+        // depend on how often renderFrame() happens to be called - see accumulateFadeAmount().
+        // Starting point equivalent to the old fixed stepLocal-out-of-255 fade at a ~60fps
+        // reference; needs a visual pass on real hardware to retune.
+        constexpr float TRAIL_LOSS_RATE_PER_SECOND = 0.6f;
 
-                       FOR_EACH_STRIP
-                       {
-                           FOR_EACH_LED(iStrip)
-                           {
-                               short lv = GEOMETRY.getStrip(iStrip).leds[iLed].cartesian.x;
-                               if (lv >= (v - stepLocal) && lv <= v)
-                                   GEOMETRY.getStrip(iStrip).buffer[iLed] = color;
-                           }
+        addSegment(
+            durationMs,
+            [color, stepLocal, vStart, vEnd, durationMs, TRAIL_LOSS_RATE_PER_SECOND,
+             lastSegmentT = (milliseconds_t)-1, decayDebt = 0.0f](milliseconds_t segmentT) mutable
+            {
+                milliseconds_t dt =
+                    (lastSegmentT == (milliseconds_t)-1) ? 16 : segmentT - lastSegmentT;
+                lastSegmentT = segmentT;
 
-                           fadeToBlackBy(GEOMETRY.getStrip(iStrip).buffer,
-                                         GEOMETRY.getStrip(iStrip).num_leds, stepLocal);
-                       }
-                   });
+                short v = map(segmentT, 0, durationMs, vStart, vEnd);
+                uint8_t fadeAmount =
+                    accumulateFadeAmount(decayDebt, TRAIL_LOSS_RATE_PER_SECOND, dt);
+
+                FOR_EACH_STRIP
+                {
+                    FOR_EACH_LED(iStrip)
+                    {
+                        short lv = GEOMETRY.getStrip(iStrip).leds[iLed].cartesian.x;
+                        if (lv >= (v - stepLocal) && lv <= v)
+                            GEOMETRY.getStrip(iStrip).buffer[iLed] = color;
+                    }
+
+                    fadeToBlackBy(GEOMETRY.getStrip(iStrip).buffer,
+                                  GEOMETRY.getStrip(iStrip).num_leds, fadeAmount);
+                }
+            });
     }
 
    private:
