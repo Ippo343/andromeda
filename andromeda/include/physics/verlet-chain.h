@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "physics/physics-random.h"
+#include "physics/substepper.h"
 #include "physics/vec2f.h"
 #include "utils.h"
 
@@ -67,14 +68,13 @@ class VerletChain
     // never causes the a*dt^2 term to blow up or forces a "catch-up" backlog.
     void step(milliseconds_t dtMs)
     {
-        milliseconds_t remaining = dtMs > MAX_TOTAL_STEP_MS ? MAX_TOTAL_STEP_MS : dtMs;
-        while (remaining > 0)
-        {
-            milliseconds_t sub = remaining > MAX_SUBSTEP_MS ? MAX_SUBSTEP_MS : remaining;
-            verletIntegrate(sub / 1000.0f);
-            for (int i = 0; i < CONSTRAINT_ITERATIONS; i++) relaxConstraints();
-            remaining -= sub;
-        }
+        physics::steppedSimulate(dtMs, MAX_SUBSTEP_MS, MAX_TOTAL_STEP_MS,
+                                 [this](float dtSeconds)
+                                 {
+                                     verletIntegrate(dtSeconds);
+                                     for (int i = 0; i < CONSTRAINT_ITERATIONS; i++)
+                                         relaxConstraints();
+                                 });
     }
 
    private:

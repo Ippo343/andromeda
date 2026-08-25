@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "physics/physics-random.h"
+#include "physics/substepper.h"
 #include "physics/vec2f.h"
 #include "utils.h"
 
@@ -73,13 +74,8 @@ class NBodySystem
     // permanently unbound and was regenerated from scratch).
     bool step(milliseconds_t dtMs)
     {
-        milliseconds_t remaining = dtMs > MAX_TOTAL_STEP_MS ? MAX_TOTAL_STEP_MS : dtMs;
-        while (remaining > 0)
-        {
-            milliseconds_t sub = remaining > MAX_SUBSTEP_MS ? MAX_SUBSTEP_MS : remaining;
-            substep(sub / 1000.0f);
-            remaining -= sub;
-        }
+        physics::steppedSimulate(dtMs, MAX_SUBSTEP_MS, MAX_TOTAL_STEP_MS,
+                                 [this](float dtSeconds) { substep(dtSeconds); });
 
         if (detectEscape())
         {
