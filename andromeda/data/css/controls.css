@@ -133,7 +133,7 @@
     position: relative;
     width: 240px;
     height: 240px;
-    margin-bottom: 1.5rem;
+    margin: 1.5rem 0;
 }
 
 .color-wheel {
@@ -482,7 +482,7 @@
         height: 70vw;
         max-width: 250px;
         max-height: 250px;
-        margin: 0 auto 1.5rem auto;
+        margin: 1.5rem auto;
     }
 
     .brightness-section {
