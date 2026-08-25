@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Andromeda Native Visualizer</title>
+    <style>
+        html, body {
+            margin: 0;
+            height: 100%;
+            background: #0a0a0a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #status {
+            position: fixed;
+            top: 8px;
+            left: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #888;
+        }
+        svg {
+            max-width: 95vw;
+            max-height: 95vh;
+        }
+        circle {
+            stroke: rgba(255, 255, 255, 0.08);
+            stroke-width: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="status">connecting...</div>
+    <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <script src="/visualizer.js"></script>
+</body>
+</html>
