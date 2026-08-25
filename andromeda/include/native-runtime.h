@@ -18,6 +18,18 @@
 //     is true), {"type":"frame","leds":[[r,g,b],...]} (once per real
 //     FASTLED_SHOW() tick), and {"type":"geometry",...} (once, right after
 //     boot).
+//
+// MODEL and REBOOT commands are intentionally inert here, exactly like on
+// real hardware before its own reboot: MissionControl::processWebCommands()
+// (mission-control.cpp) only ever persists the requested model id and calls
+// esp_restart(), which is a real hardware-only restart - natively it's the
+// no-op mock in test/mocks/Arduino.h, so nothing re-reads geometry and the
+// wire state's model.rebootRequired flag stays permanently true once set.
+// To actually run a different model, stop this process and start a new one
+// with a different --model arg (see "Model selection" in the plan doc) -
+// the exact same "change requires a restart" story real hardware already
+// tells the user via that same flag, just requiring a manual restart
+// instead of an automatic one.
 namespace NativeRuntime
 {
 

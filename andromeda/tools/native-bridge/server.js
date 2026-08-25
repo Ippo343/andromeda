@@ -40,6 +40,9 @@ const STATIC_ROUTES = {
     '/': { file: 'index.html', type: 'text/html' },
     '/index.html': { file: 'index.html', type: 'text/html' },
     '/wifi-setup.html': { file: 'wifi-setup.html', type: 'text/html' },
+    // Matches comms.cpp's separate server.on("/wifi", ...) alias - index.html
+    // links here directly (href="/wifi"), not to /wifi-setup.html.
+    '/wifi': { file: 'wifi-setup.html', type: 'text/html' },
     '/fonts/cinzel.woff2': { file: 'fonts/cinzel.woff2', type: 'font/woff2' },
     '/js/utils.js': { file: 'js/utils.js', type: 'application/javascript' },
     '/js/controls-logic.js': { file: 'js/controls-logic.js', type: 'application/javascript' },
