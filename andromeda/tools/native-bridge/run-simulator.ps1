@@ -100,6 +100,7 @@ function Write-Log([string]$msg) {
 }
 
 $script:ServerProcess = $null
+$script:BrowserTabsOpened = $false
 
 $startButton.Add_Click({
   try {
@@ -157,9 +158,14 @@ $startButton.Add_Click({
     }
 
     Write-Log "Running at http://localhost:8080/"
-    Write-Log "Opening controls + visualizer in your browser..."
-    Start-Process "http://localhost:8080/"
-    Start-Process "http://localhost:8080/visualizer.html"
+    if ($script:BrowserTabsOpened) {
+        Write-Log "Browser tabs already opened this session - not reopening (refresh them manually if needed)."
+    } else {
+        Write-Log "Opening controls + visualizer in your browser..."
+        Start-Process "http://localhost:8080/"
+        Start-Process "http://localhost:8080/visualizer.html"
+        $script:BrowserTabsOpened = $true
+    }
 
     $stopButton.Enabled = $true
   } catch {
