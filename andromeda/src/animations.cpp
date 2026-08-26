@@ -25,7 +25,12 @@ class SweepStrips : public SegmentedAnimation
     }
 
    private:
-    RandParam<int, 10, 30> timeStep;
+    // A fixed total duration per segment - not scaled by LED count like the old
+    // ms-per-LED timeStep was - so a full sweep takes the same time regardless of
+    // strip length instead of one segment alone taking tens of seconds on a
+    // 1600-LED grid. Matches the range ClockSweep/RadialSweep already use for the
+    // same "one sweep, however many LEDs" duration.
+    RandParam<milliseconds_t, 400, 800> segmentDuration;
 
     void addColorSegment(CRGB color)
     {
@@ -36,14 +41,26 @@ class SweepStrips : public SegmentedAnimation
             maxLeds = max(maxLeds, GEOMETRY.getStrip(i).num_leds);
         }
 
-        milliseconds_t duration = maxLeds * timeStep;
+        milliseconds_t duration = segmentDuration;
 
         addSegment(duration,
                    [maxLeds, duration, color](milliseconds_t segmentT)
                    {
-                       // Map elapsed segment time to how many LEDs should be lit,
-                       // the same normalized-progress math the old step counter used.
-                       size_t step = map(segmentT, 0, duration, 0, maxLeds - 1);
+                       // SegmentedAnimation only ever calls a non-final segment's fn
+                       // with segmentT strictly less than its duration (it hands the
+                       // boundary tick to the *next* segment instead - see
+                       // segmented-animation.h) - mapping straight against the full
+                       // duration therefore always undershoots by up to one frame's
+                       // worth of LEDs. Invisible on a short strip, but a real dark
+                       // gap at the tail on a long one (e.g. the 1600-LED grid test
+                       // rig). Map against 90% of duration instead, clamped, so the
+                       // sweep visibly finishes with margin to spare well before the
+                       // segment's real end - the same headroom BaseSweep gets for
+                       // free from its brightness ramp width.
+                       milliseconds_t effectiveDuration = max(duration * 9 / 10, (milliseconds_t)1);
+                       size_t step =
+                           min((size_t)map(segmentT, 0, effectiveDuration, 0, maxLeds - 1),
+                               maxLeds - 1);
 
                        FOR_EACH_STRIP
                        {

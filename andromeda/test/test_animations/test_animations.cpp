@@ -164,6 +164,31 @@ void test_sweep_strips_finishes_within_a_bounded_duration()
     TEST_ASSERT_TRUE(frames > 1);
 }
 
+// Regression test: SweepStrips maps segment-elapsed time straight onto LED index.
+// SegmentedAnimation never hands a non-final segment's fn the exact segmentT ==
+// duration tick (it hands the boundary tick to the *next* segment instead - see
+// segmented-animation.h), so without deliberate headroom the sweep always
+// undershoots the top of the strip by up to one frame's worth of LEDs - invisible
+// on a short strip, but a real dark gap at the tail of a long one (surfaced on the
+// 1600-LED grid test rig). Drive at the default (realistic) 25ms step and confirm
+// the very last LED of a long single strip does get lit at some point.
+void test_sweep_strips_lights_the_last_led_of_a_long_strip()
+{
+    GEOMETRY.initializeForTest(ModelId::GRID_TEST_DEVICE);
+    SweepStrips anim;
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    size_t lastIdx = strip.num_leds - 1;
+
+    bool sawLit = false;
+    for (milliseconds_t t = 0; t <= 10000 && !sawLit; t += 25)
+    {
+        anim.renderFrame(t);
+        if (strip.buffer[lastIdx] != CRGB::Black) sawLit = true;
+    }
+
+    TEST_ASSERT_TRUE(sawLit);
+}
+
 void test_clock_sweep_finishes_within_a_bounded_duration()
 {
     ClockSweep anim;
@@ -288,6 +313,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_get_random_animation_never_repeats_consecutively);
 
     RUN_TEST(test_sweep_strips_finishes_within_a_bounded_duration);
+    RUN_TEST(test_sweep_strips_lights_the_last_led_of_a_long_strip);
     RUN_TEST(test_clock_sweep_finishes_within_a_bounded_duration);
     RUN_TEST(test_radial_sweep_finishes_within_a_bounded_duration);
     RUN_TEST(test_sequential_fade_in_finishes_within_a_bounded_duration);
