@@ -1,0 +1,28 @@
+#!/bin/sh
+
+# Get the root of the git repository
+GIT_ROOT=$(git rev-parse --show-toplevel)
+
+cd "$GIT_ROOT" || exit
+
+# 1. Get names of staged files (added or modified)
+# 2. Filter for .cpp and .h files
+# 3. Ensure we only pass files that actually exist (avoids errors on deletions)
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMRT | grep -E '\.(cpp|h)$')
+
+# If no C++ files are staged, exit early
+if [ -z "$STAGED_FILES" ]; then
+    exit 0
+fi
+
+echo "Formatting staged files..."
+
+# Format each staged file
+for FILE in $STAGED_FILES; do
+    if [ -f "$FILE" ]; then
+        clang-format.exe -i "$FILE"
+        git add "$FILE"
+    fi
+done
+
+echo "Formatting complete."
