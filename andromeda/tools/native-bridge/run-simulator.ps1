@@ -95,6 +95,7 @@ function Write-Log([string]$msg) {
 $script:ServerProcess = $null
 
 $startButton.Add_Click({
+  try {
     $startButton.Enabled = $false
     $combo.Enabled = $false
     $form.Refresh()
@@ -131,8 +132,14 @@ $startButton.Add_Click({
     Write-Log "Build OK."
 
     Write-Log "Starting bridge server for model '$model'..."
+    # Start-Process -ArgumentList joins array elements with a bare space and
+    # does NOT quote elements containing whitespace (PS 5.1) - a model name
+    # like "Andromeda Mk1" would otherwise arrive at node as two separate
+    # argv entries ("--model=Andromeda", "Mk1"), silently falling back to
+    # the default model. Wrapping the whole flag in its own quotes keeps it
+    # one token, same fix as the CLI-quoting note in the plan doc.
     $script:ServerProcess = Start-Process -FilePath $NodeExe `
-        -ArgumentList @($ServerJs, "--model=$model") `
+        -ArgumentList @($ServerJs, "`"--model=$model`"") `
         -WorkingDirectory $RepoRoot -WindowStyle Hidden -PassThru
 
     Start-Sleep -Milliseconds 800
@@ -148,6 +155,10 @@ $startButton.Add_Click({
     Start-Process "http://localhost:8080/visualizer.html"
 
     $stopButton.Enabled = $true
+  } catch {
+    Write-Log "Unexpected error: $_"
+    $startButton.Enabled = $true; $combo.Enabled = $true
+  }
 })
 
 $stopButton.Add_Click({
