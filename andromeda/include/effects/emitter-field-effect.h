@@ -22,6 +22,9 @@ class EmitterFieldEffect : public AbstractEffect
     vector<Vec2f> positions;
     vector<CHSV> colors;
     FrameClock clock;
+    // Passed through to brightnessFromEmitter() - subclasses may override in their
+    // constructor for a smaller/larger falloff radius than the default.
+    float brightnessFactor = defaultBrightnessFactor;
 
     explicit EmitterFieldEffect(size_t n) : positions(n), colors(n), cartesianPositions_(n) {}
 
@@ -51,7 +54,7 @@ class EmitterFieldEffect : public AbstractEffect
         for (size_t i = 0; i < positions.size(); i++)
         {
             CRGB emitterColor = colors[i];
-            uint8_t v = brightnessFromEmitter(led, cartesianPositions_[i]);
+            uint8_t v = brightnessFromEmitter(led, cartesianPositions_[i], brightnessFactor);
             emitterColor.nscale8(v);
             finalColor += emitterColor;
         }

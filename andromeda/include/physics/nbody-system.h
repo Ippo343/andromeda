@@ -32,7 +32,7 @@ class NBodySystem
     std::vector<float> mass;
     float boundsRadius = 0;
 
-    static constexpr float G = 2.0e6f;                  // tuning constant, needs a visual pass
+    static constexpr float G = 1.5e5f;                  // tuning constant, needs a visual pass
     static constexpr float SOFTENING_MM = 30.0f;        // Plummer softening length
     static constexpr float LEASH_ACCEL_PER_MM = 0.05f;  // tuning constant, needs a visual pass
     static constexpr float ESCAPE_DISTANCE_MARGIN = 1.5f;
