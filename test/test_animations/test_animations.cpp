@@ -299,6 +299,39 @@ void test_rotation_animations_report_done_far_past_their_duration()
     TEST_ASSERT_TRUE(swipe.renderFrame(60000));
 }
 
+// ---------------------------------------------------------------------------
+// AbstractBlockingAnimation::cleanup() - nothing else in the native suite
+// constructs a blocking animation, since run() is deliberately out of test
+// scope (see the file header). cleanup() itself (paint black + FASTLED_SHOW())
+// is safe to exercise though, and covers both sides of FASTLED_SHOW()'s
+// g_frameCaptureHook check.
+// ---------------------------------------------------------------------------
+
+void test_blocking_animation_cleanup_paints_black_with_hook_unset()
+{
+    g_frameCaptureHook = nullptr;
+
+    AbstractBlockingAnimation anim;
+    anim.cleanup();
+
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    for (size_t i = 0; i < strip.num_leds; i++) TEST_ASSERT_TRUE(strip.buffer[i] == CRGB::Black);
+}
+
+void test_blocking_animation_cleanup_paints_black_with_hook_set()
+{
+    static bool hookCalled = false;
+    hookCalled = false;
+    g_frameCaptureHook = []() { hookCalled = true; };
+
+    AbstractBlockingAnimation anim;
+    anim.cleanup();
+
+    TEST_ASSERT_TRUE(hookCalled);
+
+    g_frameCaptureHook = nullptr;
+}
+
 int main(int argc, char** argv)
 {
     UNITY_BEGIN();
@@ -322,6 +355,9 @@ int main(int argc, char** argv)
     RUN_TEST(test_swipe_actually_lights_up_a_led_somewhere_during_the_sweep);
     RUN_TEST(test_rotation_animations_render_first_frame_without_crashing);
     RUN_TEST(test_rotation_animations_report_done_far_past_their_duration);
+
+    RUN_TEST(test_blocking_animation_cleanup_paints_black_with_hook_unset);
+    RUN_TEST(test_blocking_animation_cleanup_paints_black_with_hook_set);
 
     return UNITY_END();
 }

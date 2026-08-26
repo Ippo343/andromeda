@@ -72,6 +72,17 @@ void test_mdns_hostname_is_lowercased_device_name()
     TEST_ASSERT_EQUAL_STRING("kitchen-lamp", DeviceIdentity::getMdnsHostname().c_str());
 }
 
+// setDeviceName() already truncates to DeviceUid::MAX_NAME_LENGTH (32), so a
+// name this long fills getMdnsHostname()'s 32-byte copy buffer exactly,
+// exercising its loop's buffer-full exit branch instead of the NUL-terminator
+// exit every other (short-name) test hits.
+void test_mdns_hostname_truncates_a_maximally_long_name()
+{
+    DeviceIdentity::setDeviceName("ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMN");  // 40 letters
+    TEST_ASSERT_EQUAL_STRING("abcdefghijklmnopqrstuvwxyzabcdef",
+                             DeviceIdentity::getMdnsHostname().c_str());
+}
+
 void test_mdns_hostname_matches_lowercased_default_name()
 {
     std::string expected = std::string("andromeda-") + DeviceIdentity::getUid();
@@ -92,6 +103,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_set_device_name_sanitizes_input);
     RUN_TEST(test_set_device_name_empty_clears_back_to_default);
     RUN_TEST(test_mdns_hostname_is_lowercased_device_name);
+    RUN_TEST(test_mdns_hostname_truncates_a_maximally_long_name);
     RUN_TEST(test_mdns_hostname_matches_lowercased_default_name);
 
     return UNITY_END();

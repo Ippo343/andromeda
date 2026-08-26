@@ -166,6 +166,7 @@ void Geometry::allocateAndLoadCoordinates(ModelId model_id)
         Log.errorln("Failed to find model configuration for ID %d", (uint8_t)model_id);
         // TODO: handle this more gracefully (e.g., fallback to a default model or enter a safe
         // mode)
+        return;
     }
 
     Log.noticeln("Initializing geometry for: %s", config->name);

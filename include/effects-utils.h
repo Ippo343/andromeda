@@ -16,12 +16,6 @@ void paint(CRGB color);
 // Thin wrapper around fill_solid because I'm that lazy
 void paintStrip(int idx, CRGB color);
 
-// Fade in a strip with the given color over the given duration
-void fadeInStrip(int idx, CHSV color, milliseconds_t duration);
-
-// Fade in all strips together to the given color in the given duration
-void fadeInAllStrips(CHSV color, milliseconds_t duration);
-
 // TIL this is the professional approach to generating a random color.
 // If you just generate a random RGB triplet the intensity will be all over the place,
 // while HSV lets you generate random colors with the same intensity. Cool!
