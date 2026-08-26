@@ -178,12 +178,18 @@ std::string frameBuffer;
 
 void frameCaptureHook()
 {
-    if (frameBuffer.capacity() == 0)
+    static bool reserved = false;
+    if (!reserved)
     {
+        // libstdc++'s default-constructed std::string already has a nonzero
+        // small-string-optimization capacity, so a capacity()==0 check never
+        // fires here - use an explicit flag instead to actually get the
+        // one-time sized reserve() this comment promises.
         size_t totalLeds = 0;
         for (size_t s = 0; s < GEOMETRY.getNumStrips(); s++)
             totalLeds += GEOMETRY.getStrip(s).num_leds;
         frameBuffer.reserve(totalLeds * 15 + 64);  // "[255,255,255]," <= 15 bytes/LED, plus slack
+        reserved = true;
     }
 
     frameBuffer.clear();
@@ -216,33 +222,43 @@ void frameCaptureHook()
 void emitGeometryOnce()
 {
     const ModelConfig* config = GEOMETRY.getConfig();
+    size_t numStrips = GEOMETRY.getNumStrips();
 
-    std::string buf;
-    buf += "{\"type\":\"geometry\",\"width_mm\":";
-    buf += std::to_string(config->screen_width_mm);
-    buf += ",\"height_mm\":";
-    buf += std::to_string(config->screen_height_mm);
-    buf += ",\"strips\":[";
-
-    for (size_t s = 0; s < GEOMETRY.getNumStrips(); s++)
+    // Runs once at boot, not the hot path frameCaptureHook()'s hand-rolled
+    // serialization is optimized for - reuse ArduinoJson instead (already a
+    // project dependency, already the pattern ws-state-builder.h uses for
+    // the identical job), which gets a real overflow guard for free instead
+    // of unchecked string concatenation. Capacity is computed precisely
+    // from the actual strip/LED counts rather than a guessed constant,
+    // since that varies a lot per model (L70 MK1 alone has 267 LEDs).
+    size_t capacity = JSON_OBJECT_SIZE(4) + JSON_ARRAY_SIZE(numStrips) + 128;
+    for (size_t s = 0; s < numStrips; s++)
     {
-        if (s > 0) buf += ',';
+        size_t n = GEOMETRY.getStrip(s).num_leds;
+        capacity += JSON_OBJECT_SIZE(2) + JSON_ARRAY_SIZE(n) + n * JSON_ARRAY_SIZE(2);
+    }
+
+    DynamicJsonDocument doc(capacity);
+    doc["type"] = "geometry";
+    doc["width_mm"] = config->screen_width_mm;
+    doc["height_mm"] = config->screen_height_mm;
+    JsonArray strips = doc.createNestedArray("strips");
+    for (size_t s = 0; s < numStrips; s++)
+    {
         LedStrip& strip = GEOMETRY.getStrip(s);
-        buf += "{\"num_leds\":";
-        buf += std::to_string(strip.num_leds);
-        buf += ",\"points\":[";
+        JsonObject stripObj = strips.createNestedObject();
+        stripObj["num_leds"] = strip.num_leds;
+        JsonArray points = stripObj.createNestedArray("points");
         for (size_t i = 0; i < strip.num_leds; i++)
         {
-            if (i > 0) buf += ',';
-            buf += '[';
-            buf += std::to_string(strip.leds[i].cartesian.x);
-            buf += ',';
-            buf += std::to_string(strip.leds[i].cartesian.y);
-            buf += ']';
+            JsonArray point = points.createNestedArray();
+            point.add(strip.leds[i].cartesian.x);
+            point.add(strip.leds[i].cartesian.y);
         }
-        buf += "]}";
     }
-    buf += "]}";
+
+    std::string buf;
+    serializeJson(doc, buf);
     writeLine(buf.data(), buf.size());
 }
 
@@ -250,6 +266,16 @@ void emitGeometryOnce()
 
 void init(int argc, char** argv)
 {
+    // Lets callers (tools/native-bridge/run-simulator.ps1's model dropdown)
+    // read the registry's actual model names off the freshly-built binary
+    // instead of hardcoding a list that can drift from src/geometry/*.cpp.
+    for (int i = 1; i < argc; i++)
+    {
+        if (strcmp(argv[i], "--list-models") != 0) continue;
+        for (size_t m = 0; m < NUM_MODELS; m++) std::puts(MODEL_REGISTRY[m]->name);
+        std::exit(0);
+    }
+
     static const char* PREFIX = "--model=";
     const size_t prefixLen = strlen(PREFIX);
 

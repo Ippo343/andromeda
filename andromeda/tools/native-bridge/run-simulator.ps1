@@ -37,9 +37,16 @@ if (-not (Test-Path $PioExe)) {
     exit 1
 }
 
-# Mirrors the .name fields in src/geometry/*.cpp (model_registry.cpp) - keep
-# in sync if a model is added/renamed there.
+# Ask the already-built binary for its real model list (program.exe
+# --list-models, one name per line - see NativeRuntime::init()) rather than
+# hardcoding names that could drift from src/geometry/*.cpp. Only falls back
+# to a hardcoded list on the very first-ever run, before program.exe exists;
+# every run after that first build shows the live registry.
 $Models = @("Andromeda Mk1", "L70 MK1", "L10 MK1", "Single Strip Test Rig")
+if (Test-Path $BinaryPath) {
+    $liveModels = & $BinaryPath --list-models 2>$null
+    if ($LASTEXITCODE -eq 0 -and $liveModels) { $Models = @($liveModels) }
+}
 
 # --- UI -----------------------------------------------------------------
 
