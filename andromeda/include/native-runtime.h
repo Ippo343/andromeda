@@ -53,13 +53,13 @@ void installProtocol();
 // Call once per main loop iteration, after MissionControl::update(). Drains
 // any command lines that arrived on stdin since the last call (dispatching
 // them into MissionControl exactly like comms.cpp's WS_EVT_DATA handler
-// does), emits a fresh {"type":"state",...} line if state changed, and then
-// paces the loop to frameDurationCapMs of real wall-clock time - the
-// FreeRTOS mock's vTaskDelay() is a no-op natively (test/mocks/freertos/
-// FreeRTOS.h), so MissionControl::update()'s own frame-duration-cap delay
-// doesn't actually sleep here; without this the native loop would free-spin
-// at whatever speed the host CPU allows instead of the device's configured
-// frame rate.
-void tick(milliseconds_t frameDurationCapMs);
+// does) and emits a fresh {"type":"state",...} line if state changed.
+// Deliberately does not pace the loop to the device's min_frame_duration_ms
+// - that cap exists to save power on battery-powered LED hardware, which
+// doesn't apply here, so the native loop just free-runs as fast as the host
+// CPU and the stdio pipe to the bridge allow (the FreeRTOS mock's
+// vTaskDelay() is also a no-op natively, so MissionControl::update()'s own
+// frame-duration-cap delay never sleeps either).
+void tick();
 
 }  // namespace NativeRuntime

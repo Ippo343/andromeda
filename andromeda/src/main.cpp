@@ -112,7 +112,7 @@ void setup()
 void loop()
 {
     MissionControl::Instance().update(millis());
-    NativeRuntime::tick(GEOMETRY.getConfig()->min_frame_duration_ms);
+    NativeRuntime::tick();
 }
 
 int main(int argc, char** argv)

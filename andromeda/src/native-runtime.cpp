@@ -4,7 +4,6 @@
 #include <FastLED.h>
 
 #include <atomic>
-#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <deque>
@@ -283,26 +282,28 @@ ModelId model() { return resolvedModel; }
 
 void installProtocol()
 {
+    // MinGW's CRT leaves stdout effectively unbuffered when it's a pipe (not
+    // a console) on Windows, splitting each fwrite() of a multi-KB frame
+    // line into many small WriteFile() syscalls - each one individually
+    // cheap, but their sheer number was the entire native-vs-bridge FPS gap
+    // (measured: ~37fps -> ~57fps on Andromeda Mk1's 161-LED frame line just
+    // from this one change). Forcing a real block buffer makes each
+    // writeLine() a single memcpy-then-one-syscall instead.
+    static char stdoutIoBuf[1 << 16];
+    std::setvbuf(stdout, stdoutIoBuf, _IOFBF, sizeof(stdoutIoBuf));
+
     g_frameCaptureHook = frameCaptureHook;
     emitGeometryOnce();
 }
 
-void tick(milliseconds_t frameDurationCapMs)
+void tick()
 {
     pumpStdinCommands();
     emitStateIfDirty();
-
-    // 0 means "uncapped" on real hardware; an actually-uncapped native loop
-    // would just spin a full host core for no visual benefit, so fall back
-    // to a sane default instead of honoring 0 literally.
-    milliseconds_t targetMs = frameDurationCapMs > 0 ? frameDurationCapMs : 16;
-
-    static auto lastTick = std::chrono::steady_clock::now();
-    auto now = std::chrono::steady_clock::now();
-    auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastTick).count();
-    if (elapsedMs < static_cast<long long>(targetMs))
-        std::this_thread::sleep_for(std::chrono::milliseconds(targetMs - elapsedMs));
-    lastTick = std::chrono::steady_clock::now();
+    // Deliberately no frame-rate pacing here: min_frame_duration_ms exists
+    // to save power on battery-powered LED hardware, which doesn't apply
+    // running on a dev machine - the native loop just runs as fast as the
+    // host CPU (and the stdio pipe to the bridge) allow.
 }
 
 }  // namespace NativeRuntime
