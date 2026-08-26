@@ -101,8 +101,27 @@ function broadcast(line) {
     }
 }
 
+// The native core's render loop is deliberately uncapped (see
+// native-runtime.cpp's tick()) and can emit tens of thousands of frames per
+// second - far more than any browser tab can usefully render. Throttle just
+// this browser-facing stream to a sane display rate rather than forwarding
+// every frame; the compute loop itself stays uncapped.
+const FRAME_INTERVAL_MS = 1000 / 144;
+let lastFrameSentAt = 0;
+
 const rl = readline.createInterface({ input: child.stdout });
 rl.on('line', (line) => {
+    // 'frame' lines are by far the hottest message type at this rate -
+    // check the wire-format prefix directly instead of paying for a full
+    // JSON.parse on every one just to decide whether to throttle it away.
+    if (line.startsWith('{"type":"frame"')) {
+        const now = Date.now();
+        if (now - lastFrameSentAt < FRAME_INTERVAL_MS) return;
+        lastFrameSentAt = now;
+        broadcast(line);
+        return;
+    }
+
     let msg;
     try {
         msg = JSON.parse(line);
@@ -118,8 +137,8 @@ rl.on('line', (line) => {
     } else if (msg.type === 'geometry') {
         lastGeometryLine = line;
     }
-    // 'frame' (and any future message type) is forwarded as-is, uncached -
-    // there's no "current frame" concept worth replaying to a late joiner.
+    // Any other/future message type is forwarded as-is, uncached - there's
+    // no "current value" concept worth replaying to a late joiner.
 
     broadcast(line);
 });
