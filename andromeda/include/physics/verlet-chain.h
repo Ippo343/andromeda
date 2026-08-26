@@ -46,6 +46,7 @@ class VerletChain
         previousSubstepDtSeconds = 1.0f / 60.0f;
 
         Vec2f prevPoint = anchor;
+        Vec2f comOffset(0, 0);  // mass-weighted sum of (pos - anchor), before reflection below
         for (size_t i = 0; i < n; i++)
         {
             float mass = randomFloat(minMass, maxMass);
@@ -61,6 +62,24 @@ class VerletChain
             curr[i] = pos;
             prev[i] = pos;
             prevPoint = pos;
+
+            comOffset += (pos - anchor) * mass;
+        }
+
+        // A fully-random angle per link can happen to land the whole chain already
+        // hanging below the anchor - its lowest-energy resting configuration - which
+        // then just oscillates weakly in place instead of swinging. Guarantee a real
+        // fall by reflecting the chain about the anchor's horizontal (y is screen-down
+        // here) whenever its center of mass starts below the anchor rather than above
+        // it. Reflection is an isometry, so every rod's length - already exactly
+        // correct by construction above - survives unchanged.
+        if (comOffset.y > 0.0f)
+        {
+            for (size_t i = 0; i < n; i++)
+            {
+                curr[i].y = 2.0f * anchor.y - curr[i].y;
+                prev[i].y = curr[i].y;
+            }
         }
     }
 
