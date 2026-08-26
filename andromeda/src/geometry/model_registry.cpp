@@ -12,6 +12,10 @@ namespace SingleStripTestDevice
 {
 extern const ModelConfig CONFIG;
 }
+namespace GridTestDevice
+{
+extern const ModelConfig CONFIG;
+}
 namespace L70_MK1
 {
 extern const ModelConfig CONFIG;
@@ -23,9 +27,8 @@ extern const ModelConfig CONFIG;
 
 // Global registry of all available models
 const ModelConfig* MODEL_REGISTRY[] = {
-    &AndromedaMk1::CONFIG,
-    &SingleStripTestDevice::CONFIG,
-    &L70_MK1::CONFIG,
+    &AndromedaMk1::CONFIG,   &SingleStripTestDevice::CONFIG,
+    &GridTestDevice::CONFIG, &L70_MK1::CONFIG,
     &L10_MK1::CONFIG,
 };
 

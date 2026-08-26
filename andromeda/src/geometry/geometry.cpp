@@ -184,7 +184,12 @@ void Geometry::allocateAndLoadCoordinates(ModelId model_id)
         strips[i].idx = i;
         _fixedStrips[i].idx = i;
 
-        size_t strip_length = pgm_read_byte(&config->strip_lengths[i]);
+        // pgm_read_byte would silently truncate any strip >= 256 LEDs (only ever
+        // exposed once a model needed one - all real strips happen to stay under
+        // that). memcpy_P reads the full size_t width instead, same idiom already
+        // used for cartesian_data below.
+        size_t strip_length;
+        memcpy_P(&strip_length, &config->strip_lengths[i], sizeof(size_t));
 
         strips[i].allocate(strip_length, true);
         _fixedStrips[i].allocate(strip_length, false);

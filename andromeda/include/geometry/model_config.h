@@ -26,6 +26,11 @@ enum class ModelId : uint16_t
     // That ridiculous little thing that I brought to Eindhoven to replicate an L10
     SINGLE_STRIP_TEST_DEVICE = MODEL_ID(TEST_DEVICES, 0),
 
+    // Fake square grid, simulator-only in practice: gives the emitter-field effects
+    // (BezierSwarm, MultiPendulum, RGBodyProblem) a plain 2D layout to visualize on,
+    // instead of Andromeda's rings.
+    GRID_TEST_DEVICE = MODEL_ID(TEST_DEVICES, 1),
+
     // The first prototype Andromeda model that started this whole madness
     ANDROMEDA_MK1 = MODEL_ID(ANDROMEDA, 0),
 

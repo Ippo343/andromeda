@@ -42,7 +42,7 @@ if (-not (Test-Path $PioExe)) {
 # hardcoding names that could drift from src/geometry/*.cpp. Only falls back
 # to a hardcoded list on the very first-ever run, before program.exe exists;
 # every run after that first build shows the live registry.
-$Models = @("Andromeda Mk1", "L70 MK1", "L10 MK1", "Single Strip Test Rig")
+$Models = @("Andromeda Mk1", "L70 MK1", "L10 MK1", "Single Strip Test Rig", "Grid Test Rig")
 if (Test-Path $BinaryPath) {
     $liveModels = & $BinaryPath --list-models 2>$null
     if ($LASTEXITCODE -eq 0 -and $liveModels) { $Models = @($liveModels) }
