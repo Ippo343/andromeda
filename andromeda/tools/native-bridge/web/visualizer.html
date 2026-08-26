@@ -12,13 +12,18 @@
             align-items: center;
             justify-content: center;
         }
-        #status {
+        #status, #fps {
             position: fixed;
-            top: 8px;
             left: 8px;
             font-family: monospace;
             font-size: 12px;
             color: #888;
+        }
+        #status {
+            top: 8px;
+        }
+        #fps {
+            top: 24px;
         }
         svg {
             max-width: 95vw;
@@ -32,6 +37,7 @@
 </head>
 <body>
     <div id="status">connecting...</div>
+    <div id="fps"></div>
     <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
 
     <script src="/visualizer.js"></script>

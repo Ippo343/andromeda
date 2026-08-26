@@ -7,6 +7,7 @@
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const canvas = document.getElementById('canvas');
 const statusEl = document.getElementById('status');
+const fpsEl = document.getElementById('fps');
 
 // Flat array of <circle> elements, built once per 'geometry' message, in the
 // same strip-major order native-runtime.cpp emits both 'geometry' and
@@ -44,6 +45,23 @@ function buildCircles(geometry) {
     statusEl.textContent = `${circles.length} LEDs`;
 }
 
+// Counts 'frame' messages actually applied to the DOM in the last second - the
+// browser's real render rate, not the native runtime's send rate (server.js can
+// emit faster than the browser tab can keep up with, e.g. a backgrounded tab
+// throttled by the browser itself).
+let frameCount = 0;
+let fpsWindowStart = performance.now();
+
+function updateFps() {
+    const now = performance.now();
+    const elapsed = now - fpsWindowStart;
+    if (elapsed >= 1000) {
+        fpsEl.textContent = `${(frameCount / (elapsed / 1000)).toFixed(1)} fps`;
+        frameCount = 0;
+        fpsWindowStart = now;
+    }
+}
+
 function applyFrame(frame) {
     const leds = frame.leds;
     const n = Math.min(leds.length, circles.length);
@@ -51,6 +69,8 @@ function applyFrame(frame) {
         const [r, g, b] = leds[i];
         circles[i].setAttribute('fill', `rgb(${r},${g},${b})`);
     }
+    frameCount++;
+    updateFps();
 }
 
 function connect() {
