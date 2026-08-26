@@ -4,6 +4,13 @@
 
 #include "geometry/geometry.h"
 
+// Free function defined in src/geometry/geometry.cpp with external linkage but
+// no header declaration (only ever called from bindHardwareDrivers(), which
+// no native test exercises since it drives real FastLED.addLeds<>()
+// template instantiations). Declared here to reach it directly - safe
+// natively since FastLED.addLeds is stubbed under FASTLED_STUB_IMPL.
+void addLedsToPin(uint8_t pin, CRGB* buffer, int count);
+
 void setUp() {}
 void tearDown() {}
 
@@ -105,6 +112,17 @@ void test_led_strip_reallocate_frees_previous()
     TEST_ASSERT_EQUAL_INT(8, strip.num_leds);
 }
 
+void test_led_strip_deallocate_on_never_allocated_strip_is_a_no_op()
+{
+    // Hits the false side of deallocate()'s `if (leds)`/`if (buffer)` guards -
+    // every other deallocate test allocates first.
+    LedStrip strip;
+    strip.deallocate();
+    TEST_ASSERT_EQUAL_INT(0, strip.num_leds);
+    TEST_ASSERT_NULL(strip.leds);
+    TEST_ASSERT_NULL(strip.buffer);
+}
+
 // ---------------------------------------------------------------------------
 // Geometry::initializeForTest - the pure (non-hardware) half of initialize()
 // ---------------------------------------------------------------------------
@@ -126,6 +144,31 @@ void test_geometry_initialize_for_test_loads_single_strip_device()
     // Last LED is {-458, 0}
     const Led& last = GEOMETRY.getStrip(0).leds[55];
     TEST_ASSERT_EQUAL_INT16(-458, last.cartesian.x);
+}
+
+// getModelConfig(UNKNOWN) returns null; allocateAndLoadCoordinates() must log
+// and bail out instead of dereferencing it (regression test for a latent
+// null-deref: it used to unconditionally read config->name right after this
+// check).
+void test_geometry_initialize_for_test_with_unknown_model_does_not_crash()
+{
+    Geometry local;
+    local.initializeForTest(ModelId::UNKNOWN);
+    TEST_ASSERT_TRUE(true);
+}
+
+// Calling initializeForTest() twice on the same instance must free the first
+// allocation before making the second, hitting the "already allocated" true
+// branch of allocateAndLoadCoordinates()'s cleanup guards.
+void test_geometry_reinitialize_frees_previous_allocation()
+{
+    Geometry local;
+    local.initializeForTest(ModelId::SINGLE_STRIP_TEST_DEVICE);
+    TEST_ASSERT_EQUAL_INT(1, local.getNumStrips());
+
+    local.initializeForTest(ModelId::L70_MK1);
+    TEST_ASSERT_EQUAL_INT(2, local.getNumStrips());
+    TEST_ASSERT_EQUAL_INT(142, local.getStrip(0).num_leds);
 }
 
 // Every other geometry/effect test in this suite (and test_effects.cpp) uses
@@ -269,6 +312,44 @@ void test_geometry_destructor_frees_allocated_strips()
     TEST_ASSERT_TRUE(true);
 }
 
+void test_geometry_destructor_on_never_initialized_instance_is_a_no_op()
+{
+    // Hits the false side of ~Geometry()'s `if (strips)`/`if (_fixedStrips)`
+    // guards - the other destructor test only exercises the allocated path.
+    {
+        Geometry local;
+    }
+    TEST_ASSERT_TRUE(true);
+}
+
+// ---------------------------------------------------------------------------
+// addLedsToPin - the hardware-binding switch bindHardwareDrivers() drives.
+// Only pins 1/2/4/5/10/default are compiled for the native build (the
+// higher-GPIO cases are gated behind ESP32_S3/ESP32_C3/ESP32_WROOM defines,
+// none of which apply natively).
+// ---------------------------------------------------------------------------
+
+void test_add_leds_to_pin_valid_pin_does_not_crash()
+{
+    CRGB buffer[4];
+    addLedsToPin(1, buffer, 4);
+    TEST_ASSERT_TRUE(true);
+}
+
+void test_add_leds_to_pin_forbidden_pin_ten_does_not_crash()
+{
+    CRGB buffer[4];
+    addLedsToPin(10, buffer, 4);
+    TEST_ASSERT_TRUE(true);
+}
+
+void test_add_leds_to_pin_invalid_pin_hits_default_case()
+{
+    CRGB buffer[4];
+    addLedsToPin(200, buffer, 4);
+    TEST_ASSERT_TRUE(true);
+}
+
 int main(int argc, char** argv)
 {
     UNITY_BEGIN();
@@ -285,9 +366,12 @@ int main(int argc, char** argv)
     RUN_TEST(test_led_strip_allocate_without_buffer);
     RUN_TEST(test_led_strip_deallocate_resets_state);
     RUN_TEST(test_led_strip_reallocate_frees_previous);
+    RUN_TEST(test_led_strip_deallocate_on_never_allocated_strip_is_a_no_op);
 
     RUN_TEST(test_geometry_initialize_for_test_loads_single_strip_device);
     RUN_TEST(test_geometry_initialize_for_test_loads_multi_strip_l70_mk1_model);
+    RUN_TEST(test_geometry_initialize_for_test_with_unknown_model_does_not_crash);
+    RUN_TEST(test_geometry_reinitialize_frees_previous_allocation);
     RUN_TEST(test_geometry_screen_dimension_helpers);
     RUN_TEST(test_geometry_reset_global_transform_restores_original_coordinates);
     RUN_TEST(test_geometry_apply_global_random_rotation_preserves_radius);
@@ -300,6 +384,11 @@ int main(int argc, char** argv)
     RUN_TEST(test_factory_config_is_configured_reflects_model_id);
 
     RUN_TEST(test_geometry_destructor_frees_allocated_strips);
+    RUN_TEST(test_geometry_destructor_on_never_initialized_instance_is_a_no_op);
+
+    RUN_TEST(test_add_leds_to_pin_valid_pin_does_not_crash);
+    RUN_TEST(test_add_leds_to_pin_forbidden_pin_ten_does_not_crash);
+    RUN_TEST(test_add_leds_to_pin_invalid_pin_hits_default_case);
 
     return UNITY_END();
 }

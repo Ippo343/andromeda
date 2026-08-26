@@ -520,6 +520,42 @@ void test_random_predefined_palette_returns_nonempty_palette()
     }
 }
 
+// Draws enough samples (seeded, so deterministic) to hit every case of the
+// switch(random(8)), including case 7 (HeatColors_p) which 20 unseeded draws
+// wasn't reliably enough to land on.
+void test_random_predefined_palette_covers_every_case()
+{
+    randomSeed(3);
+    const CRGBPalette16 known[8] = {CloudColors_p,  LavaColors_p,    OceanColors_p,
+                                    ForestColors_p, RainbowColors_p, RainbowStripeColors_p,
+                                    PartyColors_p,  HeatColors_p};
+    bool seen[8] = {false};
+
+    for (int i = 0; i < 400; i++)
+    {
+        CRGBPalette16 p = randomPredefinedPalette();
+        for (int k = 0; k < 8; k++)
+        {
+            bool matches = true;
+            for (int j = 0; j < 16; j++)
+            {
+                if (p[j] != known[k][j])
+                {
+                    matches = false;
+                    break;
+                }
+            }
+            if (matches)
+            {
+                seen[k] = true;
+                break;
+            }
+        }
+    }
+
+    for (int k = 0; k < 8; k++) TEST_ASSERT_TRUE(seen[k]);
+}
+
 void test_brightness_from_emitter_decays_with_distance()
 {
     LedStrip& strip = GEOMETRY.getStrip(0);
@@ -531,6 +567,19 @@ void test_brightness_from_emitter_decays_with_distance()
     uint8_t farAway = brightnessFromEmitter(led, {-458, 0});
 
     TEST_ASSERT_TRUE(nearby >= farAway);
+}
+
+// A negative brightnessFactor drives the pre-clamp value below 0, exercising
+// the low side of brightnessFromEmitter's constrain() (only the >255 side is
+// reachable via the normal positive-factor callers above).
+void test_brightness_from_emitter_clamps_negative_value_to_zero()
+{
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    Led* led = &strip.leds[0];
+
+    uint8_t v = brightnessFromEmitter(led, {450, 0}, -5000.0f);
+
+    TEST_ASSERT_EQUAL_UINT8(0, v);
 }
 
 // ---------------------------------------------------------------------------
@@ -660,7 +709,9 @@ int main(int argc, char** argv)
     RUN_TEST(test_random_color_full_saturation_and_value);
     RUN_TEST(test_random_complementary_colors_are_evenly_spaced);
     RUN_TEST(test_random_predefined_palette_returns_nonempty_palette);
+    RUN_TEST(test_random_predefined_palette_covers_every_case);
     RUN_TEST(test_brightness_from_emitter_decays_with_distance);
+    RUN_TEST(test_brightness_from_emitter_clamps_negative_value_to_zero);
 
     return UNITY_END();
 }

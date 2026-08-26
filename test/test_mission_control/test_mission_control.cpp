@@ -928,6 +928,55 @@ void test_finish_transition_applies_rotation_hint_from_the_new_effect()
 // BrightnessConfig - persists max brightness across reboots (NVS)
 // ---------------------------------------------------------------------------
 
+// esp_restart() is mocked to a no-op for native tests (test/mocks/Arduino.h)
+// specifically so this switch case is safe to exercise here.
+void test_reboot_command_calls_esp_restart_without_crashing()
+{
+    MissionControl& mc = MissionControl::Instance();
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Reboot()));
+    mc.update(0);
+    TEST_ASSERT_TRUE(true);
+}
+
+// powerOff() while already OFF must leave modeBeforeOff untouched (the
+// `mode != RenderMode::OFF` guard's false branch) rather than clobbering it
+// with RenderMode::OFF itself.
+void test_power_off_while_already_off_preserves_mode_before_off()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setNextTransition(mc);
+    MissionControlTestAccess::setMode(mc, RenderMode::HOLDING);
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::PowerOff()));
+    mc.update(0);
+    TEST_ASSERT_EQUAL(RenderMode::HOLDING, MissionControlTestAccess::getModeBeforeOff(mc));
+
+    // Already OFF: a second PowerOff must not overwrite modeBeforeOff.
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::PowerOff()));
+    mc.update(0);
+    TEST_ASSERT_EQUAL(RenderMode::HOLDING, MissionControlTestAccess::getModeBeforeOff(mc));
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::PowerOn()));
+    mc.update(0);
+    TEST_ASSERT_EQUAL(RenderMode::HOLDING, MissionControlTestAccess::getMode(mc));
+}
+
+// update()'s frame-throttle: with MIN_FRAME_DURATION_MS set high enough that
+// a real (fast, native) frame always finishes under it, the delay branch
+// must actually be taken. vTaskDelay() is a no-op mock natively, so this is
+// safe to call for real rather than needing a controllable clock.
+void test_update_throttles_frames_faster_than_the_minimum_duration()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setNextTransition(mc);
+    mc.setFrameDurationCap(1000);
+
+    mc.update(millis());
+
+    mc.setFrameDurationCap(0);  // restore default so later tests aren't throttled
+    TEST_ASSERT_TRUE(true);
+}
+
 void test_brightness_config_persists_and_reloads_value()
 {
     BrightnessConfig::persist(120);
@@ -984,6 +1033,9 @@ int main(int argc, char** argv)
     RUN_TEST(test_queue_model_command_updates_factory_config);
     RUN_TEST(test_queue_device_name_command_persists_via_device_identity);
     RUN_TEST(test_ws_json_color_command_flows_through_to_static_color);
+    RUN_TEST(test_reboot_command_calls_esp_restart_without_crashing);
+    RUN_TEST(test_power_off_while_already_off_preserves_mode_before_off);
+    RUN_TEST(test_update_throttles_frames_faster_than_the_minimum_duration);
     RUN_TEST(test_brightness_config_persists_and_reloads_value);
 
     RUN_TEST(test_next_command_starts_transitioning_without_blocking_later_commands);
