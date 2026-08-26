@@ -57,6 +57,34 @@ void test_static_color_default_constructor()
     TEST_ASSERT_TRUE(fx.targetColor == CRGB(255, 255, 170));
 }
 
+// Regression: the blend step used to be a fixed CRGB::blend(cur, target, 1) per precompute()
+// call, keyed to call count rather than elapsed time - so at a higher tick rate (smaller dt per
+// call), the same number of calls covered less wall-clock time yet blended just as far toward
+// the target. Same call count, same starting color, but one schedule's dt is ~60x the other's:
+// the large-dt schedule must now end up meaningfully closer to the target.
+void test_static_color_blend_scales_with_dt_not_call_count()
+{
+    StaticColor fastTicksFx(CRGB(200, 100, 50));
+    fastTicksFx.currentColor = CRGB(0, 0, 0);  // CRGB's default ctor leaves this uninitialized
+    milliseconds_t t = 0;
+    for (int i = 0; i < 5; i++)
+    {
+        t += 16;  // ~60fps
+        fastTicksFx.precompute(t);
+    }
+
+    StaticColor slowTicksFx(CRGB(200, 100, 50));
+    slowTicksFx.currentColor = CRGB(0, 0, 0);
+    t = 0;
+    for (int i = 0; i < 5; i++)
+    {
+        t += 1000;  // ~1fps
+        slowTicksFx.precompute(t);
+    }
+
+    TEST_ASSERT_TRUE(slowTicksFx.currentColor.r > fastTicksFx.currentColor.r + 10);
+}
+
 // ---------------------------------------------------------------------------
 // IndividualStripMoodlight
 // ---------------------------------------------------------------------------
@@ -479,6 +507,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_error_effect_strip0_is_red_others_black);
     RUN_TEST(test_static_color_blends_toward_target);
     RUN_TEST(test_static_color_default_constructor);
+    RUN_TEST(test_static_color_blend_scales_with_dt_not_call_count);
 
     RUN_TEST(test_individual_strip_moodlight_evaluates);
 
