@@ -1,4 +1,4 @@
-# Andromeda custom 4 MB partition table (esp32_wroom, esp32_c3_zero).
+# Andromeda custom 4 MB partition table (esp32_wroom, esp32_c3_zero, esp32_s3_zero).
 #
 # Same layout as Arduino-esp32's default.csv - dual-OTA kept, we will need it -
 # but the filesystem partition is cut from 1.375 MiB to 1.0 MiB (data/ is well
