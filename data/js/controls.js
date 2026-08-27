@@ -463,11 +463,79 @@ function initControlsPage() {
         if (isExpanded) {
             settingsToggle.classList.remove('expanded');
             settingsDrawer.classList.remove('expanded');
+            stopDiagnostics();
         } else {
             settingsToggle.classList.add('expanded');
             settingsDrawer.classList.add('expanded');
+            startDiagnostics();
         }
     });
+
+    // Diagnostics: poll /metrics (1s) and /logs (2s) over plain HTTP, but only
+    // while the Settings drawer is open. Uses the pure helpers from
+    // controls-logic.js for level filtering and value formatting.
+    const logView = document.getElementById('logView');
+    const logLevelFilter = document.getElementById('logLevelFilter');
+    const logRefreshBtn = document.getElementById('logRefreshBtn');
+    let lastLogText = '';
+    let diagMetricsTimer = null;
+    let diagLogsTimer = null;
+
+    function setMetric(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    }
+
+    function renderLog() {
+        const nearBottom = logView.scrollHeight - logView.scrollTop - logView.clientHeight < 40;
+        logView.textContent =
+            filterLogText(lastLogText, Number(logLevelFilter.value)) || '(no matching log lines)';
+        if (nearBottom) logView.scrollTop = logView.scrollHeight;
+    }
+
+    function refreshLogs() {
+        fetch('/logs')
+            .then((r) => r.text())
+            .then((text) => {
+                lastLogText = text;
+                renderLog();
+            })
+            .catch(() => {});
+    }
+
+    function refreshMetrics() {
+        fetch('/metrics')
+            .then((r) => r.json())
+            .then((m) => {
+                setMetric('metricUptime', formatUptime(m.uptimeMs));
+                setMetric('metricHeap', formatHeap(m.freeHeap));
+                setMetric('metricRssi', rssiLabel(m.rssi).text);
+                setMetric('metricFps', Number.isFinite(m.fps) ? m.fps.toFixed(1) : '--');
+                setMetric('metricMode', m.renderMode || '--');
+                setMetric('metricEffect', m.effect || '--');
+            })
+            .catch(() => {
+                ['metricUptime', 'metricHeap', 'metricRssi', 'metricFps', 'metricMode', 'metricEffect']
+                    .forEach((id) => setMetric(id, '--'));
+            });
+    }
+
+    function startDiagnostics() {
+        refreshMetrics();
+        refreshLogs();
+        diagMetricsTimer = setInterval(refreshMetrics, 1000);
+        diagLogsTimer = setInterval(refreshLogs, 2000);
+    }
+
+    function stopDiagnostics() {
+        clearInterval(diagMetricsTimer);
+        clearInterval(diagLogsTimer);
+        diagMetricsTimer = null;
+        diagLogsTimer = null;
+    }
+
+    logLevelFilter.addEventListener('change', renderLog);
+    logRefreshBtn.addEventListener('click', refreshLogs);
 
     // Brightness slider (initial value comes from the state message pushed
     // right after the WebSocket connects - see handleServerMessage)
