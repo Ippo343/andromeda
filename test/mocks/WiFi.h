@@ -87,6 +87,9 @@ class WiFiClass
         if (index < 0 || index >= static_cast<int>(scriptedScanRSSIs.size())) return 0;
         return scriptedScanRSSIs[index];
     }
+    // No-arg form: the connected AP's signal strength (WiFi.RSSI() on real hw).
+    int scriptedRSSI = -55;
+    int RSSI() const { return scriptedRSSI; }
 
     IPAddress localIP() const { return IPAddress(192, 168, 1, 232); }
 

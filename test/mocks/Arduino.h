@@ -99,5 +99,6 @@ class EspClass
 {
    public:
     void restart() {}
+    uint32_t getFreeHeap() const { return 200000; }
 };
 inline EspClass ESP;

@@ -2,6 +2,7 @@
 
 #include <DNSServer.h>
 
+#include "log-ring.h"
 #include "ws-command-parser.h"
 
 constexpr int DNS_PORT = 53;
@@ -167,6 +168,38 @@ void Comms::setupRoutes()
     server.on(
         "/brightness", HTTP_GET, [](AsyncWebServerRequest* r)
         { r->send(200, "text/plain", String(MissionControl::Instance().getMaxBrightness())); });
+
+    // Diagnostics view (web UI Settings drawer): a plain-text tail of the
+    // in-RAM log ring, and a small JSON metrics snapshot. Both are polled by
+    // the browser only while the Diagnostics section is open.
+    server.on("/logs", HTTP_GET,
+              [](AsyncWebServerRequest* r)
+              {
+                  // .bss, not the async task's stack; a concurrent second
+                  // reader can at worst see a slightly torn tail.
+                  static char buf[LogRing::CAP + 1];
+                  size_t n = LogRing::Instance().snapshot(buf, LogRing::CAP);
+                  buf[n] = '\0';
+                  r->send(200, "text/plain", buf);
+              });
+    server.on("/metrics", HTTP_GET,
+              [](AsyncWebServerRequest* r)
+              {
+                  MissionControl& mc = MissionControl::Instance();
+                  StaticJsonDocument<256> doc;
+                  doc["fps"] = PerformanceMonitor::Instance().fps();
+                  doc["uptimeMs"] = millis();
+                  doc["freeHeap"] = ESP.getFreeHeap();
+                  doc["rssi"] = WiFi.RSSI();
+                  doc["renderMode"] = renderModeToString(mc.getMode());
+                  doc["effect"] = mc.getEffectName();
+                  doc["power"] = mc.isOn();
+                  doc["holding"] = mc.isHolding();
+
+                  char out[256];
+                  serializeJson(doc, out);
+                  r->send(200, "application/json", out);
+              });
 
     // WiFi functionality
     server.on("/scan", HTTP_GET, [this](AsyncWebServerRequest* r)
