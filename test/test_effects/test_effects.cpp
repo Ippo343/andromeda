@@ -288,6 +288,45 @@ void test_polar_swipe_get_brightness_bounds()
     TEST_ASSERT_EQUAL_UINT8(0, fx.getBrightness(&farLed));
 }
 
+// getBrightness() is well covered above, but nothing yet confirms evaluate() actually
+// applies it to fx.color for the LED's own radius - as opposed to e.g. always using a
+// stale/default brightness.
+void test_polar_swipe_evaluate_matches_color_scaled_by_brightness()
+{
+    PolarSwipe fx;
+    fx.bandCenter = 100;
+    fx.color = CRGB(200, 100, 50);
+
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    Led nearLed = strip.leds[0];
+    nearLed.polar.radius = 100;  // band center -> full brightness
+    CRGB near = fx.evaluate(&strip, &nearLed, 0, 0);
+    TEST_ASSERT_TRUE(near == (fx.color % fx.getBrightness(&nearLed)));
+
+    Led farLed = strip.leds[0];
+    farLed.polar.radius = 100 + fx.bandWidth + 500;  // outside band -> zero brightness
+    CRGB far = fx.evaluate(&strip, &farLed, 0, 0);
+    TEST_ASSERT_TRUE(far == CRGB::Black);
+}
+
+// The Andromeda mirror's central strip is deliberately excluded from this effect - this
+// branch had zero coverage of any kind before.
+void test_polar_swipe_andromeda_strip0_is_always_black()
+{
+    GEOMETRY.initializeForTest(ModelId::ANDROMEDA_MK1);
+    PolarSwipe fx;
+    fx.bandCenter = 100;
+    fx.color = CRGB::White;
+
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    TEST_ASSERT_EQUAL_UINT8(0, strip.idx);
+    Led led = strip.leds[0];
+    led.polar.radius = fx.bandCenter;  // would otherwise be full brightness
+
+    CRGB c = fx.evaluate(&strip, &led, 0, 0);
+    TEST_ASSERT_TRUE(c == CRGB::Black);
+}
+
 // ---------------------------------------------------------------------------
 // PolarMoodlight
 // ---------------------------------------------------------------------------
@@ -687,6 +726,8 @@ int main(int argc, char** argv)
 
     RUN_TEST(test_polar_swipe_evaluates_both_flip_directions);
     RUN_TEST(test_polar_swipe_get_brightness_bounds);
+    RUN_TEST(test_polar_swipe_evaluate_matches_color_scaled_by_brightness);
+    RUN_TEST(test_polar_swipe_andromeda_strip0_is_always_black);
 
     RUN_TEST(test_polar_moodlight_evaluates);
     RUN_TEST(test_polar_moodlight_same_radius_gives_same_color);
