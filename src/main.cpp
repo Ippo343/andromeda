@@ -15,6 +15,10 @@
 #include "perf-monitor.h"
 #include "version.h"
 
+#ifndef NATIVE_RUNTIME
+#include "status-led.h"
+#endif
+
 #ifdef NATIVE_RUNTIME
 #include "native-runtime.h"
 #endif
@@ -22,6 +26,10 @@
 void setup()
 {
 #ifndef NATIVE_RUNTIME
+    // Before anything else - including Serial - so a board that hangs in early
+    // init still visibly shows it has power.
+    statusLedOn();
+
     Serial.begin(115200);
     while (!Serial && !Serial.available()) {}
 
