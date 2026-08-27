@@ -241,6 +241,25 @@ void test_palette_wave_sets_rotate_space_hint()
     exerciseEvaluate(fx, 3000);
 }
 
+// evaluate() is a pure function of (led->cartesian, real millis()) - two LEDs at very
+// different positions, sampled back-to-back (so real time is effectively frozen between
+// the two calls), should land on different palette phases.
+void test_palette_wave_color_varies_with_position()
+{
+    PaletteWave fx;
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    Led ledA = strip.leds[0];
+    ledA.cartesian.x = 0;
+    ledA.cartesian.y = 0;
+    Led ledB = strip.leds[0];
+    ledB.cartesian.x = 1000;
+    ledB.cartesian.y = 1000;
+
+    CRGB a = fx.evaluate(&strip, &ledA, 0, 0);
+    CRGB b = fx.evaluate(&strip, &ledB, 0, 0);
+    TEST_ASSERT_FALSE(a == b);
+}
+
 // ---------------------------------------------------------------------------
 // NinjaStar
 // ---------------------------------------------------------------------------
@@ -260,6 +279,42 @@ void test_ninja_star_pow16_lut_fixed_points_and_shrinks_midrange()
     TEST_ASSERT_EQUAL_UINT8(0, NinjaStar::pow16(0));
     TEST_ASSERT_EQUAL_UINT8(255, NinjaStar::pow16(255));
     TEST_ASSERT_TRUE(NinjaStar::pow16(128) < 128);
+}
+
+// evaluate() blends innerColor (radius 0) to outerColor (max radius) - confirms that
+// blend actually runs in the near-to-far direction, not reversed. Bypasses precompute()
+// (whose inner/outer MoodLights are driven by real millis(), not t) and instead sets
+// innerColor/outerColor/offset directly; theta only depends on the LED's own angle
+// (cdegrees=0 here), so scanning offset finds a phase with nonzero brightness (v) that
+// applies identically to both radii, isolating the radial blend from the beam pattern.
+void test_ninja_star_evaluate_blends_from_inner_to_outer_by_radius()
+{
+    NinjaStar fx;
+    fx.innerColor = CRGB(200, 0, 0);
+    fx.outerColor = CRGB(0, 0, 200);
+
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    Led led = strip.leds[0];
+    led.polar.cdegrees = 0;  // theta = 0 regardless of offset
+
+    uint8_t v = 0;
+    for (int offset = 0; offset < 256 && v == 0; offset += 16)
+    {
+        fx.offset = (uint8_t)offset;
+        v = NinjaStar::pow16(sin8(offset));
+    }
+    TEST_ASSERT_TRUE(v > 0);
+
+    Led nearLed = led;
+    nearLed.polar.radius = 0;
+    Led farLed = led;
+    farLed.polar.radius = GEOMETRY.getScreenRadius();
+
+    CRGB near = fx.evaluate(&strip, &nearLed, 0, 0);
+    CRGB far = fx.evaluate(&strip, &farLed, 0, 0);
+
+    TEST_ASSERT_TRUE(near == (fx.innerColor % v));
+    TEST_ASSERT_TRUE(far == (fx.outerColor % v));
 }
 
 // ---------------------------------------------------------------------------
@@ -597,6 +652,35 @@ void test_cartesian_moodlight_randomize_and_evaluate()
     exerciseEvaluate(fx, 9000);
 }
 
+void test_cartesian_moodlight_color_varies_with_position()
+{
+    CartesianMoodlight fx;
+    fx.randomize();
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    Led ledA = strip.leds[0];
+    ledA.cartesian.x = 0;
+    ledA.cartesian.y = 0;
+    Led ledB = strip.leds[0];
+    ledB.cartesian.x = 400;
+    ledB.cartesian.y = -300;
+
+    CRGB a = fx.evaluate(&strip, &ledA, 0, 1000);
+    CRGB b = fx.evaluate(&strip, &ledB, 0, 1000);
+    TEST_ASSERT_FALSE(a == b);
+}
+
+void test_cartesian_moodlight_color_varies_with_time()
+{
+    CartesianMoodlight fx;
+    fx.randomize();
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    Led& led = strip.leds[0];
+
+    CRGB early = fx.evaluate(&strip, &led, 0, 0);
+    CRGB late = fx.evaluate(&strip, &led, 0, 500000);
+    TEST_ASSERT_FALSE(early == late);
+}
+
 // ---------------------------------------------------------------------------
 // effects-utils.cpp: paint / randomColor / randomComplementaryColors /
 // randomPredefinedPalette / brightnessFromEmitter
@@ -758,9 +842,11 @@ int main(int argc, char** argv)
     RUN_TEST(test_saturation_glow_color_varies_over_time);
 
     RUN_TEST(test_palette_wave_sets_rotate_space_hint);
+    RUN_TEST(test_palette_wave_color_varies_with_position);
 
     RUN_TEST(test_ninja_star_evaluates);
     RUN_TEST(test_ninja_star_pow16_lut_fixed_points_and_shrinks_midrange);
+    RUN_TEST(test_ninja_star_evaluate_blends_from_inner_to_outer_by_radius);
 
     RUN_TEST(test_polar_swipe_evaluates_both_flip_directions);
     RUN_TEST(test_polar_swipe_get_brightness_bounds);
@@ -790,6 +876,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_individual_strip_drift_current_color_moves_toward_target_over_the_transition);
 
     RUN_TEST(test_cartesian_moodlight_randomize_and_evaluate);
+    RUN_TEST(test_cartesian_moodlight_color_varies_with_position);
+    RUN_TEST(test_cartesian_moodlight_color_varies_with_time);
 
     RUN_TEST(test_get_random_effect_produces_valid_effects);
     RUN_TEST(test_num_effects_matches_registry_length);
