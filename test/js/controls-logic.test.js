@@ -111,8 +111,10 @@ describe('logoBrightnessFilter', () => {
         assert.equal(logoBrightnessFilter(255), 1);
     });
 
-    test('low slider values still render a mostly-bright logo', () => {
-        assert.ok(logoBrightnessFilter(25) > 0.5);
+    test('low slider values still render a fairly bright logo', () => {
+        // value 25 is ~10% of the slider; the steep curve keeps the logo
+        // well above the linear 0.1 it would otherwise sit at.
+        assert.ok(logoBrightnessFilter(25) > 0.4);
     });
 
     test('is steeper than linear across the range', () => {

@@ -24,7 +24,10 @@ Write-Host "== Capturing coverage ==" -ForegroundColor Cyan
 # lcov_branch_coverage is geninfo's actual rc key (see mingw64/bin/geninfo); passing an extra
 # --rc branch_coverage=1 alongside it silently drops branch data entirely -- verified by testing
 # each flag in isolation, so don't reintroduce it.
-$captureCmd = "export PATH=/mingw64/bin:/usr/bin:/bin:`$PATH && cd '$unixRoot' && lcov --capture --directory .pio/build/native --output-file coverage.info --rc lcov_branch_coverage=1"
+# --ignore-errors mismatch: newer geninfo treats gcov "mismatched exception tag" noise from
+# libstdc++ template code as fatal; it's not our code (the --remove below strips it), so
+# downgrade it to a warning -- keep in sync with .github/workflows/test.yml.
+$captureCmd = "export PATH=/mingw64/bin:/usr/bin:/bin:`$PATH && cd '$unixRoot' && lcov --capture --directory .pio/build/native --output-file coverage.info --rc lcov_branch_coverage=1 --ignore-errors mismatch"
 & $msysBash -lc $captureCmd
 
 Write-Host "== Filtering coverage (project sources only) ==" -ForegroundColor Cyan
