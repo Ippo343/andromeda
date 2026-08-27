@@ -8,6 +8,11 @@ const {
     rgbToHistogramWidths,
     hsvToRgb,
     logoBrightnessFilter,
+    parseLogLevel,
+    filterLogText,
+    formatUptime,
+    formatHeap,
+    rssiLabel,
 } = require('../../data/js/controls-logic.js');
 
 describe('pickInitialTab', () => {
@@ -120,5 +125,92 @@ describe('logoBrightnessFilter', () => {
     test('is steeper than linear across the range', () => {
         const mid = 128;
         assert.ok(logoBrightnessFilter(mid) > mid / 255);
+    });
+});
+
+describe('parseLogLevel', () => {
+    test('reads the severity token from a real log line', () => {
+        assert.equal(parseLogLevel('12345 | WRN | WiFi connecting'), 3);
+        assert.equal(parseLogLevel('12345 | ERR | boom'), 2);
+        assert.equal(parseLogLevel('12345 | VRB | chatty'), 6);
+    });
+
+    test('returns 0 for lines with no token', () => {
+        assert.equal(parseLogLevel('   ...continuation'), 0);
+        assert.equal(parseLogLevel(''), 0);
+        assert.equal(parseLogLevel(undefined), 0);
+    });
+});
+
+describe('filterLogText', () => {
+    const log = [
+        '1 | INF | started',
+        '2 | WRN | flaky',
+        '3 | ERR | dropped',
+        'bare continuation line',
+        '4 | VRB | noise',
+    ].join('\n');
+
+    test('minRank >= 6 (or falsy) returns everything', () => {
+        assert.equal(filterLogText(log, 6), log);
+        assert.equal(filterLogText(log, 0), log);
+    });
+
+    test('keeps only lines at/above the requested severity, plus token-less lines', () => {
+        const out = filterLogText(log, 3).split('\n');
+        assert.deepEqual(out, ['2 | WRN | flaky', '3 | ERR | dropped', 'bare continuation line']);
+    });
+
+    test('empty input stays empty', () => {
+        assert.equal(filterLogText('', 2), '');
+    });
+
+    test('preserves a trailing newline', () => {
+        assert.equal(filterLogText('1 | ERR | x\n', 2), '1 | ERR | x\n');
+    });
+});
+
+describe('formatUptime', () => {
+    test('sub-day is HH:MM:SS', () => {
+        assert.equal(formatUptime((3 * 3600 + 4 * 60 + 5) * 1000), '03:04:05');
+    });
+
+    test('multi-day prefixes the day count', () => {
+        assert.equal(formatUptime((2 * 86400 + 60) * 1000), '2d 00:01:00');
+    });
+
+    test('non-finite / negative is "--"', () => {
+        assert.equal(formatUptime(NaN), '--');
+        assert.equal(formatUptime(-1), '--');
+    });
+});
+
+describe('formatHeap', () => {
+    test('scales bytes / KB / MB', () => {
+        assert.equal(formatHeap(512), '512 B');
+        assert.equal(formatHeap(145735), '142.3 KB');
+        assert.equal(formatHeap(3 * 1024 * 1024), '3.00 MB');
+    });
+
+    test('non-finite is "--"', () => {
+        assert.equal(formatHeap(undefined), '--');
+    });
+});
+
+describe('rssiLabel', () => {
+    test('buckets by signal strength', () => {
+        assert.equal(rssiLabel(-50).quality, 'excellent');
+        assert.equal(rssiLabel(-60).quality, 'good');
+        assert.equal(rssiLabel(-75).quality, 'fair');
+        assert.equal(rssiLabel(-90).quality, 'weak');
+    });
+
+    test('includes a dBm display string', () => {
+        assert.equal(rssiLabel(-60).text, '-60 dBm');
+    });
+
+    test('0 or non-finite means no station link', () => {
+        assert.deepEqual(rssiLabel(0), { quality: 'unknown', text: '--' });
+        assert.deepEqual(rssiLabel(NaN), { quality: 'unknown', text: '--' });
     });
 });
