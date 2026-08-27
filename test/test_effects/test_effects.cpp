@@ -129,6 +129,65 @@ void test_electric_sparks_runs_with_varying_frame_gaps()
     exerciseEvaluate(slowFx, 5160);  // ~6fps gap
 }
 
+// preValues/newValues are the one place this effect carries real per-LED state that
+// persists and diffuses across frames (unlike most effects, which are pure functions of
+// (t, global state)). These tests seed that state directly rather than relying on
+// evaluate()'s random spark injection, so they exercise only the deterministic
+// diffusion/decay math in precompute()/postprocess().
+void test_electric_sparks_diffusion_spreads_energy_to_neighbors()
+{
+    ElectricSparks fx;
+    size_t mid = GEOMETRY.getStrip(0).num_leds / 2;
+    for (auto& v : fx.preValues[0]) v = 0;
+    fx.preValues[0][mid] = 255;
+
+    fx.precompute(1000);  // newValues[iLed] = avg38(pre[iLed-1], pre[iLed], pre[iLed+1])
+
+    TEST_ASSERT_EQUAL_UINT8(0, fx.newValues[0][mid - 2]);
+    TEST_ASSERT_TRUE(fx.newValues[0][mid - 1] > 0);
+    TEST_ASSERT_TRUE(fx.newValues[0][mid] > 0);
+    TEST_ASSERT_TRUE(fx.newValues[0][mid + 1] > 0);
+    TEST_ASSERT_EQUAL_UINT8(0, fx.newValues[0][mid + 2]);
+}
+
+void test_electric_sparks_energy_decays_to_near_zero_without_further_injection()
+{
+    ElectricSparks fx;
+    fx.preValues[0][GEOMETRY.getStrip(0).num_leds / 2] = 255;
+
+    // Drive precompute()/postprocess() only - never evaluate() - so no new sparks get
+    // injected and this isolates decay/diffusion from the random injection roll.
+    milliseconds_t t = 0;
+    for (int frame = 0; frame < 200; frame++)
+    {
+        t += 100;
+        fx.precompute(t);
+        fx.postprocess(t);
+    }
+
+    long total = 0;
+    for (uint8_t v : fx.preValues[0]) total += v;
+    TEST_ASSERT_TRUE(total < 10);
+}
+
+// evaluate()'s color comes from preValues[led], one frame behind whatever precompute()
+// just wrote into newValues - this confirms it actually reads that state rather than
+// returning a stale/constant palette entry.
+void test_electric_sparks_evaluate_color_tracks_energy_level()
+{
+    ElectricSparks fx;
+    fx.sparkThreshold = 0;  // keep evaluate()'s random spark-injection branch from firing
+    LedStrip& strip = GEOMETRY.getStrip(0);
+
+    fx.preValues[0][0] = 0;
+    CRGB dark = fx.evaluate(&strip, &strip.leds[0], 0, 1000);
+
+    fx.preValues[0][0] = 255;
+    CRGB bright = fx.evaluate(&strip, &strip.leds[0], 0, 1000);
+
+    TEST_ASSERT_FALSE(dark == bright);
+}
+
 // ---------------------------------------------------------------------------
 // SaturationGlow
 // ---------------------------------------------------------------------------
@@ -662,6 +721,9 @@ int main(int argc, char** argv)
     RUN_TEST(test_electric_sparks_runs_full_frame_cycle);
     RUN_TEST(test_electric_sparks_avg38_clamps);
     RUN_TEST(test_electric_sparks_runs_with_varying_frame_gaps);
+    RUN_TEST(test_electric_sparks_diffusion_spreads_energy_to_neighbors);
+    RUN_TEST(test_electric_sparks_energy_decays_to_near_zero_without_further_injection);
+    RUN_TEST(test_electric_sparks_evaluate_color_tracks_energy_level);
 
     RUN_TEST(test_saturation_glow_evaluates);
     RUN_TEST(test_saturation_glow_evaluate_matches_precomputed_color);
