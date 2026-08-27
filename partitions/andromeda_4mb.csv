@@ -1,0 +1,14 @@
+# Andromeda custom 4 MB partition table (esp32_wroom, esp32_c3_zero).
+#
+# Same layout as Arduino-esp32's default.csv - dual-OTA kept, we will need it -
+# but the filesystem partition is cut from 1.375 MiB to 1.0 MiB (data/ is well
+# under 100 KiB) and the freed 384 KiB is split evenly between the two app
+# slots: 1.25 MiB -> 1.4375 MiB each.
+#
+# Name,   Type, SubType, Offset,   Size,     Flags
+nvs,      data, nvs,     0x9000,   0x5000,
+otadata,  data, ota,     0xe000,   0x2000,
+app0,     app,  ota_0,   0x10000,  0x170000,
+app1,     app,  ota_1,   0x180000, 0x170000,
+spiffs,   data, spiffs,  0x2F0000, 0x100000,
+coredump, data, coredump,0x3F0000, 0x10000,
