@@ -186,6 +186,9 @@ class MissionControl
     inline bool isOn() const { return mode != RenderMode::OFF; }
     inline bool isHolding() const { return mode == RenderMode::HOLDING; }
 
+    // Current top-level render state, for the web UI's diagnostics view.
+    inline RenderMode getMode() const { return mode; }
+
     // True when a HOLD command arrived mid-transition and is waiting for the
     // transition to land (see holdPending) - i.e. the device is committed to
     // holding but isn't there yet. Comms folds this into the wire "holding"

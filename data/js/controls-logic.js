@@ -83,6 +83,69 @@ function logoBrightnessFilter(value) {
     return Math.pow(value / 255, 0.35);
 }
 
+// --- Diagnostics view (Settings drawer): log filtering + metric formatting ---
+
+// Severity ranks matching the 3-letter tokens the firmware log prefix emits
+// (see setupLoggers() in include/loggers.h) and ArduinoLog's level ordering:
+// lower number = more severe.
+const LOG_LEVEL_RANKS = { FTL: 1, ERR: 2, WRN: 3, INF: 4, TRC: 5, VRB: 6 };
+
+// Severity rank of a single log line from its ` | XXX | ` token, or 0 when the
+// line has no recognizable token (blank lines, wrapped continuations) so the
+// filter can always keep those.
+function parseLogLevel(line) {
+    const m = /\|\s*(FTL|ERR|WRN|INF|TRC|VRB)\s*\|/.exec(line || '');
+    return m ? LOG_LEVEL_RANKS[m[1]] : 0;
+}
+
+// Keeps only log lines at or above `minRank` severity (rank <= minRank), plus
+// token-less lines. minRank >= 6 (or falsy) means "show everything".
+function filterLogText(text, minRank) {
+    if (!text) return '';
+    if (!minRank || minRank >= 6) return text;
+    return text
+        .split('\n')
+        .filter((line) => {
+            const rank = parseLogLevel(line);
+            return rank === 0 || rank <= minRank;
+        })
+        .join('\n');
+}
+
+// Milliseconds since boot -> "3d 04:05:06" / "04:05:06". millis() rolls over
+// at ~49.7 days; the display just follows it.
+function formatUptime(ms) {
+    if (!Number.isFinite(ms) || ms < 0) return '--';
+    let s = Math.floor(ms / 1000);
+    const d = Math.floor(s / 86400);
+    s -= d * 86400;
+    const h = Math.floor(s / 3600);
+    s -= h * 3600;
+    const m = Math.floor(s / 60);
+    s -= m * 60;
+    const hms = [h, m, s].map((n) => String(n).padStart(2, '0')).join(':');
+    return d > 0 ? `${d}d ${hms}` : hms;
+}
+
+// Free-heap byte count -> human string.
+function formatHeap(bytes) {
+    if (!Number.isFinite(bytes) || bytes < 0) return '--';
+    if (bytes < 1024) return `${bytes} B`;
+    const kb = bytes / 1024;
+    return kb < 1024 ? `${kb.toFixed(1)} KB` : `${(kb / 1024).toFixed(2)} MB`;
+}
+
+// WiFi RSSI (dBm) -> a coarse quality bucket + display text. 0/non-finite is
+// treated as "no station connection" (e.g. AP mode).
+function rssiLabel(dbm) {
+    if (!Number.isFinite(dbm) || dbm === 0) return { quality: 'unknown', text: '--' };
+    let quality = 'weak';
+    if (dbm >= -55) quality = 'excellent';
+    else if (dbm >= -67) quality = 'good';
+    else if (dbm >= -78) quality = 'fair';
+    return { quality, text: `${dbm} dBm` };
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         pickInitialTab,
@@ -92,5 +155,10 @@ if (typeof module !== 'undefined' && module.exports) {
         rgbToHistogramWidths,
         hsvToRgb,
         logoBrightnessFilter,
+        parseLogLevel,
+        filterLogText,
+        formatUptime,
+        formatHeap,
+        rssiLabel,
     };
 }

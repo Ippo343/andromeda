@@ -3,6 +3,7 @@
 #include <ArduinoLog.h>
 #include <LittleFS.h>
 
+#include "log-ring.h"
 #include "utils.h"
 
 // Logger extension that logs everything to a file in LittleFS
@@ -50,18 +51,47 @@ class SimpleFileLog : public Print
     }
 };
 
-// Tee to both Serial and file
+// Print sink that funnels formatted log lines into the in-RAM LogRing. Buffers
+// bytes and hands the ring one whole line at a time (on '\n' or when the line
+// buffer fills), so the ring's lock is taken per line rather than per byte.
+class RingLog : public Print
+{
+    char _line[160];
+    size_t _len = 0;
+
+    void flushLine()
+    {
+        if (_len == 0) return;
+        LogRing::Instance().write(reinterpret_cast<const uint8_t*>(_line), _len);
+        _len = 0;
+    }
+
+   public:
+    size_t write(uint8_t c) override
+    {
+        _line[_len++] = static_cast<char>(c);
+        if (c == '\n' || _len == sizeof(_line)) flushLine();
+        return 1;
+    }
+};
+
+// Tee to Serial, file, and (optionally) the in-RAM ring buffer.
 class TeeLog : public Print
 {
     Print* _serial;
     Print* _file;
+    Print* _extra;
 
    public:
-    TeeLog(Print* serial, Print* file) : _serial(serial), _file(file) {}
+    TeeLog(Print* serial, Print* file, Print* extra = nullptr)
+        : _serial(serial), _file(file), _extra(extra)
+    {
+    }
 
     size_t write(uint8_t c) override
     {
         _serial->write(c);
+        if (_extra) _extra->write(c);
         return _file->write(c);
     }
 };
@@ -81,7 +111,8 @@ class TeeLog : public Print
 void setupLoggers()
 {
     static SimpleFileLog fileLogger(32768);
-    static TeeLog teeLogger(&Serial, &fileLogger);
+    static RingLog ringLogger;
+    static TeeLog teeLogger(&Serial, &fileLogger, &ringLogger);
 
     Log.begin(LOG_RUNTIME_LEVEL, &teeLogger, true);
 

@@ -140,6 +140,28 @@
                     <button class="btn" onclick="goToWifiSetup()" style="margin-top: 0.5rem; width: 100%;">
                         WiFi Setup
                     </button>
+
+                    <div class="slider-container" style="margin-top: 1.25rem;">
+                        <label class="slider-label">Diagnostics</label>
+                        <div class="metrics-grid">
+                            <span class="metric-key">Uptime</span><span class="metric-val" id="metricUptime">--</span>
+                            <span class="metric-key">Free heap</span><span class="metric-val" id="metricHeap">--</span>
+                            <span class="metric-key">WiFi</span><span class="metric-val" id="metricRssi">--</span>
+                            <span class="metric-key">FPS</span><span class="metric-val" id="metricFps">--</span>
+                            <span class="metric-key">Render mode</span><span class="metric-val" id="metricMode">--</span>
+                            <span class="metric-key">Effect</span><span class="metric-val" id="metricEffect">--</span>
+                        </div>
+                        <div class="log-controls">
+                            <select class="model-select" id="logLevelFilter">
+                                <option value="6">All levels</option>
+                                <option value="4">Info &amp; up</option>
+                                <option value="3">Warnings &amp; up</option>
+                                <option value="2">Errors only</option>
+                            </select>
+                            <button class="log-refresh-btn" id="logRefreshBtn" type="button">Refresh</button>
+                        </div>
+                        <pre class="log-view" id="logView">Open Settings to load logs&hellip;</pre>
+                    </div>
                 </div>
             </div>
         </div>

@@ -283,7 +283,9 @@
 }
 
 .settings-drawer.expanded {
-    max-height: 250px;
+    /* Generous cap: the Diagnostics block (metrics grid + scrolling log
+       pane) lives in here now; the log pane scrolls internally. */
+    max-height: 1000px;
 }
 
 .settings-content {
@@ -442,6 +444,65 @@
 .model-row.has-reboot .reboot-btn {
     border-top-left-radius: 4px;
     border-bottom-left-radius: 4px;
+}
+
+/* --- Diagnostics (Settings drawer) --- */
+.metrics-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.3rem 0.8rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    margin-bottom: 0.8rem;
+}
+
+.metric-key {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.metric-val {
+    color: rgba(255, 255, 255, 0.9);
+    text-align: right;
+}
+
+.log-controls {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+}
+
+.log-controls .model-select {
+    flex: 1;
+}
+
+.log-refresh-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.85);
+    border-radius: 6px;
+    padding: 0 0.9rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.log-refresh-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.log-view {
+    max-height: 180px;
+    overflow: auto;
+    margin: 0;
+    padding: 0.5rem;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.7rem;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.8);
+    white-space: pre;
 }
 
 .device-uid-hint {
