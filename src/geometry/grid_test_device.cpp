@@ -10,10 +10,14 @@ namespace GridTestDevice
 {
 
 // Fake square grid, wired as a single strip in serpentine (boustrophedon) order -
-// alternating scan direction each row, like a real LED matrix panel - so it has no
-// real-world counterpart but still exists for real hardware builds too, same as
-// SingleStripTestDevice. Its point is giving the emitter-field effects a plain 2D
-// layout to tune against, instead of Andromeda's rings.
+// alternating scan direction each row, like a real LED matrix panel. It has no
+// real-world counterpart; its only job is giving the emitter-field effects a
+// plain 2D layout to tune against in the simulator, instead of Andromeda's rings.
+//
+// Simulator/native-tests only: this file is filtered out of the firmware builds
+// (platformio.ini) and model_registry.cpp drops the registry entry under
+// !NATIVE_BUILD, so the ~6.4 KB compile-time GRID_CARTESIAN table never reaches
+// hardware.
 
 constexpr size_t GRID_SIZE = 40;
 constexpr size_t NUM_LEDS = GRID_SIZE * GRID_SIZE;

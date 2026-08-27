@@ -12,10 +12,15 @@ namespace SingleStripTestDevice
 {
 extern const ModelConfig CONFIG;
 }
+#if defined(NATIVE_BUILD)
+// Simulator/native-tests only - a 1600-point compile-time grid that never
+// ships on hardware (src/geometry/grid_test_device.cpp is filtered out of the
+// firmware builds; the ~6.4 KB coordinate table went with it).
 namespace GridTestDevice
 {
 extern const ModelConfig CONFIG;
 }
+#endif
 namespace L70_MK1
 {
 extern const ModelConfig CONFIG;
@@ -28,8 +33,10 @@ extern const ModelConfig CONFIG;
 // Global registry of all available models
 const ModelConfig* MODEL_REGISTRY[] = {
     &AndromedaMk1::CONFIG,   &SingleStripTestDevice::CONFIG,
-    &GridTestDevice::CONFIG, &L70_MK1::CONFIG,
-    &L10_MK1::CONFIG,
+#if defined(NATIVE_BUILD)
+    &GridTestDevice::CONFIG,
+#endif
+    &L70_MK1::CONFIG,        &L10_MK1::CONFIG,
 };
 
 const size_t NUM_MODELS = sizeof(MODEL_REGISTRY) / sizeof(MODEL_REGISTRY[0]);

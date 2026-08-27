@@ -26,9 +26,12 @@ enum class ModelId : uint16_t
     // That ridiculous little thing that I brought to Eindhoven to replicate an L10
     SINGLE_STRIP_TEST_DEVICE = MODEL_ID(TEST_DEVICES, 0),
 
-    // Fake square grid, simulator-only in practice: gives the emitter-field effects
+    // Fake square grid, simulator-only: gives the emitter-field effects
     // (BezierSwarm, MultiPendulum, RGBodyProblem) a plain 2D layout to visualize on,
-    // instead of Andromeda's rings.
+    // instead of Andromeda's rings. The registry entry (model_registry.cpp) and the
+    // ~6.4 KB coordinate table are compiled out of hardware builds, so on-device
+    // getModelConfig(GRID_TEST_DEVICE) returns nullptr - the enumerator is kept only
+    // so the id space stays stable.
     GRID_TEST_DEVICE = MODEL_ID(TEST_DEVICES, 1),
 
     // The first prototype Andromeda model that started this whole madness
