@@ -1,7 +1,11 @@
 name: Test
 
 on:
+  # Only on main directly; PR branches are covered by the pull_request event,
+  # so scoping this here avoids every same-repo PR running the whole suite
+  # twice (once for push, once for pull_request).
   push:
+    branches: [main]
   pull_request:
 
 jobs:
