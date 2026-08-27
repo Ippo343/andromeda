@@ -217,6 +217,19 @@ void test_saturation_glow_amplitude_keeps_center_wave_in_range()
     TEST_ASSERT_TRUE(center + (int)fx.saturationAmplitude <= 255);
 }
 
+// color[] is a pure function of t (hue via inoise8, saturation via scaledCubicWave8) -
+// confirms precompute() actually produces a moving value instead of settling on a
+// constant once constructed.
+void test_saturation_glow_color_varies_over_time()
+{
+    SaturationGlow fx;
+    fx.precompute(0);
+    CRGB early = fx.color[0];
+    fx.precompute(120000);  // 2 minutes later - within the 1-4 minute cycleTime range
+    CRGB late = fx.color[0];
+    TEST_ASSERT_FALSE(early == late);
+}
+
 // ---------------------------------------------------------------------------
 // PaletteWave
 // ---------------------------------------------------------------------------
@@ -546,6 +559,30 @@ void test_individual_strip_drift_transitions_to_new_target()
     TEST_ASSERT_TRUE(c == fx.currentColors[0]);
 }
 
+// The transition's midpoint should have moved measurably closer to the target than the
+// very start did - the existing test above only checks the read-back (evaluate() ==
+// currentColors[]), never that currentColors[] actually blends toward targetColors[].
+void test_individual_strip_drift_current_color_moves_toward_target_over_the_transition()
+{
+    IndividualStripDrift fx;
+    CRGB target = fx.targetColors[0];
+    milliseconds_t start = fx.transitionStartTimes[0];
+    milliseconds_t end = fx.transitionEndTimes[0];
+
+    fx.precompute(start);
+    CRGB atStart = fx.currentColors[0];
+
+    fx.precompute(start + (end - start) / 2);
+    CRGB atMid = fx.currentColors[0];
+
+    auto colorDistanceToTarget = [&](CRGB c)
+    {
+        return abs((int)c.r - (int)target.r) + abs((int)c.g - (int)target.g) +
+               abs((int)c.b - (int)target.b);
+    };
+    TEST_ASSERT_TRUE(colorDistanceToTarget(atMid) < colorDistanceToTarget(atStart));
+}
+
 // ---------------------------------------------------------------------------
 // CartesianMoodlight
 // ---------------------------------------------------------------------------
@@ -767,6 +804,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_saturation_glow_evaluates);
     RUN_TEST(test_saturation_glow_evaluate_matches_precomputed_color);
     RUN_TEST(test_saturation_glow_amplitude_keeps_center_wave_in_range);
+    RUN_TEST(test_saturation_glow_color_varies_over_time);
 
     RUN_TEST(test_palette_wave_sets_rotate_space_hint);
 
@@ -798,6 +836,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_hexagonal_ripple_galaxy_color_varies_with_position);
 
     RUN_TEST(test_individual_strip_drift_transitions_to_new_target);
+    RUN_TEST(test_individual_strip_drift_current_color_moves_toward_target_over_the_transition);
 
     RUN_TEST(test_cartesian_moodlight_randomize_and_evaluate);
 
