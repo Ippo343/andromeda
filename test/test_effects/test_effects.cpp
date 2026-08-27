@@ -485,6 +485,33 @@ void test_bezier_swarm_evaluates()
     exerciseEvaluate(fx, 9600);  // second frame exercises path-stepping with a real dt
 }
 
+// Extends RGBodyProblem's falloff test to BezierSwarm's own evaluate() output - the
+// generic EmitterFieldEffect blend test in test_physics.cpp covers this behavior only
+// through a synthetic test-double subclass, not through this effect's actual positions.
+void test_bezier_swarm_brighter_near_an_emitter_than_far_away()
+{
+    BezierSwarm fx;
+    fx.precompute(1000);
+
+    CartesianCoordinates emitter0 = fx.positions[0].toCartesian();
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    Led nearLed = strip.leds[0];
+    nearLed.cartesian.x = emitter0.x + 5;
+    nearLed.cartesian.y = emitter0.y;
+
+    Led farLed = strip.leds[0];
+    short farCoord = GEOMETRY.getScreenRadius() * 10;
+    farLed.cartesian.x = farCoord;
+    farLed.cartesian.y = farCoord;
+
+    CRGB near = fx.evaluate(&strip, &nearLed, 0, 1000);
+    CRGB far = fx.evaluate(&strip, &farLed, 0, 1000);
+
+    int nearSum = (int)near.r + near.g + near.b;
+    int farSum = (int)far.r + far.g + far.b;
+    TEST_ASSERT_TRUE(nearSum > farSum);
+}
+
 void test_bezier_swarm_sets_rotate_space_hint()
 {
     BezierSwarm fx;
@@ -522,6 +549,33 @@ void test_multi_pendulum_evaluates()
     MultiPendulum fx;
     exerciseEvaluate(fx, 10000);
     exerciseEvaluate(fx, 10016);  // second frame exercises chain-stepping with a real dt
+}
+
+// Extends RGBodyProblem's falloff test to MultiPendulum's own evaluate() output - see
+// test_bezier_swarm_brighter_near_an_emitter_than_far_away for why this can't just rely
+// on the generic EmitterFieldEffect test double.
+void test_multi_pendulum_brighter_near_an_emitter_than_far_away()
+{
+    MultiPendulum fx;
+    fx.precompute(1000);
+
+    CartesianCoordinates emitter0 = fx.positions[0].toCartesian();
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    Led nearLed = strip.leds[0];
+    nearLed.cartesian.x = emitter0.x + 5;
+    nearLed.cartesian.y = emitter0.y;
+
+    Led farLed = strip.leds[0];
+    short farCoord = GEOMETRY.getScreenRadius() * 10;
+    farLed.cartesian.x = farCoord;
+    farLed.cartesian.y = farCoord;
+
+    CRGB near = fx.evaluate(&strip, &nearLed, 0, 1000);
+    CRGB far = fx.evaluate(&strip, &farLed, 0, 1000);
+
+    int nearSum = (int)near.r + near.g + near.b;
+    int farSum = (int)far.r + far.g + far.b;
+    TEST_ASSERT_TRUE(nearSum > farSum);
 }
 
 void test_multi_pendulum_sets_rotate_space_hint()
@@ -910,10 +964,12 @@ int main(int argc, char** argv)
     RUN_TEST(test_rgbody_problem_initial_positions_use_narrower_screen_dimension);
 
     RUN_TEST(test_bezier_swarm_evaluates);
+    RUN_TEST(test_bezier_swarm_brighter_near_an_emitter_than_far_away);
     RUN_TEST(test_bezier_swarm_sets_rotate_space_hint);
     RUN_TEST(test_bezier_swarm_single_emitter_hue_changes_over_time);
 
     RUN_TEST(test_multi_pendulum_evaluates);
+    RUN_TEST(test_multi_pendulum_brighter_near_an_emitter_than_far_away);
     RUN_TEST(test_multi_pendulum_sets_rotate_space_hint);
     RUN_TEST(test_multi_pendulum_initial_reach_uses_narrower_screen_dimension);
 
