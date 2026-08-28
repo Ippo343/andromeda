@@ -61,6 +61,11 @@ inline long random(long max) { return random(0L, max); }
 
 inline int analogRead(int) { return std::rand() % 1024; }
 
+// Stand-in for ESP-IDF's esp_random() (esp_system.h isn't available on the
+// host toolchain) - just needs to be a source of noise for seeding, not a
+// real CSPRNG.
+inline uint32_t esp_random() { return static_cast<uint32_t>(std::rand()); }
+
 // PROGMEM: ESP32's Arduino core maps these to plain memory access (no
 // separate flash address space like AVR), so on the host they're just
 // direct dereferences. FastLED's own null_progmem.h (included when
