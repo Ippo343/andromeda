@@ -275,7 +275,15 @@
 .settings-drawer {
     max-height: 0;
     overflow: hidden;
-    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    /* visibility:hidden (not just clipped height) so the inputs inside a
+       collapsed drawer are pulled out of the focus order - otherwise iOS's
+       Captive Network Assistant autofocuses the first text field
+       (Device Name) on load and zooms in, making the page unusable. Delay
+       the visibility flip until the collapse animation finishes so the
+       content doesn't vanish mid-transition. */
+    visibility: hidden;
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                visibility 0s linear 0.4s;
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-top: none;
@@ -284,6 +292,9 @@
 
 .settings-drawer.expanded {
     max-height: 250px;
+    visibility: visible;
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                visibility 0s;
 }
 
 .settings-content {
