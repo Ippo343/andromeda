@@ -1,13 +1,18 @@
 #include "utils.h"
 
+#ifndef UNIT_TEST
+#include <esp_system.h>  // esp_random()
+#endif
+
 const char* LOG_FILE_CUR = "/log0.txt";
 const char* LOG_FILE_OLD = "/log1.txt";
 
 void seedRNGs()
 {
-    // The analog pins not attached to anything, so the voltage fluctuates
-    // doing an analog read from it returns noise for the RNG
-    randomSeed(analogRead(0));
+    // esp_random() is backed by the chip's hardware RNG - no dependency on
+    // which GPIO happens to be floating (that varies by board and isn't
+    // guaranteed to even be ADC-capable, e.g. GPIO0 on the ESP32-S3).
+    randomSeed(esp_random());
     random16_set_seed(random(65536));
     random16_add_entropy(random(65536));
 }
