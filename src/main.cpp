@@ -112,7 +112,12 @@ void setup()
     }
 #endif
 
-    MissionControl::Instance().setCpuFrequency(config->preferred_cpu_freq_mhz);
+#if defined(ESP32_C3)
+    // The C3 sits enclosed in the small L10 case with little room to shed
+    // heat, and 80MHz is plenty for the L10's effects - dropping to it here
+    // saves power/thermal headroom on that one board.
+    setCpuFrequencyMhz(80);
+#endif
     MissionControl::Instance().setFrameDurationCap(config->min_frame_duration_ms);
 }
 

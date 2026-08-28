@@ -33,8 +33,6 @@ extern const ModelConfig CONFIG = {
     .screen_height_mm = 480,
     .screen_width_mm = 680,
     .cartesian_data = (const CartesianCoordinates*)coords_L70,
-
-    .preferred_cpu_freq_mhz = F_CPU_MHZ,
 };
 
 }  // namespace L70_MK1

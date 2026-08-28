@@ -58,11 +58,6 @@ struct ModelConfig
     // Coordinate data stored as flat arrays
     const CartesianCoordinates* cartesian_data;
 
-    // Preferred CPU frequency for this model, set once at boot and left alone.
-    // Predefined as the actual CPU's default, but it can be overwritten per model.
-    // The main example of this is the L10, which still runs at 400fps even at 80MHz.
-    uint8_t preferred_cpu_freq_mhz = F_CPU_MHZ;
-
     // Minimum frame duration in milliseconds (for fps capping)
     uint8_t min_frame_duration_ms = 0;
 
