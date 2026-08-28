@@ -230,15 +230,6 @@ class MissionControl
         stateDirty = true;
     }
 
-    // Set once at boot from the model's preferred CPU frequency (main.cpp) and
-    // never touched again - the main loop no longer scales the CPU frequency
-    // up/down with ON/OFF or transitions.
-    inline void setCpuFrequency(uint32_t freq)
-    {
-        Log.noticeln("Setting CPU frequency to %d MHz", freq);
-        setCpuFrequencyMhz(freq);
-    }
-
     inline void setFrameDurationCap(milliseconds_t duration)
     {
         Log.noticeln("Capping min frame duration to %d ms", duration);

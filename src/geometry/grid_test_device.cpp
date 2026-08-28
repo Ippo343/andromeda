@@ -66,8 +66,6 @@ extern const ModelConfig CONFIG = {
     .screen_height_mm = (uint16_t)(GRID_SIZE * SPACING_MM),
     .screen_width_mm = (uint16_t)(GRID_SIZE * SPACING_MM),
     .cartesian_data = GRID_CARTESIAN.data(),
-
-    .preferred_cpu_freq_mhz = 80,
 };
 
 }  // namespace GridTestDevice

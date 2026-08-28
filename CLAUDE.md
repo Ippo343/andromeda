@@ -28,7 +28,7 @@ Core pattern: singletons accessed globally. Main loop: `MissionControl::update(m
 
 ## Core Subsystems
 
-**MissionControl** — Main render/command loop. Receives queued web commands, orchestrates effect/animation render, manages power/brightness/CPU frequency/frame rate. Its top-level state is a `RenderMode` enum (`OFF`, `FX_LOOP`, `HOLDING`, `TRANSITIONING`) rather than separate booleans - `TRANSITIONING` is the mode a rotation animation plays in, driven one frame per tick via `updateTransition()` (mirrors how `FX_LOOP`/`HOLDING` drive the current effect's `precompute`/`render`/`postprocess`).
+**MissionControl** — Main render/command loop. Receives queued web commands, orchestrates effect/animation render, manages power/brightness/frame rate. Its top-level state is a `RenderMode` enum (`OFF`, `FX_LOOP`, `HOLDING`, `TRANSITIONING`) rather than separate booleans - `TRANSITIONING` is the mode a rotation animation plays in, driven one frame per tick via `updateTransition()` (mirrors how `FX_LOOP`/`HOLDING` drive the current effect's `precompute`/`render`/`postprocess`).
 
 **Geometry** — Device config & LED data (strip count/lengths/pins, Cartesian/polar coordinates, constraints). Initialized with ModelId at startup.
 
@@ -42,7 +42,7 @@ Core pattern: singletons accessed globally. Main loop: `MissionControl::update(m
 
 - **Time:** `milliseconds_t` (uint32_t); effects receive `t` for frame-relative math.
 - **Memory:** LEDs in strips; coordinates in flat arrays. No per-LED allocation.
-- **CPU:** Fixed preferred frequency per model (80–240 MHz), set once at boot; frame rate capping per device.
+- **CPU:** Runs at the default clock except on the C3 (`#if defined(ESP32_C3)` in `main.cpp`), forced to 80MHz for thermal headroom in its small enclosure; frame rate capping per device.
 - **Brightness:** Global limiter each frame.
 
 ## Conventions
