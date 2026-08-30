@@ -2,6 +2,7 @@
 
 const EffectInfo EFFECT_REGISTRY[] = {
     {EffectId::BezierSwarm, "Bezier Swarm"},
+    {EffectId::BouncingBallGlow, "Bouncing Ball Glow"},
     {EffectId::CartesianMoodlight, "Cartesian Moodlight"},
     {EffectId::ElectricSparks, "Electric Sparks"},
     {EffectId::HeatDiffusionRing, "Heat Diffusion Ring"},
@@ -26,6 +27,8 @@ AbstractEffect* createEffect(EffectId id)
     {
         case EffectId::BezierSwarm:
             return new BezierSwarm();
+        case EffectId::BouncingBallGlow:
+            return new BouncingBallGlow();
         case EffectId::CartesianMoodlight:
             return new CartesianMoodlight();
         case EffectId::ElectricSparks:
