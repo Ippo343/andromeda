@@ -316,8 +316,13 @@ void test_ws_connect_pushes_initial_state()
 
     TEST_ASSERT_FALSE(client.lastSentText.empty());
 
+    // Zero-copy parse (mutable buffer) - mirrors how comms.cpp/native-runtime
+    // handle inbound JSON and keeps the doc within JSON_CAPACITY. Parsing the
+    // std::string directly forces ArduinoJson to duplicate every key/value into
+    // the pool, which needs materially more than the serialize side.
+    std::string sent = client.lastSentText;
     StaticJsonDocument<WsStateBuilder::JSON_CAPACITY> doc;
-    TEST_ASSERT_FALSE(deserializeJson(doc, client.lastSentText));
+    TEST_ASSERT_FALSE(deserializeJson(doc, sent.data(), sent.size()));
     TEST_ASSERT_EQUAL_STRING("state", doc["type"]);
     TEST_ASSERT_EQUAL(MissionControl::Instance().getMaxBrightness(), doc["brightness"].as<int>());
 }
@@ -341,8 +346,9 @@ void test_state_broadcast_after_brightness_command()
     CommsTestAccess::broadcastStateIfDirty(Comms::Instance());
 
     TEST_ASSERT_FALSE(ws->lastBroadcastText.empty());
+    std::string broadcast = ws->lastBroadcastText;  // zero-copy parse below, see note above
     StaticJsonDocument<WsStateBuilder::JSON_CAPACITY> doc;
-    TEST_ASSERT_FALSE(deserializeJson(doc, ws->lastBroadcastText));
+    TEST_ASSERT_FALSE(deserializeJson(doc, broadcast.data(), broadcast.size()));
     TEST_ASSERT_EQUAL(77, doc["brightness"].as<int>());
 }
 

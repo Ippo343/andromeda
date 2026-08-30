@@ -29,6 +29,10 @@ namespace L10_MK1
 {
 extern const ModelConfig CONFIG;
 }
+namespace L10_MK2
+{
+extern const ModelConfig CONFIG;
+}
 
 // Global registry of all available models
 const ModelConfig* MODEL_REGISTRY[] = {
@@ -37,6 +41,7 @@ const ModelConfig* MODEL_REGISTRY[] = {
     &GridTestDevice::CONFIG,
 #endif
     &L70_MK1::CONFIG,        &L10_MK1::CONFIG,
+    &L10_MK2::CONFIG,
 };
 
 const size_t NUM_MODELS = sizeof(MODEL_REGISTRY) / sizeof(MODEL_REGISTRY[0]);

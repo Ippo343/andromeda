@@ -146,6 +146,26 @@ void test_geometry_initialize_for_test_loads_single_strip_device()
     TEST_ASSERT_EQUAL_INT16(-458, last.cartesian.x);
 }
 
+// L10 MK2: a real single-strip production model (56 LEDs, chamfered square,
+// real coordinate table) loaded through the same ModelId -> Geometry path.
+void test_geometry_initialize_for_test_loads_l10_mk2_model()
+{
+    GEOMETRY.initializeForTest(ModelId::L10_MK2);
+
+    TEST_ASSERT_EQUAL_INT(1, GEOMETRY.getNumStrips());
+    TEST_ASSERT_EQUAL_INT(56, GEOMETRY.getStrip(0).num_leds);
+
+    // First LED of coords_L10_MK2 is {-42, -51}, last is the {-47, -47} corner
+    // per src/geometry/L10_mk2.cpp.
+    const Led& first = GEOMETRY.getStrip(0).leds[0];
+    TEST_ASSERT_EQUAL_INT16(-42, first.cartesian.x);
+    TEST_ASSERT_EQUAL_INT16(-51, first.cartesian.y);
+
+    const Led& last = GEOMETRY.getStrip(0).leds[55];
+    TEST_ASSERT_EQUAL_INT16(-47, last.cartesian.x);
+    TEST_ASSERT_EQUAL_INT16(-47, last.cartesian.y);
+}
+
 // getModelConfig(UNKNOWN) returns null; allocateAndLoadCoordinates() must log
 // and bail out instead of dereferencing it (regression test for a latent
 // null-deref: it used to unconditionally read config->name right after this
@@ -370,6 +390,7 @@ int main(int argc, char** argv)
 
     RUN_TEST(test_geometry_initialize_for_test_loads_single_strip_device);
     RUN_TEST(test_geometry_initialize_for_test_loads_multi_strip_l70_mk1_model);
+    RUN_TEST(test_geometry_initialize_for_test_loads_l10_mk2_model);
     RUN_TEST(test_geometry_initialize_for_test_with_unknown_model_does_not_crash);
     RUN_TEST(test_geometry_reinitialize_frees_previous_allocation);
     RUN_TEST(test_geometry_screen_dimension_helpers);

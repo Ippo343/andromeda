@@ -40,6 +40,7 @@ enum class ModelId : uint16_t
     // The actually "commercially" "viable" products
     L70_MK1 = MODEL_ID(L_SERIES, 0),
     L10_MK1 = MODEL_ID(L_SERIES, 1),
+    L10_MK2 = MODEL_ID(L_SERIES, 2),
 };
 
 // Configuration for a specific LED model
