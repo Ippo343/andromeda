@@ -17,6 +17,7 @@ const EffectInfo EFFECT_REGISTRY[] = {
     {EffectId::PolarSwipe, "Polar Swipe"},
     {EffectId::RGBodyProblem, "RG Body Problem"},
     {EffectId::SaturationGlow, "Saturation Glow"},
+    {EffectId::StandingWaveRing, "Standing Wave Ring"},
 };
 
 const size_t NUM_EFFECTS = sizeof(EFFECT_REGISTRY) / sizeof(EFFECT_REGISTRY[0]);
@@ -58,6 +59,8 @@ AbstractEffect* createEffect(EffectId id)
             return new RGBodyProblem();
         case EffectId::SaturationGlow:
             return new SaturationGlow();
+        case EffectId::StandingWaveRing:
+            return new StandingWaveRing();
     }
     return new ErrorEffect();
 }

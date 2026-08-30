@@ -18,6 +18,7 @@
 #include "effects/polar-swipe.h"
 #include "effects/rgbody-problem.h"
 #include "effects/saturation-glow.h"
+#include "effects/standing-wave-ring.h"
 #include "effects/static-color.h"
 
 // Stable identity for every rotation-eligible effect, so it can be referred
@@ -45,6 +46,7 @@ enum class EffectId : uint8_t
     PolarSwipe,
     RGBodyProblem,
     SaturationGlow,
+    StandingWaveRing,
 
     // Sentinel only - never in EFFECT_REGISTRY/NUM_EFFECTS, never a valid
     // wire id. Used solely by getRandomEffect()'s forcedSelection to mean
