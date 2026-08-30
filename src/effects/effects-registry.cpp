@@ -10,6 +10,7 @@ const EffectInfo EFFECT_REGISTRY[] = {
     {EffectId::HexagonalRippleGalaxy, "Hexagonal Ripple Galaxy"},
     {EffectId::IndividualStripDrift, "Individual Strip Drift"},
     {EffectId::IndividualStripMoodlight, "Individual Strip Moodlight"},
+    {EffectId::JellyFrame, "Jelly Frame"},
     {EffectId::MultiPendulum, "Multi Pendulum"},
     {EffectId::NinjaStar, "Ninja Star"},
     {EffectId::PaletteWave, "Palette Wave"},
@@ -45,6 +46,8 @@ AbstractEffect* createEffect(EffectId id)
             return new IndividualStripDrift();
         case EffectId::IndividualStripMoodlight:
             return new IndividualStripMoodlight();
+        case EffectId::JellyFrame:
+            return new JellyFrame();
         case EffectId::MultiPendulum:
             return new MultiPendulum();
         case EffectId::NinjaStar:
