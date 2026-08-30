@@ -283,7 +283,7 @@
 }
 
 .settings-drawer.expanded {
-    max-height: 250px;
+    max-height: 320px;
 }
 
 .settings-content {
@@ -351,104 +351,9 @@
     transform: scale(0.95);
 }
 
-/* Model Selection Styles */
-.model-row {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-    transition: all 0.3s ease;
-}
-
-.model-select {
-    width: 100%;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    color: white;
-    padding: 0.8rem;
-    font-family: inherit;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='white' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 1rem center;
-    padding-right: 2.5rem;
-}
-
-.model-select:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.2);
-}
-
-.model-select:focus {
-    outline: none;
-    border-color: #4CAF50;
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.model-select option {
-    background: #1a1a1a;
-    color: white;
-    padding: 0.5rem;
-}
-
-.reboot-btn {
-    /* Layout & Size */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-
-    /* Animation Properties */
-    max-width: 0;
-    margin-left: 0;
-    opacity: 0;
-    overflow: hidden;
-
-    /* Styling */
-    background: rgba(255, 59, 48, 0.15);
-    border: 1px solid rgba(255, 59, 48, 0.5);
-    color: #ff3b30;
-    border-radius: 8px;
-    cursor: pointer;
-    white-space: nowrap;
-    font-weight: bold;
-    font-family: inherit;
-
-    transition: all 0.3s cubic-bezier(0.215, 0.610, 0.355, 1);
-}
-
-/* The "Visible" State */
-.reboot-btn.visible {
-    max-width: 100px;
-    padding: 0 1.2rem;
-    margin-left: 0.8rem;
-    opacity: 1;
-}
-
-.reboot-btn:hover {
-    background: rgba(255, 59, 48, 0.4);
-    box-shadow: 0 0 15px rgba(255, 59, 48, 0.3);
-}
-
-/* Optional: round the corners differently when they are side-by-side */
-.model-row.has-reboot .model-select {
-    border-top-right-radius: 4px;
-    border-bottom-right-radius: 4px;
-}
-
-.model-row.has-reboot .reboot-btn {
-    border-top-left-radius: 4px;
-    border-bottom-left-radius: 4px;
-}
-
-.device-uid-hint {
-    color: rgba(255, 255, 255, 0.4);
-    font-size: 0.75rem;
-    margin-top: 0.5rem;
-}
+/* The model selector and device-name field (with their reboot-required
+   buttons) moved to /advanced.html and /device-name.html - their styles live
+   in css/advanced.css now. */
 
 /* AP Mode Info Box */
 #apModeInfo {

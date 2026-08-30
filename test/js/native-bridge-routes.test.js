@@ -38,19 +38,23 @@ function staticRouteKeys(serverJsSource) {
     return routes;
 }
 
-test('every data/index.html local asset has a route in the native bridge', () => {
-    const html = fs.readFileSync(path.join(REPO_ROOT, 'data', 'index.html'), 'utf8');
+// Every browser-served HTML page in data/ (each needs its <script>/<link>
+// assets routed too, not just index.html).
+const HTML_PAGES = ['index.html', 'advanced.html', 'device-name.html', 'wifi-setup.html'];
+
+test('every data/ HTML page local asset has a route in the native bridge', () => {
     const serverJs = fs.readFileSync(
         path.join(REPO_ROOT, 'tools', 'native-bridge', 'server.js'), 'utf8');
-
-    const referenced = referencedLocalPaths(html);
     const registered = staticRouteKeys(serverJs);
 
-    for (const p of referenced) {
-        assert.ok(
-            registered.has(p),
-            `${p} is referenced by data/index.html but tools/native-bridge/server.js has no ` +
-            'STATIC_ROUTES entry for it - it will 404 in the native visualizer setup'
-        );
+    for (const page of HTML_PAGES) {
+        const html = fs.readFileSync(path.join(REPO_ROOT, 'data', page), 'utf8');
+        for (const p of referencedLocalPaths(html)) {
+            assert.ok(
+                registered.has(p),
+                `${p} is referenced by data/${page} but tools/native-bridge/server.js has no ` +
+                'STATIC_ROUTES entry for it - it will 404 in the native visualizer setup'
+            );
+        }
     }
 });

@@ -48,10 +48,42 @@ const STATIC_ROUTES = {
     '/js/controls-logic.js': { file: 'js/controls-logic.js', type: 'application/javascript' },
     '/js/controls.js': { file: 'js/controls.js', type: 'application/javascript' },
     '/js/wifi.js': { file: 'js/wifi.js', type: 'application/javascript' },
+    '/js/advanced-logic.js': { file: 'js/advanced-logic.js', type: 'application/javascript' },
+    '/js/advanced.js': { file: 'js/advanced.js', type: 'application/javascript' },
+    '/js/device-name.js': { file: 'js/device-name.js', type: 'application/javascript' },
     '/css/common.css': { file: 'css/common.css', type: 'text/css' },
     '/css/controls.css': { file: 'css/controls.css', type: 'text/css' },
     '/css/wifi.css': { file: 'css/wifi.css', type: 'text/css' },
+    '/css/advanced.css': { file: 'css/advanced.css', type: 'text/css' },
+    '/advanced.html': { file: 'advanced.html', type: 'text/html' },
+    '/device-name.html': { file: 'device-name.html', type: 'text/html' },
 };
+
+// Canned log + diagnostics payloads for the Advanced page. The native core has
+// no LittleFS log file and no real heap/temp sensors, so the bridge answers
+// these the same way it special-cases /fps and /brightness below.
+const SIM_LOG = [
+    '12 | INF | Andromeda native runtime up',
+    '48 | INF | Geometry initialised',
+    '1502 | WRN | WiFi RSSI low (simulated)',
+    '3310 | INF | Effect rotation started',
+    '9021 | ERR | Simulated error line for styling',
+].join('\n');
+
+function simMetricsJson() {
+    return JSON.stringify({
+        uptimeMs: Math.floor(process.uptime() * 1000),
+        heapFree: 190 * 1024,
+        heapMin: 150 * 1024,
+        heapTotal: 320 * 1024,
+        tempC: 41.5,
+        fps: lastFps === null ? null : lastFps,
+        rssi: -55,
+        cpuMhz: 240,
+        chip: 'native',
+        resetReason: 1,
+    });
+}
 
 // The visualizer page lives under tools/native-bridge/web/, not data/ - that
 // directory is bundled verbatim into the LittleFS image uploaded to real
@@ -168,6 +200,22 @@ const server = http.createServer((req, res) => {
     if (url === '/brightness') {
         res.writeHead(200, { 'Content-Type': 'text/plain' });
         res.end(lastBrightness === null ? '' : String(lastBrightness));
+        return;
+    }
+    if (url === '/log0.txt' || url === '/logs') {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end(SIM_LOG);
+        return;
+    }
+    if (url === '/log1.txt') {
+        // Mirrors a fresh device: no rotated file yet.
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Not Found');
+        return;
+    }
+    if (url === '/metrics') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(simMetricsJson());
         return;
     }
 
