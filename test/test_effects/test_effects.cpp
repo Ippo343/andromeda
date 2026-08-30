@@ -699,6 +699,85 @@ void test_multi_pendulum_initial_reach_uses_narrower_screen_dimension()
 }
 
 // ---------------------------------------------------------------------------
+// BouncingBallGlow
+// ---------------------------------------------------------------------------
+
+void test_bouncing_ball_glow_evaluates()
+{
+    BouncingBallGlow fx;
+    exerciseEvaluate(fx, 10000);
+    exerciseEvaluate(fx, 10016);  // second frame steps the box with a real dt
+}
+
+void test_bouncing_ball_glow_brighter_near_a_ball_than_far_away()
+{
+    BouncingBallGlow fx;
+    fx.precompute(1000);
+
+    Vec2f ball0 = fx.boxForTest().pos[0];
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    Led nearLed = strip.leds[0];
+    nearLed.cartesian.x = (int16_t)ball0.x + 5;
+    nearLed.cartesian.y = (int16_t)ball0.y;
+
+    Led farLed = strip.leds[0];
+    short farCoord = GEOMETRY.getScreenRadius() * 10;
+    farLed.cartesian.x = farCoord;
+    farLed.cartesian.y = farCoord;
+
+    CRGB near = fx.evaluate(&strip, &nearLed, 0, 1000);
+    CRGB far = fx.evaluate(&strip, &farLed, 0, 1000);
+    TEST_ASSERT_TRUE((int)near.r + near.g + near.b > (int)far.r + far.g + far.b);
+}
+
+void test_bouncing_ball_glow_does_not_set_rotate_space_hint()
+{
+    // Deliberate: the box is axis-aligned with the device so the balls hit a
+    // square's sides square-on.
+    BouncingBallGlow fx;
+    TEST_ASSERT_FALSE(fx.controlHints & ControlHints::ROTATE_SPACE);
+}
+
+void test_bouncing_ball_glow_balls_stay_inside_the_render_area()
+{
+    randomSeed(9);
+    BouncingBallGlow fx;
+    float halfW = (float)GEOMETRY.getScreenHalfWidth();
+    float halfH = (float)GEOMETRY.getScreenHalfHeight();
+    milliseconds_t t = 1000;
+    for (int frame = 0; frame < 500; frame++)
+    {
+        t += 16;
+        fx.precompute(t);
+        for (auto& p : fx.boxForTest().pos)
+        {
+            TEST_ASSERT_TRUE(fabsf(p.x) <= halfW + 1e-3f);
+            TEST_ASSERT_TRUE(fabsf(p.y) <= halfH + 1e-3f);
+        }
+    }
+}
+
+void test_bouncing_ball_glow_evaluates_on_l10_and_multi_strip_models()
+{
+    for (ModelId model : {ModelId::L10_MK2, ModelId::ANDROMEDA_MK1})
+    {
+        GEOMETRY.initializeForTest(model);
+        BouncingBallGlow fx;
+        fx.precompute(0);
+        fx.precompute(16);
+        for (size_t iStrip = 0; iStrip < GEOMETRY.getNumStrips(); iStrip++)
+        {
+            LedStrip& strip = GEOMETRY.getStrip(iStrip);
+            for (size_t i = 0; i < strip.num_leds; i += 5)
+            {
+                CRGB c = fx.evaluate(&strip, &strip.leds[i], i, 16);
+                (void)c;
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // HexagonalRippleGalaxy
 // ---------------------------------------------------------------------------
 
@@ -994,16 +1073,16 @@ void test_get_random_effect_produces_valid_effects()
         namesSeen.insert(fx->GetName());
         delete fx;
     }
-    // 14 possible effects; 300 draws (never repeating consecutively) should
+    // 15 possible effects; 300 draws (never repeating consecutively) should
     // realistically hit all of them.
-    TEST_ASSERT_TRUE(namesSeen.size() >= 11);
+    TEST_ASSERT_TRUE(namesSeen.size() >= 12);
 }
 
 // ---------------------------------------------------------------------------
 // EFFECT_REGISTRY / createEffect()
 // ---------------------------------------------------------------------------
 
-void test_num_effects_matches_registry_length() { TEST_ASSERT_EQUAL_INT(14, NUM_EFFECTS); }
+void test_num_effects_matches_registry_length() { TEST_ASSERT_EQUAL_INT(15, NUM_EFFECTS); }
 
 void test_create_effect_matches_registry_name_for_every_entry()
 {
@@ -1073,6 +1152,12 @@ int main(int argc, char** argv)
     RUN_TEST(test_multi_pendulum_brighter_near_an_emitter_than_far_away);
     RUN_TEST(test_multi_pendulum_sets_rotate_space_hint);
     RUN_TEST(test_multi_pendulum_initial_reach_uses_narrower_screen_dimension);
+
+    RUN_TEST(test_bouncing_ball_glow_evaluates);
+    RUN_TEST(test_bouncing_ball_glow_brighter_near_a_ball_than_far_away);
+    RUN_TEST(test_bouncing_ball_glow_does_not_set_rotate_space_hint);
+    RUN_TEST(test_bouncing_ball_glow_balls_stay_inside_the_render_area);
+    RUN_TEST(test_bouncing_ball_glow_evaluates_on_l10_and_multi_strip_models);
 
     RUN_TEST(test_hexagonal_ripple_galaxy_evaluates);
     RUN_TEST(test_hexagonal_ripple_galaxy_color_varies_with_time);

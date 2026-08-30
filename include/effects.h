@@ -2,6 +2,7 @@
 
 #include "effects-base.h"
 #include "effects/bezier-swarm.h"
+#include "effects/bouncing-ball-glow.h"
 #include "effects/cartesian-moodlight.h"
 #include "effects/electric-sparks.h"
 #include "effects/error-effect.h"
@@ -28,6 +29,7 @@
 enum class EffectId : uint8_t
 {
     BezierSwarm,
+    BouncingBallGlow,
     CartesianMoodlight,
     ElectricSparks,
     HeatDiffusionRing,
