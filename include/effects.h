@@ -1,6 +1,7 @@
 #pragma once
 
 #include "effects-base.h"
+#include "effects/angular-palette-rotation.h"
 #include "effects/bezier-swarm.h"
 #include "effects/bouncing-ball-glow.h"
 #include "effects/cartesian-moodlight.h"
@@ -28,6 +29,7 @@
 // and ErrorEffect is an internal fallback, not a user-selectable effect.
 enum class EffectId : uint8_t
 {
+    AngularPaletteRotation,
     BezierSwarm,
     BouncingBallGlow,
     CartesianMoodlight,

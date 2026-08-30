@@ -1,6 +1,7 @@
 #include "effects.h"
 
 const EffectInfo EFFECT_REGISTRY[] = {
+    {EffectId::AngularPaletteRotation, "Angular Palette Rotation"},
     {EffectId::BezierSwarm, "Bezier Swarm"},
     {EffectId::BouncingBallGlow, "Bouncing Ball Glow"},
     {EffectId::CartesianMoodlight, "Cartesian Moodlight"},
@@ -25,6 +26,8 @@ AbstractEffect* createEffect(EffectId id)
 {
     switch (id)
     {
+        case EffectId::AngularPaletteRotation:
+            return new AngularPaletteRotation();
         case EffectId::BezierSwarm:
             return new BezierSwarm();
         case EffectId::BouncingBallGlow:
