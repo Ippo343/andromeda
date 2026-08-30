@@ -46,10 +46,10 @@ struct DeviceState
 // StaticJsonDocument capacity for the schema below plus the full model and
 // effect registries. Fixed, zero-heap - bump this if fields/models/effects
 // are added. NOTE: buf[JSON_CAPACITY] plus a StaticJsonDocument<JSON_CAPACITY>
-// both land on the "WebServer" task stack (8192 bytes, see Comms::
+// both land on the "WebServer" task stack (16384 bytes, see Comms::
 // createWebServerTask) via broadcastStateIfDirty(); keep 2*JSON_CAPACITY well
 // under that or the task stack-overflows at runtime.
-constexpr size_t JSON_CAPACITY = 3072;
+constexpr size_t JSON_CAPACITY = 4096;
 
 // Serializes `state` plus the full MODEL_REGISTRY into `outBuffer` (of size
 // `outBufferSize`). Returns the number of bytes written (0 on failure, e.g.

@@ -102,7 +102,7 @@ bool Comms::startStationMode()
 
 void Comms::createWebServerTask()
 {
-    xTaskCreatePinnedToCore(webServerTask, "WebServer", 8192, this, 1, &webServerTaskHandle, 0);
+    xTaskCreatePinnedToCore(webServerTask, "WebServer", 16384, this, 1, &webServerTaskHandle, 0);
 }
 
 void Comms::webServerTask(void* parameter)
