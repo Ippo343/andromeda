@@ -284,6 +284,73 @@ void test_heat_diffusion_ring_evaluates_on_l10_and_multi_strip_models()
 }
 
 // ---------------------------------------------------------------------------
+// StandingWaveRing
+// ---------------------------------------------------------------------------
+
+void test_standing_wave_ring_runs_full_frame_cycle()
+{
+    StandingWaveRing fx;
+    exerciseEvaluate(fx, 5000);
+    exerciseEvaluate(fx, 5016);
+}
+
+void test_standing_wave_ring_pluck_propagates_to_neighbours()
+{
+    StandingWaveRing fx;
+    fx.precompute(1000);  // lazy seed + first step
+
+    std::vector<float>& u = fx.fieldForTest(0, 0);
+    std::vector<float>& v = fx.fieldForTest(0, 1);
+    for (auto& x : u) x = 0.0f;
+    for (auto& x : v) x = 0.0f;
+    size_t mid = u.size() / 2;
+    u[mid] = 100.0f;
+
+    for (int frame = 1; frame < 12; frame++) fx.precompute(1000 + frame * 16);
+
+    // The bump has moved energy outward from the seed cell.
+    TEST_ASSERT_TRUE(fabsf(u[mid - 3]) + fabsf(u[mid + 3]) > 0.5f);
+}
+
+void test_standing_wave_ring_stays_bounded_over_long_run()
+{
+    randomSeed(6);
+    StandingWaveRing fx;
+    milliseconds_t t = 1000;
+    for (int frame = 0; frame < 3000; frame++)
+    {
+        t += 16;
+        fx.precompute(t);
+    }
+    std::vector<float>& u = fx.fieldForTest(0, 0);
+    for (float x : u)
+    {
+        TEST_ASSERT_TRUE(isfinite(x));
+        TEST_ASSERT_TRUE(fabsf(x) < 5000.0f);
+    }
+}
+
+void test_standing_wave_ring_evaluates_on_l10_and_multi_strip_models()
+{
+    for (ModelId model : {ModelId::L10_MK2, ModelId::ANDROMEDA_MK1})
+    {
+        GEOMETRY.initializeForTest(model);
+        StandingWaveRing fx;
+        fx.precompute(0);
+        fx.precompute(16);
+        for (size_t iStrip = 0; iStrip < GEOMETRY.getNumStrips(); iStrip++)
+        {
+            LedStrip& strip = GEOMETRY.getStrip(iStrip);
+            for (size_t i = 0; i < strip.num_leds; i += 5)
+            {
+                CRGB c = fx.evaluate(&strip, &strip.leds[i], i, 16);
+                (void)c;
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // SaturationGlow
 // ---------------------------------------------------------------------------
 
@@ -1132,16 +1199,16 @@ void test_get_random_effect_produces_valid_effects()
         namesSeen.insert(fx->GetName());
         delete fx;
     }
-    // 16 possible effects; 300 draws (never repeating consecutively) should
+    // 17 possible effects; 300 draws (never repeating consecutively) should
     // realistically hit all of them.
-    TEST_ASSERT_TRUE(namesSeen.size() >= 13);
+    TEST_ASSERT_TRUE(namesSeen.size() >= 14);
 }
 
 // ---------------------------------------------------------------------------
 // EFFECT_REGISTRY / createEffect()
 // ---------------------------------------------------------------------------
 
-void test_num_effects_matches_registry_length() { TEST_ASSERT_EQUAL_INT(16, NUM_EFFECTS); }
+void test_num_effects_matches_registry_length() { TEST_ASSERT_EQUAL_INT(17, NUM_EFFECTS); }
 
 void test_create_effect_matches_registry_name_for_every_entry()
 {
@@ -1182,6 +1249,11 @@ int main(int argc, char** argv)
     RUN_TEST(test_saturation_glow_evaluate_matches_precomputed_color);
     RUN_TEST(test_saturation_glow_amplitude_keeps_center_wave_in_range);
     RUN_TEST(test_saturation_glow_color_varies_over_time);
+
+    RUN_TEST(test_standing_wave_ring_runs_full_frame_cycle);
+    RUN_TEST(test_standing_wave_ring_pluck_propagates_to_neighbours);
+    RUN_TEST(test_standing_wave_ring_stays_bounded_over_long_run);
+    RUN_TEST(test_standing_wave_ring_evaluates_on_l10_and_multi_strip_models);
 
     RUN_TEST(test_palette_wave_sets_rotate_space_hint);
     RUN_TEST(test_palette_wave_color_varies_with_position);
