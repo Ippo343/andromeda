@@ -4,6 +4,7 @@ const EffectInfo EFFECT_REGISTRY[] = {
     {EffectId::BezierSwarm, "Bezier Swarm"},
     {EffectId::CartesianMoodlight, "Cartesian Moodlight"},
     {EffectId::ElectricSparks, "Electric Sparks"},
+    {EffectId::HeatDiffusionRing, "Heat Diffusion Ring"},
     {EffectId::HexagonalRippleGalaxy, "Hexagonal Ripple Galaxy"},
     {EffectId::IndividualStripDrift, "Individual Strip Drift"},
     {EffectId::IndividualStripMoodlight, "Individual Strip Moodlight"},
@@ -29,6 +30,8 @@ AbstractEffect* createEffect(EffectId id)
             return new CartesianMoodlight();
         case EffectId::ElectricSparks:
             return new ElectricSparks();
+        case EffectId::HeatDiffusionRing:
+            return new HeatDiffusionRing();
         case EffectId::HexagonalRippleGalaxy:
             return new HexagonalRippleGalaxy();
         case EffectId::IndividualStripDrift:

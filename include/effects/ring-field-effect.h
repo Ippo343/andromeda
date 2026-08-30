@@ -115,6 +115,14 @@ class RingFieldEffect : public AbstractEffect
 
     CRGBPalette256 palette_;
 
+#ifdef UNIT_TEST
+   public:
+    // Test-only: direct field access so native tests can plant a known state and
+    // assert on the subclass's update rule without going through the random
+    // injector or the lazy seed.
+    std::vector<float>& fieldForTest(size_t strip, uint8_t c) { return ch_[strip][c]; }
+#endif
+
    private:
     // A periodic Laplacian needs at least 3 distinct cells; strips shorter than
     // that (e.g. Andromeda's short centre strip) are left inert rather than

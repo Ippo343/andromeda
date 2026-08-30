@@ -5,6 +5,7 @@
 #include "effects/cartesian-moodlight.h"
 #include "effects/electric-sparks.h"
 #include "effects/error-effect.h"
+#include "effects/heat-diffusion-ring.h"
 #include "effects/hexagonal-ripple-galaxy.h"
 #include "effects/individual-strip-drift.h"
 #include "effects/individual-strip-moodlight.h"
@@ -29,6 +30,7 @@ enum class EffectId : uint8_t
     BezierSwarm,
     CartesianMoodlight,
     ElectricSparks,
+    HeatDiffusionRing,
     HexagonalRippleGalaxy,
     IndividualStripDrift,
     IndividualStripMoodlight,
