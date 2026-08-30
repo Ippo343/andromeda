@@ -14,11 +14,15 @@ class StaticColor : public AbstractEffect
     CRGB currentColor;  // the color we are currently displaying, which will blend towards the
                         // targetColor
 
-    // Frame-rate independent blend towards targetColor: fraction of the remaining distance
-    // closed per second, converted each frame into a CRGB::blend() amount via dt - see
-    // accumulateFadeAmount(). Chosen to match the old fixed blend(cur, target, 1) step at a
-    // ~60fps reference.
-    constexpr static float BLEND_RATE_PER_SECOND = 0.235f;
+    // Frame-rate independent blend towards targetColor. The approach is modelled as
+    // exponential decay of the remaining distance: after SETTLE_SECONDS the displayed colour
+    // is within ~1/255 of the target, i.e. visually indistinguishable. accumulateFadeAmount()
+    // turns the rate into a per-frame CRGB::blend() amount via dt, so a colour change takes
+    // the same wall-clock time to converge regardless of frame rate.
+    constexpr static float SETTLE_SECONDS = 0.8f;
+    // ln(255) ~= 5.54: the decay constant that closes all but 1/255 of the gap in
+    // SETTLE_SECONDS. (The old value of 0.235f settled in ~24s, which felt like a crawl.)
+    constexpr static float BLEND_RATE_PER_SECOND = 5.541f / SETTLE_SECONDS;
     float blendDebt = 0;
 
     // Elapsed time (dt) since the previous frame, same lastT/hasLastT idiom as
