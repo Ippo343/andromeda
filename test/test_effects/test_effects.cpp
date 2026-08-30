@@ -356,6 +356,65 @@ void test_palette_wave_color_varies_with_position()
 }
 
 // ---------------------------------------------------------------------------
+// AngularPaletteRotation
+// ---------------------------------------------------------------------------
+
+void test_angular_palette_rotation_evaluates()
+{
+    AngularPaletteRotation fx;
+    exerciseEvaluate(fx, 3000);
+}
+
+void test_angular_palette_rotation_color_varies_with_angle()
+{
+    randomSeed(4);
+    AngularPaletteRotation fx;
+    fx.precompute(0);
+    LedStrip& strip = GEOMETRY.getStrip(0);
+
+    Led a = strip.leds[0];
+    a.polar.cdegrees = 0;
+    Led b = strip.leds[0];
+    b.polar.cdegrees = 12000;  // 120 degrees round
+
+    TEST_ASSERT_FALSE(fx.evaluate(&strip, &a, 0, 0) == fx.evaluate(&strip, &b, 0, 0));
+}
+
+void test_angular_palette_rotation_sweeps_over_time()
+{
+    randomSeed(4);
+    AngularPaletteRotation fx;
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    Led led = strip.leds[0];
+    led.polar.cdegrees = 0;  // colour index here is exactly the rotation offset
+
+    fx.precompute(0);
+    CRGB early = fx.evaluate(&strip, &led, 0, 0);
+    fx.precompute(20000);
+    CRGB later = fx.evaluate(&strip, &led, 0, 20000);
+    TEST_ASSERT_FALSE(early == later);
+}
+
+void test_angular_palette_rotation_evaluates_on_l10_and_multi_strip_models()
+{
+    for (ModelId model : {ModelId::L10_MK2, ModelId::ANDROMEDA_MK1})
+    {
+        GEOMETRY.initializeForTest(model);
+        AngularPaletteRotation fx;
+        fx.precompute(1000);
+        for (size_t iStrip = 0; iStrip < GEOMETRY.getNumStrips(); iStrip++)
+        {
+            LedStrip& strip = GEOMETRY.getStrip(iStrip);
+            for (size_t i = 0; i < strip.num_leds; i += 5)
+            {
+                CRGB c = fx.evaluate(&strip, &strip.leds[i], i, 1000);
+                (void)c;
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // NinjaStar
 // ---------------------------------------------------------------------------
 
@@ -1073,16 +1132,16 @@ void test_get_random_effect_produces_valid_effects()
         namesSeen.insert(fx->GetName());
         delete fx;
     }
-    // 15 possible effects; 300 draws (never repeating consecutively) should
+    // 16 possible effects; 300 draws (never repeating consecutively) should
     // realistically hit all of them.
-    TEST_ASSERT_TRUE(namesSeen.size() >= 12);
+    TEST_ASSERT_TRUE(namesSeen.size() >= 13);
 }
 
 // ---------------------------------------------------------------------------
 // EFFECT_REGISTRY / createEffect()
 // ---------------------------------------------------------------------------
 
-void test_num_effects_matches_registry_length() { TEST_ASSERT_EQUAL_INT(15, NUM_EFFECTS); }
+void test_num_effects_matches_registry_length() { TEST_ASSERT_EQUAL_INT(16, NUM_EFFECTS); }
 
 void test_create_effect_matches_registry_name_for_every_entry()
 {
@@ -1126,6 +1185,11 @@ int main(int argc, char** argv)
 
     RUN_TEST(test_palette_wave_sets_rotate_space_hint);
     RUN_TEST(test_palette_wave_color_varies_with_position);
+
+    RUN_TEST(test_angular_palette_rotation_evaluates);
+    RUN_TEST(test_angular_palette_rotation_color_varies_with_angle);
+    RUN_TEST(test_angular_palette_rotation_sweeps_over_time);
+    RUN_TEST(test_angular_palette_rotation_evaluates_on_l10_and_multi_strip_models);
 
     RUN_TEST(test_ninja_star_evaluates);
     RUN_TEST(test_ninja_star_pow16_lut_fixed_points_and_shrinks_midrange);
