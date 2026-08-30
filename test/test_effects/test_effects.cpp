@@ -85,6 +85,26 @@ void test_static_color_blend_scales_with_dt_not_call_count()
     TEST_ASSERT_TRUE(slowTicksFx.currentColor.r > fastTicksFx.currentColor.r + 10);
 }
 
+// Issue #106: a colour change must be visually indistinguishable from the target within ~1s.
+// Drive a full black->white step at ~60fps for one second and require every channel to have
+// closed all but a couple of units of the gap.
+void test_static_color_converges_within_one_second()
+{
+    StaticColor fx(CRGB(255, 255, 255));
+    fx.currentColor = CRGB(0, 0, 0);
+
+    milliseconds_t t = 0;
+    for (int i = 0; i < 60; i++)
+    {
+        t += 16;  // ~60fps
+        fx.precompute(t);
+    }
+
+    TEST_ASSERT_TRUE(fx.currentColor.r >= 253);
+    TEST_ASSERT_TRUE(fx.currentColor.g >= 253);
+    TEST_ASSERT_TRUE(fx.currentColor.b >= 253);
+}
+
 // ---------------------------------------------------------------------------
 // IndividualStripMoodlight
 // ---------------------------------------------------------------------------
@@ -929,6 +949,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_static_color_blends_toward_target);
     RUN_TEST(test_static_color_default_constructor);
     RUN_TEST(test_static_color_blend_scales_with_dt_not_call_count);
+    RUN_TEST(test_static_color_converges_within_one_second);
 
     RUN_TEST(test_individual_strip_moodlight_evaluates);
 
