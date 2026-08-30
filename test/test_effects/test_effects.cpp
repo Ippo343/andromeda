@@ -209,6 +209,81 @@ void test_electric_sparks_evaluate_color_tracks_energy_level()
 }
 
 // ---------------------------------------------------------------------------
+// HeatDiffusionRing
+// ---------------------------------------------------------------------------
+
+void test_heat_diffusion_ring_runs_full_frame_cycle()
+{
+    HeatDiffusionRing fx;
+    exerciseEvaluate(fx, 5000);
+    exerciseEvaluate(fx, 5016);  // second frame exercises the diffusion step with a real dt
+}
+
+void test_heat_diffusion_ring_spreads_a_hot_spot_to_neighbours()
+{
+    HeatDiffusionRing fx;
+    fx.precompute(1000);  // lazily seeds the field + takes the first step
+
+    std::vector<float>& T = fx.fieldForTest(0, 0);
+    for (auto& v : T) v = 0.0f;
+    size_t mid = T.size() / 2;
+    T[mid] = 255.0f;
+
+    fx.precompute(1016);  // one diffusion step on our planted spike
+
+    TEST_ASSERT_TRUE(T[mid] < 255.0f);
+    TEST_ASSERT_TRUE(T[mid - 1] > 0.0f);
+    TEST_ASSERT_TRUE(T[mid + 1] > 0.0f);
+}
+
+void test_heat_diffusion_ring_cools_a_saturated_strip_over_time()
+{
+    randomSeed(5);
+    HeatDiffusionRing fx;
+    fx.precompute(1000);
+
+    std::vector<float>& T = fx.fieldForTest(0, 0);
+    for (auto& v : T) v = 255.0f;  // every cell maxed, so the injector can't add energy
+    float before = 0;
+    for (float v : T) before += v;
+
+    milliseconds_t t = 1000;
+    for (int frame = 0; frame < 300; frame++)
+    {
+        t += 16;
+        fx.precompute(t);
+    }
+
+    float after = 0;
+    for (float v : T) after += v;
+    TEST_ASSERT_TRUE(after < before * 0.5f);
+}
+
+// A ring effect is designed for the single-strip L10 but must stay well-behaved
+// on every model: each strip runs its own periodic field, and strips shorter
+// than 3 LEDs (Andromeda's centre strip) must be left alone rather than indexed
+// out of bounds.
+void test_heat_diffusion_ring_evaluates_on_l10_and_multi_strip_models()
+{
+    for (ModelId model : {ModelId::L10_MK2, ModelId::ANDROMEDA_MK1})
+    {
+        GEOMETRY.initializeForTest(model);
+        HeatDiffusionRing fx;
+        fx.precompute(0);
+        fx.precompute(16);
+        for (size_t iStrip = 0; iStrip < GEOMETRY.getNumStrips(); iStrip++)
+        {
+            LedStrip& strip = GEOMETRY.getStrip(iStrip);
+            for (size_t i = 0; i < strip.num_leds; i += 5)
+            {
+                CRGB c = fx.evaluate(&strip, &strip.leds[i], i, 16);
+                (void)c;
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // SaturationGlow
 // ---------------------------------------------------------------------------
 
@@ -919,16 +994,16 @@ void test_get_random_effect_produces_valid_effects()
         namesSeen.insert(fx->GetName());
         delete fx;
     }
-    // 13 possible effects; 300 draws (never repeating consecutively) should
+    // 14 possible effects; 300 draws (never repeating consecutively) should
     // realistically hit all of them.
-    TEST_ASSERT_TRUE(namesSeen.size() >= 10);
+    TEST_ASSERT_TRUE(namesSeen.size() >= 11);
 }
 
 // ---------------------------------------------------------------------------
 // EFFECT_REGISTRY / createEffect()
 // ---------------------------------------------------------------------------
 
-void test_num_effects_matches_registry_length() { TEST_ASSERT_EQUAL_INT(13, NUM_EFFECTS); }
+void test_num_effects_matches_registry_length() { TEST_ASSERT_EQUAL_INT(14, NUM_EFFECTS); }
 
 void test_create_effect_matches_registry_name_for_every_entry()
 {
@@ -959,6 +1034,11 @@ int main(int argc, char** argv)
     RUN_TEST(test_electric_sparks_diffusion_spreads_energy_to_neighbors);
     RUN_TEST(test_electric_sparks_energy_decays_to_near_zero_without_further_injection);
     RUN_TEST(test_electric_sparks_evaluate_color_tracks_energy_level);
+
+    RUN_TEST(test_heat_diffusion_ring_runs_full_frame_cycle);
+    RUN_TEST(test_heat_diffusion_ring_spreads_a_hot_spot_to_neighbours);
+    RUN_TEST(test_heat_diffusion_ring_cools_a_saturated_strip_over_time);
+    RUN_TEST(test_heat_diffusion_ring_evaluates_on_l10_and_multi_strip_models);
 
     RUN_TEST(test_saturation_glow_evaluates);
     RUN_TEST(test_saturation_glow_evaluate_matches_precomputed_color);
