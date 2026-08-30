@@ -1,6 +1,7 @@
 #include "comms.h"
 
 #include <DNSServer.h>
+#include <esp_system.h>
 
 #include "ws-command-parser.h"
 
@@ -160,6 +161,47 @@ void Comms::setupRoutes()
 
     server.on("/wifi", HTTP_GET,
               [](AsyncWebServerRequest* r) { r->send(LittleFS, "/wifi-setup.html", "text/html"); });
+
+    // Log files, served straight from LittleFS with no handler logic - the
+    // logger already keeps the log as these two rotating files. Keep the
+    // literals in sync with LOG_FILE_CUR / LOG_FILE_OLD (utils.h). /log1.txt
+    // 404s until the first 32 KB rotation; the Advanced page treats that as
+    // empty.
+    STATIC_FILE_ROUTE("/log0.txt", "text/plain");
+    STATIC_FILE_ROUTE("/log1.txt", "text/plain");
+    server.on("/logs", HTTP_GET,
+              [](AsyncWebServerRequest* r) { r->send(LittleFS, LOG_FILE_CUR, "text/plain"); });
+
+    server.on(
+        "/metrics", HTTP_GET,
+        [](AsyncWebServerRequest* r)
+        {
+            // fps() is NaN before the first frame, and temperatureRead() can be
+            // NaN on a bad/early sensor read - both must serialize as JSON null,
+            // not the bare token "nan" which would make the whole payload
+            // unparseable. Self-comparison is the header-free NaN test.
+            float fps = PerformanceMonitor::Instance().fps();
+            char fpsBuf[16];
+            if (fps != fps) { strcpy(fpsBuf, "null"); }
+            else { snprintf(fpsBuf, sizeof(fpsBuf), "%.1f", fps); }
+
+            float tempC = temperatureRead();
+            char tempBuf[16];
+            if (tempC != tempC) { strcpy(tempBuf, "null"); }
+            else { snprintf(tempBuf, sizeof(tempBuf), "%.1f", tempC); }
+
+            char json[320];
+            snprintf(json, sizeof(json),
+                     "{\"uptimeMs\":%lu,\"heapFree\":%u,\"heapMin\":%u,\"heapTotal\":%u,"
+                     "\"tempC\":%s,\"fps\":%s,\"rssi\":%d,\"cpuMhz\":%u,"
+                     "\"chip\":\"%s\",\"resetReason\":%d}",
+                     static_cast<unsigned long>(millis()), static_cast<unsigned>(ESP.getFreeHeap()),
+                     static_cast<unsigned>(ESP.getMinFreeHeap()),
+                     static_cast<unsigned>(ESP.getHeapSize()), tempBuf, fpsBuf,
+                     static_cast<int>(WiFi.RSSI()), static_cast<unsigned>(ESP.getCpuFreqMHz()),
+                     ESP.getChipModel(), static_cast<int>(esp_reset_reason()));
+            r->send(200, "application/json", json);
+        });
 
     // Shared Config & Monitoring
     server.on("/fps", HTTP_GET, [](AsyncWebServerRequest* r)

@@ -96,6 +96,10 @@ inline void setCpuFrequencyMhz(uint32_t) {}
 // command) - no-op on the host, there is nothing to restart.
 inline void esp_restart() {}
 
+// esp32-hal chip temperature sensor, read by comms.cpp's /metrics handler.
+// Fixed plausible value on the host.
+inline float temperatureRead() { return 42.0f; }
+
 // The Arduino core's global "ESP" object (esp32-hal-*.h) - comms.cpp calls
 // ESP.restart() from tasks that never actually run natively (see
 // freertos/FreeRTOS.h's xTaskCreate mock), but the call still needs to
@@ -104,5 +108,12 @@ class EspClass
 {
    public:
     void restart() {}
+
+    // Diagnostics read by comms.cpp's /metrics handler - fixed host values.
+    uint32_t getFreeHeap() { return 200000; }
+    uint32_t getMinFreeHeap() { return 180000; }
+    uint32_t getHeapSize() { return 320000; }
+    uint32_t getCpuFreqMHz() { return 240; }
+    const char* getChipModel() { return "native"; }
 };
 inline EspClass ESP;
