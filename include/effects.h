@@ -11,6 +11,7 @@
 #include "effects/hexagonal-ripple-galaxy.h"
 #include "effects/individual-strip-drift.h"
 #include "effects/individual-strip-moodlight.h"
+#include "effects/jelly-frame.h"
 #include "effects/multi-pendulum.h"
 #include "effects/ninja-star.h"
 #include "effects/palette-wave.h"
@@ -39,6 +40,7 @@ enum class EffectId : uint8_t
     HexagonalRippleGalaxy,
     IndividualStripDrift,
     IndividualStripMoodlight,
+    JellyFrame,
     MultiPendulum,
     NinjaStar,
     PaletteWave,

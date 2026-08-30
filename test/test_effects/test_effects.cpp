@@ -284,6 +284,71 @@ void test_heat_diffusion_ring_evaluates_on_l10_and_multi_strip_models()
 }
 
 // ---------------------------------------------------------------------------
+// JellyFrame
+// ---------------------------------------------------------------------------
+
+void test_jelly_frame_runs_full_frame_cycle()
+{
+    JellyFrame fx;
+    exerciseEvaluate(fx, 5000);
+    exerciseEvaluate(fx, 5016);
+}
+
+void test_jelly_frame_color_tracks_displacement()
+{
+    JellyFrame fx;
+    fx.precompute(1000);  // caches baseHue_ and lazily seeds
+
+    std::vector<float>& u = fx.fieldForTest(0, 0);
+    for (auto& x : u) x = 0.0f;
+    LedStrip& strip = GEOMETRY.getStrip(0);
+
+    u[1] = 60.0f;
+    CRGB crest = fx.evaluate(&strip, &strip.leds[1], 1, 1000);
+    u[2] = -60.0f;
+    CRGB trough = fx.evaluate(&strip, &strip.leds[2], 2, 1000);
+    TEST_ASSERT_FALSE(crest == trough);
+}
+
+void test_jelly_frame_stays_bounded_over_long_run()
+{
+    randomSeed(6);
+    JellyFrame fx;
+    milliseconds_t t = 1000;
+    for (int frame = 0; frame < 3000; frame++)
+    {
+        t += 16;
+        fx.precompute(t);
+    }
+    std::vector<float>& u = fx.fieldForTest(0, 0);
+    for (float x : u)
+    {
+        TEST_ASSERT_TRUE(isfinite(x));
+        TEST_ASSERT_TRUE(fabsf(x) < 5000.0f);
+    }
+}
+
+void test_jelly_frame_evaluates_on_l10_and_multi_strip_models()
+{
+    for (ModelId model : {ModelId::L10_MK2, ModelId::ANDROMEDA_MK1})
+    {
+        GEOMETRY.initializeForTest(model);
+        JellyFrame fx;
+        fx.precompute(0);
+        fx.precompute(16);
+        for (size_t iStrip = 0; iStrip < GEOMETRY.getNumStrips(); iStrip++)
+        {
+            LedStrip& strip = GEOMETRY.getStrip(iStrip);
+            for (size_t i = 0; i < strip.num_leds; i += 5)
+            {
+                CRGB c = fx.evaluate(&strip, &strip.leds[i], i, 16);
+                (void)c;
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // StandingWaveRing
 // ---------------------------------------------------------------------------
 
@@ -1199,16 +1264,16 @@ void test_get_random_effect_produces_valid_effects()
         namesSeen.insert(fx->GetName());
         delete fx;
     }
-    // 17 possible effects; 300 draws (never repeating consecutively) should
+    // 18 possible effects; 300 draws (never repeating consecutively) should
     // realistically hit all of them.
-    TEST_ASSERT_TRUE(namesSeen.size() >= 14);
+    TEST_ASSERT_TRUE(namesSeen.size() >= 15);
 }
 
 // ---------------------------------------------------------------------------
 // EFFECT_REGISTRY / createEffect()
 // ---------------------------------------------------------------------------
 
-void test_num_effects_matches_registry_length() { TEST_ASSERT_EQUAL_INT(17, NUM_EFFECTS); }
+void test_num_effects_matches_registry_length() { TEST_ASSERT_EQUAL_INT(18, NUM_EFFECTS); }
 
 void test_create_effect_matches_registry_name_for_every_entry()
 {
@@ -1249,6 +1314,11 @@ int main(int argc, char** argv)
     RUN_TEST(test_saturation_glow_evaluate_matches_precomputed_color);
     RUN_TEST(test_saturation_glow_amplitude_keeps_center_wave_in_range);
     RUN_TEST(test_saturation_glow_color_varies_over_time);
+
+    RUN_TEST(test_jelly_frame_runs_full_frame_cycle);
+    RUN_TEST(test_jelly_frame_color_tracks_displacement);
+    RUN_TEST(test_jelly_frame_stays_bounded_over_long_run);
+    RUN_TEST(test_jelly_frame_evaluates_on_l10_and_multi_strip_models);
 
     RUN_TEST(test_standing_wave_ring_runs_full_frame_cycle);
     RUN_TEST(test_standing_wave_ring_pluck_propagates_to_neighbours);
