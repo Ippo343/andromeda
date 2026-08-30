@@ -150,7 +150,9 @@ select {
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 8px;
     color: #fff;
-    font-size: 1rem;
+    /* 16px (not 1rem/smaller) so iOS Safari does not zoom the viewport when a
+       field is focused - see the captive-portal notes in device-name.js. */
+    font-size: 16px;
     transition: all 0.3s ease;
 }
 
@@ -165,6 +167,51 @@ select:focus {
 
 input::placeholder {
     color: rgba(255, 255, 255, 0.5);
+}
+
+/* Styled <select> / text-input variant shared by the effect dropdown
+   (controls page), the model dropdown (Advanced page) and the device-name
+   field (device-name page). */
+.model-select {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: white;
+    padding: 0.8rem;
+    font-family: inherit;
+    /* 16px, same iOS no-zoom reason as the rule above. */
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='white' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    padding-right: 2.5rem;
+}
+
+input.model-select {
+    cursor: text;
+    background-image: none;
+    padding-right: 0.8rem;
+}
+
+.model-select:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.model-select:focus {
+    outline: none;
+    border-color: #4CAF50;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.model-select option {
+    background: #1a1a1a;
+    color: white;
+    padding: 0.5rem;
 }
 
 /* Status Messages */

@@ -10,6 +10,16 @@ function goToWifiSetup() {
     }, 500);
 }
 
+// Diagnostics / logs / device-model selector live on their own page now.
+function goToAdvanced() {
+    window.location.href = '/advanced.html';
+}
+
+// The device name field is on its own page - see device-name.js for why.
+function goToDeviceName() {
+    window.location.href = '/device-name.html';
+}
+
 // Update slider thumb color based on brightness value
 function updateSliderThumb(slider) {
     const value = parseInt(slider.value);
@@ -231,10 +241,6 @@ let deviceIsHolding = false;
 // the slider out from under the user mid-drag.
 let sliderActivelyDragging = false;
 
-// True while the device name input has focus, so an incoming state
-// broadcast doesn't overwrite what the user is currently typing.
-let deviceNameEditing = false;
-
 // True until the first state message after a (re)connect has picked the
 // initial mode tab (see pickInitialTab() in controls-logic.js) - after
 // that, tab switching is 100% user-driven (clicking a tab or a shuffle
@@ -312,25 +318,6 @@ function applyHoldState(isHolding) {
         : '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
 }
 
-// Shows/hides a "this change needs a reboot to take effect" indicator -
-// used both by the model select/device name input's own change handlers and
-// by state broadcasts (so it's correct on load, before anyone has touched
-// anything). Shared by the model row (rebootBtn/modelRow) and the device
-// name row (deviceNameRebootBtn/deviceNameRow).
-function setRebootIndicator(rowId, btnId, show) {
-    const rebootBtn = document.getElementById(btnId);
-    const row = document.getElementById(rowId);
-    if (!rebootBtn || !row) return;
-
-    if (show) {
-        rebootBtn.classList.add('visible');
-        row.classList.add('has-reboot');
-    } else {
-        rebootBtn.classList.remove('visible');
-        row.classList.remove('has-reboot');
-    }
-}
-
 // Handles a "state" message pushed by the server: on initial /ws connect,
 // and again any time device state changes (including from another tab).
 function handleServerMessage(raw) {
@@ -356,28 +343,9 @@ function handleServerMessage(raw) {
         applyColorDisplay(r, g, b);
     }
 
-    const modelSelect = document.getElementById('modelSelect');
-    if (modelSelect && Array.isArray(msg.models)) {
-        modelSelect.innerHTML = '';
-        for (const model of msg.models) {
-            const option = document.createElement('option');
-            option.value = model.id;
-            option.textContent = model.name;
-            modelSelect.appendChild(option);
-        }
-        if (msg.model) modelSelect.value = String(msg.model.configured.id);
-    }
-    if (msg.model) setRebootIndicator('modelRow', 'rebootBtn', msg.model.rebootRequired);
-
-    if (msg.device) {
-        const deviceNameInput = document.getElementById('deviceNameInput');
-        if (deviceNameInput && !deviceNameEditing) deviceNameInput.value = msg.device.name;
-
-        const deviceUidHint = document.getElementById('deviceUidHint');
-        if (deviceUidHint) deviceUidHint.textContent = `Device ID: ${msg.device.uid}`;
-
-        setRebootIndicator('deviceNameRow', 'deviceNameRebootBtn', msg.device.nameRebootRequired);
-    }
+    // Model selection and device name moved to their own pages (/advanced.html,
+    // /device-name.html); the state message still carries msg.models / msg.model
+    // / msg.device, this page just no longer renders them.
 
     const effectSelect = document.getElementById('effectSelect');
     if (effectSelect && Array.isArray(msg.effects)) {
@@ -506,57 +474,7 @@ function initControlsPage() {
         }
     });
 
-    const modelSelect = document.getElementById('modelSelect');
     const logo = document.getElementById('logo');
-
-    // Model Selection Listener
-    modelSelect.addEventListener('change', function() {
-        const modelId = parseInt(this.value);
-
-        this.style.borderColor = 'rgba(255, 255, 255, 0.8)';
-        setTimeout(() => {
-            this.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-        }, 400);
-
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-                type: 'model',
-                id: modelId
-            }));
-        }
-
-        setRebootIndicator('modelRow', 'rebootBtn', true);
-    });
-
-    // Device Name input: commits on blur/Enter (not on every keystroke) -
-    // same "commit on release" idea as the brightness slider's drag-end.
-    const deviceNameInput = document.getElementById('deviceNameInput');
-    deviceNameInput.addEventListener('focus', () => { deviceNameEditing = true; });
-    const commitDeviceName = () => {
-        deviceNameEditing = false;
-        const name = deviceNameInput.value.trim();
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'device_name', name: name }));
-        }
-        setRebootIndicator('deviceNameRow', 'deviceNameRebootBtn', true);
-    };
-    deviceNameInput.addEventListener('blur', commitDeviceName);
-    deviceNameInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') deviceNameInput.blur();
-    });
-
-    const rebootDevice = function() {
-        this.innerHTML = "Rebooting...";
-        this.style.opacity = "0.5";
-
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'reboot' }));
-        }
-
-        setTimeout(() => location.reload(), 4000);
-    };
-    document.getElementById('rebootBtn').addEventListener('click', rebootDevice);
-    document.getElementById('deviceNameRebootBtn').addEventListener('click', rebootDevice);
 
     // Button ripple effects
     document.querySelectorAll('.btn').forEach(btn => {

@@ -63,17 +63,24 @@ std::set<std::string> registeredRoutes(const std::string& commsCpp)
 }
 }  // namespace
 
-void test_every_index_html_local_asset_has_a_registered_route()
+void test_every_html_page_local_asset_has_a_registered_route()
 {
-    std::set<std::string> referenced = referencedLocalPaths(readFile("data/index.html"));
     std::set<std::string> registered = registeredRoutes(readFile("src/comms.cpp"));
 
-    for (const std::string& path : referenced)
+    // Every browser-served page in data/ - each pulls its own <script>/<link>
+    // assets, so index.html isn't the only one that can drift out of sync.
+    const char* pages[] = {"data/index.html", "data/advanced.html", "data/device-name.html",
+                           "data/wifi-setup.html"};
+
+    for (const char* page : pages)
     {
-        std::string message = path +
-                              " is referenced by data/index.html but comms.cpp has no "
-                              "route for it - it will 404 in the browser";
-        TEST_ASSERT_TRUE_MESSAGE(registered.count(path) > 0, message.c_str());
+        std::set<std::string> referenced = referencedLocalPaths(readFile(page));
+        for (const std::string& path : referenced)
+        {
+            std::string message = path + " is referenced by " + page +
+                                  " but comms.cpp has no route for it - it will 404 in the browser";
+            TEST_ASSERT_TRUE_MESSAGE(registered.count(path) > 0, message.c_str());
+        }
     }
 }
 
@@ -81,7 +88,7 @@ int main(int argc, char** argv)
 {
     UNITY_BEGIN();
 
-    RUN_TEST(test_every_index_html_local_asset_has_a_registered_route);
+    RUN_TEST(test_every_html_page_local_asset_has_a_registered_route);
 
     return UNITY_END();
 }

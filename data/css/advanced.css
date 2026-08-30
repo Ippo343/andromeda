@@ -1,0 +1,184 @@
+/* Advanced page (metrics + logs + model selection) and the device-name page.
+   Reuses common.css for the container / logo / .btn shell. */
+
+.back-link {
+    text-decoration: none;
+    margin-bottom: 1.5rem;
+}
+
+.section-label {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.9rem;
+    margin: 1.5rem 0 0.8rem;
+    display: block;
+    text-align: left;
+}
+
+.section-label:first-of-type {
+    margin-top: 0;
+}
+
+/* --- Metrics tiles ------------------------------------------------------- */
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.6rem;
+}
+
+.metric-tile {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 0.8rem;
+    text-align: left;
+}
+
+.metric-tile .metric-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.metric-tile .metric-value {
+    margin-top: 0.3rem;
+    font-family: 'Courier New', monospace;
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.9);
+    word-break: break-word;
+}
+
+/* --- Log viewer ------------------------------------------------------------ */
+
+.logbox {
+    margin-top: 0.4rem;
+    padding: 1rem 1.2rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    text-align: left;
+    max-height: 45vh;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.log-line {
+    padding: 0.05rem 0;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.log-line .log-ts {
+    color: rgba(255, 255, 255, 0.3);
+    margin-right: 0.5rem;
+}
+
+.log-line .log-pill {
+    display: inline-block;
+    min-width: 2.4em;
+    margin-right: 0.5rem;
+    text-align: center;
+    border-radius: 4px;
+    padding: 0 0.3em;
+    font-size: 0.72rem;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.log-line.log-inf .log-pill { background: rgba(33, 150, 243, 0.18); color: #64b5f6; }
+.log-line.log-wrn .log-pill { background: rgba(255, 193, 7, 0.2); color: #ffc107; }
+.log-line.log-err .log-pill,
+.log-line.log-ftl .log-pill { background: rgba(244, 67, 54, 0.22); color: #f44336; }
+
+.log-line.log-wrn { color: #ffd95e; }
+.log-line.log-err,
+.log-line.log-ftl { color: #ff8a80; }
+.log-line.log-trc,
+.log-line.log-vrb,
+.log-line.log-raw { color: rgba(255, 255, 255, 0.45); }
+
+.logbox-note {
+    color: rgba(255, 255, 255, 0.4);
+    font-style: italic;
+}
+
+/* --- Model / device-name form (relocated from controls.css) ------------- */
+
+.model-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+/* .model-select itself is styled in common.css (shared with the controls
+   page's effect dropdown). */
+
+.reboot-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+
+    max-width: 0;
+    margin-left: 0;
+    opacity: 0;
+    overflow: hidden;
+
+    background: rgba(255, 59, 48, 0.15);
+    border: 1px solid rgba(255, 59, 48, 0.5);
+    color: #ff3b30;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-weight: bold;
+    font-family: inherit;
+
+    transition: all 0.3s cubic-bezier(0.215, 0.610, 0.355, 1);
+}
+
+.reboot-btn.visible {
+    max-width: 100px;
+    padding: 0 1.2rem;
+    margin-left: 0.8rem;
+    opacity: 1;
+}
+
+.reboot-btn:hover {
+    background: rgba(255, 59, 48, 0.4);
+    box-shadow: 0 0 15px rgba(255, 59, 48, 0.3);
+}
+
+.model-row.has-reboot .model-select {
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+}
+
+.model-row.has-reboot .reboot-btn {
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+}
+
+.device-uid-hint {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.75rem;
+    margin-top: 0.5rem;
+    text-align: left;
+}
+
+/* Grey out the model control while the WebSocket is down, matching the
+   controls page's .ws-disconnected treatment. */
+.ws-disconnected .model-row,
+.ws-disconnected .reboot-btn {
+    pointer-events: none;
+    opacity: 0.5;
+}
+
+@media (max-width: 480px) {
+    .metrics-grid { grid-template-columns: 1fr 1fr; }
+    .logbox { max-height: 55vh; }
+}

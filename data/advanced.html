@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Andromeda Advanced</title>
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="css/advanced.css">
+</head>
+<body class="ws-disconnected">
+    <div class="container">
+        <h1 class="logo" id="logo">A</h1>
+
+        <a href="/" class="btn back-link">← Back to Controls</a>
+
+        <span class="section-label">Diagnostics</span>
+        <div class="metrics-grid" id="metrics"></div>
+
+        <span class="section-label">Log</span>
+        <div class="logbox" id="logbox"></div>
+
+        <span class="section-label">Device Model</span>
+        <!-- Pre-JS fallback only: overwritten from the server's "models" list
+             in the state message pushed right after the WebSocket connects. -->
+        <div class="model-row" id="modelRow">
+            <select class="model-select" id="modelSelect">
+                <option value="769">L10</option>
+                <option value="768">L70</option>
+                <option value="512">Andromeda</option>
+                <option value="256">Test rig</option>
+            </select>
+            <button id="rebootBtn" class="reboot-btn" title="Reboot Device">Reboot</button>
+        </div>
+    </div>
+
+    <!-- External JavaScript -->
+    <script src="js/utils.js"></script>
+    <script src="js/advanced-logic.js"></script>
+    <script src="js/advanced.js"></script>
+</body>
+</html>

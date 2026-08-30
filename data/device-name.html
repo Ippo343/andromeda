@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Andromeda Device Name</title>
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="css/advanced.css">
+</head>
+<body class="ws-disconnected">
+    <div class="container">
+        <h1 class="logo" id="logo">A</h1>
+
+        <a href="/" class="btn back-link">← Back to Controls</a>
+
+        <span class="section-label">Device Name</span>
+        <div class="model-row" id="deviceNameRow">
+            <input type="text" class="model-select" id="deviceNameInput"
+                   maxlength="32" autocomplete="off" autocorrect="off"
+                   autocapitalize="off" spellcheck="false"
+                   placeholder="Andromeda-XXXX">
+            <button id="deviceNameRebootBtn" class="reboot-btn" title="Reboot Device">Reboot</button>
+        </div>
+        <div class="device-uid-hint" id="deviceUidHint"></div>
+    </div>
+
+    <!-- External JavaScript -->
+    <script src="js/utils.js"></script>
+    <script src="js/device-name.js"></script>
+</body>
+</html>

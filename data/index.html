@@ -109,35 +109,17 @@
             </div>
             <div class="settings-drawer" id="settingsDrawer">
                 <div class="settings-content">
-                    <div class="slider-container">
-                        <label class="slider-label">Device Name</label>
-                        <div class="model-row" id="deviceNameRow">
-                            <input type="text" class="model-select" id="deviceNameInput"
-                                   maxlength="32" placeholder="Andromeda-XXXX">
-                            <button id="deviceNameRebootBtn" class="reboot-btn" title="Reboot Device">
-                                Reboot
-                            </button>
-                        </div>
-                        <div class="device-uid-hint" id="deviceUidHint"></div>
-                    </div>
-                    <div class="slider-container">
-                        <label class="slider-label">Model Selection</label>
-                        <!-- Pre-JS fallback only: overwritten from the server's "models" list
-                             in the state message pushed right after the WebSocket connects -->
-                        <div class="model-row" id="modelRow">
-                            <select class="model-select" id="modelSelect">
-                                <option value="769">L10</option>
-                                <option value="768">L70</option>
-                                <option value="512">Andromeda</option>
-                                <option value="256">Test rig</option>
-                            </select>
-
-                            <button id="rebootBtn" class="reboot-btn" title="Reboot Device">
-                                Reboot
-                            </button>
-                        </div>
-                    </div>
-                    <button class="btn" onclick="goToWifiSetup()" style="margin-top: 0.5rem; width: 100%;">
+                    <!-- Nav only: the device model / device name controls live on
+                         their own pages now (a wrong model pick soft-bricks the
+                         device until reboot, and the name field was the text
+                         input iOS's captive portal kept autofocusing). -->
+                    <button class="btn" onclick="goToAdvanced()" style="width: 100%;">
+                        Advanced
+                    </button>
+                    <button class="btn" onclick="goToDeviceName()" style="width: 100%;">
+                        Device Name
+                    </button>
+                    <button class="btn" onclick="goToWifiSetup()" style="width: 100%;">
                         WiFi Setup
                     </button>
                 </div>
