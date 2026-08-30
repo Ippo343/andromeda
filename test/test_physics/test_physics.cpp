@@ -4,8 +4,10 @@
 #include <cmath>
 
 #include "effects/emitter-field-effect.h"
+#include "effects/ring-field-effect.h"
 #include "geometry/geometry.h"
 #include "physics/bezier-path.h"
+#include "physics/box-bounce.h"
 #include "physics/frame-clock.h"
 #include "physics/nbody-system.h"
 #include "physics/physics-random.h"
@@ -561,6 +563,140 @@ void test_nbody_bound_system_never_reseeds()
     TEST_ASSERT_TRUE(allFinite(sim));
 }
 
+// ---------------------------------------------------------------------------
+// BoxBounce
+// ---------------------------------------------------------------------------
+
+void test_box_bounce_stays_within_bounds_over_long_run()
+{
+    randomSeed(7);
+    BoxBounce box;
+    box.initRandom(4, 60.0f, 40.0f, 200.0f, 600.0f);  // fast, so it hits walls often
+
+    for (int frame = 0; frame < 3000; frame++)
+    {
+        box.step(16);
+        for (auto& p : box.pos)
+        {
+            TEST_ASSERT_TRUE(p.x <= 60.0f + 1e-3f && p.x >= -60.0f - 1e-3f);
+            TEST_ASSERT_TRUE(p.y <= 40.0f + 1e-3f && p.y >= -40.0f - 1e-3f);
+        }
+    }
+}
+
+void test_box_bounce_conserves_speed()
+{
+    randomSeed(8);
+    BoxBounce box;
+    box.initRandom(3, 50.0f, 50.0f, 300.0f, 300.0f);  // every ball starts at speed 300
+
+    for (int frame = 0; frame < 1000; frame++) box.step(16);
+
+    // Reflections only flip a velocity component's sign, so |v| is invariant.
+    for (auto& v : box.vel) TEST_ASSERT_FLOAT_WITHIN(1.0f, 300.0f, v.length());
+}
+
+// ---------------------------------------------------------------------------
+// RingFieldEffect
+// ---------------------------------------------------------------------------
+
+// Minimal subclass: a single channel that just diffuses, so the base class's
+// storage / periodic Laplacian / substep / palette-render path is exercised
+// without depending on any real effect.
+class DiffuseRing : public RingFieldEffect
+{
+   public:
+    DiffuseRing() : RingFieldEffect(1) {}
+    const char* GetName() override { return "DiffuseRing"; }
+
+    void seedField(size_t strip) override
+    {
+        // A single hot cell in the middle of each strip.
+        channel(strip, 0)[stripLen(strip) / 2] = 255.0f;
+    }
+    void stepStrip(size_t strip, float dtSeconds) override
+    {
+        auto& f = channel(strip, 0);
+        std::vector<float> next = f;
+        for (size_t i = 0; i < f.size(); i++) next[i] = f[i] + 8.0f * laplacian(f, i) * dtSeconds;
+        f = next;
+    }
+    uint8_t colorIndex(size_t strip, size_t led) const override
+    {
+        return (uint8_t)constrain(channel(strip, 0)[led], 0.0f, 255.0f);
+    }
+
+    // Test-only accessors for the base's protected surface.
+    static float lap(const std::vector<float>& f, size_t i) { return laplacian(f, i); }
+    float at(size_t strip, size_t led) const { return channel(strip, 0)[led]; }
+    uint8_t colorIndexAt(size_t strip, size_t led) const { return colorIndex(strip, led); }
+    const CRGBPalette256& paletteRef() const { return palette_; }
+};
+
+void test_ring_field_laplacian_is_periodic()
+{
+    std::vector<float> f = {1.0f, 0.0f, 0.0f, 0.0f};
+    // At index 0 the left neighbour must wrap to index 3 (value 0):
+    // 0 - 2*1 + 0 = -2.
+    TEST_ASSERT_EQUAL_FLOAT(-2.0f, DiffuseRing::lap(f, 0));
+    // At index 3 the right neighbour wraps back to index 0 (value 1):
+    // 0 - 2*0 + 1 = 1.
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, DiffuseRing::lap(f, 3));
+}
+
+void test_ring_field_diffuses_and_conserves_total_on_a_ring()
+{
+    GEOMETRY.initializeForTest(ModelId::L10_MK2);
+    DiffuseRing fx;
+    size_t n = GEOMETRY.getStrip(0).num_leds;
+    size_t mid = n / 2;
+
+    // First frame lazily seeds the field (one hot cell = 255) and takes one step.
+    fx.precompute(1000);
+    float before = 0;
+    for (size_t i = 0; i < n; i++) before += fx.at(0, i);
+
+    for (int frame = 1; frame < 50; frame++) fx.precompute(1000 + frame * 16);
+
+    float after = 0;
+    for (size_t i = 0; i < n; i++) after += fx.at(0, i);
+
+    // Pure diffusion on a closed loop conserves the integral of the field...
+    TEST_ASSERT_FLOAT_WITHIN(1.0f, before, after);
+    // ...and spreads the initial spike to its neighbours.
+    TEST_ASSERT_TRUE(fx.at(0, mid) < 255.0f);
+    TEST_ASSERT_TRUE(fx.at(0, mid - 1) > 0.0f);
+    TEST_ASSERT_TRUE(fx.at(0, mid + 1) > 0.0f);
+}
+
+void test_ring_field_evaluate_uses_palette_lookup()
+{
+    GEOMETRY.initializeForTest(ModelId::L10_MK2);
+    DiffuseRing fx;
+    fx.precompute(1000);
+
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    size_t mid = strip.num_leds / 2;
+    CRGB got = fx.evaluate(&strip, &strip.leds[mid], mid, 1000);
+    CRGB want = ColorFromPalette(fx.paletteRef(), fx.colorIndexAt(0, mid));
+    TEST_ASSERT_TRUE(got == want);
+}
+
+void test_ring_field_skips_strips_shorter_than_three_cells()
+{
+    // Andromeda MK1's centre strip is the real short-strip case: stepping it
+    // through the periodic Laplacian would be meaningless, so the base must
+    // leave sub-3-LED strips untouched instead of reading out of bounds.
+    GEOMETRY.initializeForTest(ModelId::ANDROMEDA_MK1);
+    DiffuseRing fx;
+    for (int frame = 0; frame < 10; frame++) fx.precompute(1000 + frame * 16);
+    // Reaching here without an ASan/UBSan trip is the assertion; also sanity
+    // check every strip stayed finite.
+    for (size_t s = 0; s < GEOMETRY.getNumStrips(); s++)
+        for (size_t i = 0; i < GEOMETRY.getStrip(s).num_leds; i++)
+            TEST_ASSERT_TRUE(std::isfinite(fx.at(s, i)));
+}
+
 int main(int argc, char** argv)
 {
     UNITY_BEGIN();
@@ -606,6 +742,14 @@ int main(int argc, char** argv)
     RUN_TEST(test_nbody_reseeds_when_a_body_permanently_escapes);
     RUN_TEST(test_nbody_detect_escape_excludes_self_from_center_of_mass);
     RUN_TEST(test_nbody_bound_system_never_reseeds);
+
+    RUN_TEST(test_box_bounce_stays_within_bounds_over_long_run);
+    RUN_TEST(test_box_bounce_conserves_speed);
+
+    RUN_TEST(test_ring_field_laplacian_is_periodic);
+    RUN_TEST(test_ring_field_diffuses_and_conserves_total_on_a_ring);
+    RUN_TEST(test_ring_field_evaluate_uses_palette_lookup);
+    RUN_TEST(test_ring_field_skips_strips_shorter_than_three_cells);
 
     return UNITY_END();
 }
