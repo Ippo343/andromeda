@@ -208,9 +208,11 @@ const server = http.createServer((req, res) => {
         return;
     }
     if (url === '/log1.txt') {
-        // Mirrors a fresh device: no rotated file yet.
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end('Not Found');
+        // Mirrors a fresh device: no rotated file yet. The firmware serves an
+        // empty 200 (not a 404) for a not-yet-created log file - see
+        // serveTextFileOrEmpty in comms.cpp.
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('');
         return;
     }
     if (url === '/metrics') {

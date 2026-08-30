@@ -2,10 +2,37 @@
 
 #include <DNSServer.h>
 #include <esp_system.h>
+#include <sys/stat.h>
 
 #include "ws-command-parser.h"
 
 constexpr int DNS_PORT = 53;
+
+// Silent "does this file exist" check. LittleFSImpl::exists() (and the
+// AsyncFileResponse path behind request->send(LittleFS, ...)) is just
+// open(path, "r"), which logs a VFS error at level E for every miss - and
+// the Advanced page polls the log routes every 2s, so a not-yet-rotated
+// /log1.txt would spew "does not exist" lines forever. A bare stat() on the
+// mount path checks without opening. LittleFS.begin() (main.cpp) takes the
+// default "/littlefs" mount point.
+static bool fileExistsQuiet(const char* littleFsPath)
+{
+    char full[40];
+    snprintf(full, sizeof(full), "/littlefs%s", littleFsPath);
+    struct stat st;
+    return stat(full, &st) == 0;
+}
+
+// Serves a LittleFS text file if present, else an empty 200 - callers are
+// the log routes, where "file not created yet" is normal and the Advanced
+// page treats an empty body as an empty log.
+static void serveTextFileOrEmpty(AsyncWebServerRequest* r, const char* path)
+{
+    if (fileExistsQuiet(path))
+        r->send(LittleFS, path, "text/plain");
+    else
+        r->send(200, "text/plain", "");
+}
 
 #define STATIC_FILE_ROUTE(path, contentType) \
     server.on(path, HTTP_GET,                \
@@ -168,15 +195,18 @@ void Comms::setupRoutes()
     server.on("/wifi", HTTP_GET,
               [](AsyncWebServerRequest* r) { r->send(LittleFS, "/wifi-setup.html", "text/html"); });
 
-    // Log files, served straight from LittleFS with no handler logic - the
-    // logger already keeps the log as these two rotating files. Keep the
-    // literals in sync with LOG_FILE_CUR / LOG_FILE_OLD (utils.h). /log1.txt
-    // 404s until the first 32 KB rotation; the Advanced page treats that as
-    // empty.
-    STATIC_FILE_ROUTE("/log0.txt", "text/plain");
-    STATIC_FILE_ROUTE("/log1.txt", "text/plain");
+    // Log files, served from LittleFS via serveTextFileOrEmpty so a
+    // not-yet-created file returns an empty 200 instead of letting the FS
+    // layer log a VFS error on the miss (see fileExistsQuiet above). The
+    // logger keeps the log as these two rotating files; /log1.txt has no
+    // content until the first 32 KB rotation. Keep the literals in sync with
+    // LOG_FILE_CUR / LOG_FILE_OLD (utils.h).
+    server.on("/log0.txt", HTTP_GET,
+              [](AsyncWebServerRequest* r) { serveTextFileOrEmpty(r, LOG_FILE_CUR); });
+    server.on("/log1.txt", HTTP_GET,
+              [](AsyncWebServerRequest* r) { serveTextFileOrEmpty(r, LOG_FILE_OLD); });
     server.on("/logs", HTTP_GET,
-              [](AsyncWebServerRequest* r) { r->send(LittleFS, LOG_FILE_CUR, "text/plain"); });
+              [](AsyncWebServerRequest* r) { serveTextFileOrEmpty(r, LOG_FILE_CUR); });
 
     server.on(
         "/metrics", HTTP_GET,
