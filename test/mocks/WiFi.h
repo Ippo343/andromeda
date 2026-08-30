@@ -88,6 +88,9 @@ class WiFiClass
         return scriptedScanRSSIs[index];
     }
 
+    // No-arg overload: RSSI of the currently connected AP (comms.cpp /metrics).
+    int RSSI() const { return -55; }
+
     IPAddress localIP() const { return IPAddress(192, 168, 1, 232); }
 
     uint8_t* macAddress(uint8_t* mac) const
