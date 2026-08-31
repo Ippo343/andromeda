@@ -181,9 +181,6 @@ class ColorWheel {
     }
 
     updateColor(x, y, centerX = this.centerX, centerY = this.centerY, radius = this.radius) {
-        this.selector.style.left = `${x}px`;
-        this.selector.style.top = `${y}px`;
-
         // Computed directly from (x, y) rather than sampled back off the
         // canvas: getImageData floors fractional coordinates toward -Infinity,
         // which in the NW quadrant (dx < 0, dy < 0) pushes the sampled pixel
@@ -198,8 +195,20 @@ class ColorWheel {
 
         const [r, g, b] = hsvToRgb(hue, saturation, 1);
 
-        const colorString = `rgb(${r}, ${g}, ${b})`;
+        this.renderSelector(x, y, r, g, b);
+        this.sendColor(r, g, b);
+    }
 
+    // Shared DOM-update tail for both a live drag (updateColor) and an
+    // incoming state broadcast (setFromBroadcast) - moves the selector dot,
+    // updates the preview/histogram via applyColorDisplay(), and re-tints the
+    // logo shine. Never sends anything over the socket - that's sendColor()'s
+    // job, called only from updateColor()'s own drag path.
+    renderSelector(x, y, r, g, b) {
+        this.selector.style.left = `${x}px`;
+        this.selector.style.top = `${y}px`;
+
+        const colorString = `rgb(${r}, ${g}, ${b})`;
         this.selector.style.backgroundColor = colorString;
 
         applyColorDisplay(r, g, b);
@@ -215,8 +224,16 @@ class ColorWheel {
         logo.style.animation = 'shine-move 3s linear infinite';
         logo.style.webkitBackgroundClip = 'text';
         logo.style.webkitTextFillColor = 'transparent';
+    }
 
-        this.sendColor(r, g, b);
+    // Moves the selector to reflect an incoming state broadcast (a color
+    // changed from another client, or pinned via the random rotation)
+    // without re-sending it back over the socket - calling sendColor() here
+    // would create a feedback loop with the broadcast that triggered this.
+    setFromBroadcast(r, g, b) {
+        const { h, s } = rgbToHsv(r, g, b);
+        const { x, y } = hsToWheelPosition(h, s, this.centerX, this.centerY, this.radius);
+        this.renderSelector(x, y, r, g, b);
     }
 
     sendColor(r, g, b) {
@@ -278,6 +295,12 @@ let awaitingInitialTab = true;
 // Lazily constructed on the Color tab's first activation, exactly like the
 // old color-picker drawer used to defer building the wheel until opened.
 let colorWheel = null;
+
+// A color broadcast that arrived before colorWheel existed yet (it's built
+// lazily - see switchTab()) - applied once the wheel is constructed so it
+// doesn't start pointed at its own default (center/white) instead of the
+// device's actual current color.
+let pendingBroadcastColor = null;
 
 function scheduleReconnect() {
     if (reconnectTimer) return;
@@ -361,6 +384,11 @@ function switchTab(tab) {
 
     if (tab === 'color' && !colorWheel) {
         colorWheel = new ColorWheel('colorWheel', 'colorSelector', 'colorPreview', 'colorInfo');
+        if (pendingBroadcastColor) {
+            colorWheel.setFromBroadcast(
+                pendingBroadcastColor.r, pendingBroadcastColor.g, pendingBroadcastColor.b);
+            pendingBroadcastColor = null;
+        }
     }
 }
 
@@ -430,6 +458,8 @@ function handleServerMessage(raw) {
         typeof msg.color.b === 'number') {
         const { r, g, b } = msg.color;
         applyColorDisplay(r, g, b);
+        if (colorWheel) colorWheel.setFromBroadcast(r, g, b);
+        else pendingBroadcastColor = { r, g, b };
     }
 
     // Model selection and device name moved to their own pages (/advanced.html,
