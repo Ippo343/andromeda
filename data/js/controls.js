@@ -38,6 +38,45 @@ function updateSliderThumb(slider) {
     }
 }
 
+// Scrolls the settings drawer's action buttons into view once it opens -
+// they render below the visible viewport on most screens, with no hint on
+// first open that anything is below the fold. The drawer grows via a CSS
+// max-height transition (see .settings-drawer.expanded in controls.css), so
+// scrolling has to wait for that to actually finish growing rather than
+// happening against the drawer's still-collapsed height; transitionend is
+// the primary signal, with a fixed-delay fallback (matching the CSS
+// transition's own duration) in case it never fires. Never scrolls when the
+// drawer is already fully in view, so it doesn't fight a user who opened it
+// while already scrolled to the bottom of the page.
+function scrollDrawerIntoView(drawer) {
+    let done = false;
+
+    const maybeScroll = () => {
+        if (done) return;
+        done = true;
+
+        const rect = drawer.getBoundingClientRect();
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+        const fullyVisible = rect.top >= 0 && rect.bottom <= viewportHeight;
+        if (!fullyVisible) {
+            drawer.scrollIntoView({ block: 'end', behavior: 'smooth' });
+        }
+    };
+
+    const onTransitionEnd = (e) => {
+        if (e.target !== drawer || e.propertyName !== 'max-height') return;
+        drawer.removeEventListener('transitionend', onTransitionEnd);
+        maybeScroll();
+    };
+    drawer.addEventListener('transitionend', onTransitionEnd);
+
+    // Matches controls.css's ".settings-drawer { transition: max-height 0.4s ... }".
+    setTimeout(() => {
+        drawer.removeEventListener('transitionend', onTransitionEnd);
+        maybeScroll();
+    }, 450);
+}
+
 // Updates the color preview box, RGB label, and histogram bars together -
 // shared by live color-wheel drags and incoming state broadcasts so they
 // can't drift out of sync with each other.
@@ -553,6 +592,7 @@ function initControlsPage() {
         } else {
             settingsToggle.classList.add('expanded');
             settingsDrawer.classList.add('expanded');
+            scrollDrawerIntoView(settingsDrawer);
         }
     });
 
