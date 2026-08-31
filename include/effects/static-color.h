@@ -1,6 +1,7 @@
 #pragma once
 
 #include "effects-base.h"
+#include "physics/frame-clock.h"
 
 class StaticColor : public AbstractEffect
 {
@@ -25,17 +26,11 @@ class StaticColor : public AbstractEffect
     constexpr static float BLEND_RATE_PER_SECOND = 5.541f / SETTLE_SECONDS;
     float blendDebt = 0;
 
-    // Elapsed time (dt) since the previous frame, same lastT/hasLastT idiom as
-    // ElectricSparks (see include/effects/electric-sparks.h) - `t` is always an absolute
-    // millis() value, never a delta, so effects that need dt must track it themselves.
-    milliseconds_t lastT = 0;
-    bool hasLastT = false;
+    FrameClock clock;
 
     void precompute(milliseconds_t t) override
     {
-        milliseconds_t dt = hasLastT ? (t - lastT) : 16;
-        lastT = t;
-        hasLastT = true;
+        milliseconds_t dt = clock.tick(t);
 
         uint8_t blendAmount = accumulateFadeAmount(blendDebt, BLEND_RATE_PER_SECOND, dt);
         currentColor = CRGB::blend(currentColor, targetColor, blendAmount);
