@@ -8,6 +8,13 @@
 // WifiManager itself never calls delay()/millis() or touches WiFi/Preferences
 // directly, so a test-double IWiFiConnector can return a scripted result
 // instantly instead of polling in real time.
+//
+// Newly-submitted credentials are persisted immediately and verified on the
+// next boot (Comms::setup() -> connectUsingStoredCredentials(), which runs
+// before the web server task exists). saveNewCredentials() deliberately does
+// NOT connect: it is invoked from the /save HTTP handler on the async_tcp
+// task, and a 10-15s blocking WiFi.status() poll there starves that task past
+// its watchdog and panics the device (#114).
 
 class IWiFiConnector
 {
@@ -18,14 +25,10 @@ class IWiFiConnector
     // station mode on success (configures a static IP, sets up
     // auto-reconnect). Real implementations poll WiFi.status() with a
     // delay()/millis()-based timeout internally; this call either returns
-    // once connected or once it's given up.
+    // once connected or once it's given up. Only ever called from
+    // Comms::setup(), before the web server / async_tcp task is started, so
+    // blocking here is harmless.
     virtual bool connect(const char* ssid, const char* password) = 0;
-
-    // Blocking, used to validate a newly-submitted credential pair before
-    // persisting it. Never commits to station mode - real implementations
-    // revert to broadcasting the setup access point (via enterAPMode())
-    // before returning, regardless of outcome.
-    virtual bool testConnection(const char* ssid, const char* password) = 0;
 
     // Falls back to broadcasting the setup access point.
     virtual void enterAPMode() = 0;
@@ -53,18 +56,16 @@ class WifiManager
     enum class SaveResult
     {
         RejectEmptySsid,
-        Persisted,
-        RejectConnectionFailed
+        Persisted
     };
 
-    // Validates, attempts to connect with the given credentials, and - only
-    // on success - persists them. Never touches previously-stored credentials.
+    // Persists the given credentials (rejecting only an empty SSID). Does not
+    // connect - see the file header: the actual join is attempted on the next
+    // boot, off the async_tcp task. Never touches previously-stored
+    // credentials until the new ones are written.
     SaveResult saveNewCredentials(const String& ssid, const String& password)
     {
         if (ssid.length() == 0) return SaveResult::RejectEmptySsid;
-
-        if (!connector.testConnection(ssid.c_str(), password.c_str()))
-            return SaveResult::RejectConnectionFailed;
 
         store.saveCredentials(ssid, password);
         return SaveResult::Persisted;

@@ -159,7 +159,7 @@ function validateForm() {
         }
     });
 
-    showStatus('Testing connection to "' + ssid + '"...', 'loading');
+    showStatus('Saving "' + ssid + '" and restarting to connect...', 'loading');
     return true;
 }
 
