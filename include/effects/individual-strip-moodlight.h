@@ -13,7 +13,7 @@ using std::vector;
 class IndividualStripMoodlight : public AbstractEffect
 {
    public:
-    virtual const char* GetName() { return "IndividualStripMoodlight"; }
+    virtual const char* GetName() { return "Individual Strip Moodlight"; }
 
     vector<MoodLight> moodlights;
     vector<CRGB> colors;

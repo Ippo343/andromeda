@@ -8,7 +8,7 @@
 class PolarSwipe : public AbstractEffect
 {
    public:
-    virtual const char* GetName() { return "PolarSwipe"; }
+    virtual const char* GetName() { return "Polar Swipe"; }
 
     RandBool flip;
     RandParam<uint8_t, 10, 40> bpm;

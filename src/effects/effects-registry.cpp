@@ -1,19 +1,19 @@
 #include "effects.h"
 
 const EffectInfo EFFECT_REGISTRY[] = {
-    {EffectId::BezierSwarm, "BezierSwarm"},
-    {EffectId::CartesianMoodlight, "CartesianMoodlight"},
-    {EffectId::ElectricSparks, "ElectricSparks"},
+    {EffectId::BezierSwarm, "Bezier Swarm"},
+    {EffectId::CartesianMoodlight, "Cartesian Moodlight"},
+    {EffectId::ElectricSparks, "Electric Sparks"},
     {EffectId::HexagonalRippleGalaxy, "Hexagonal Ripple Galaxy"},
-    {EffectId::IndividualStripDrift, "IndividualStripDrift"},
-    {EffectId::IndividualStripMoodlight, "IndividualStripMoodlight"},
-    {EffectId::MultiPendulum, "MultiPendulum"},
-    {EffectId::NinjaStar, "NinjaStar"},
-    {EffectId::PaletteWave, "PaletteWave"},
-    {EffectId::PolarMoodlight, "PolarMoodlight"},
-    {EffectId::PolarSwipe, "PolarSwipe"},
-    {EffectId::RGBodyProblem, "RGBodyProblem"},
-    {EffectId::SaturationGlow, "SaturationGlow"},
+    {EffectId::IndividualStripDrift, "Individual Strip Drift"},
+    {EffectId::IndividualStripMoodlight, "Individual Strip Moodlight"},
+    {EffectId::MultiPendulum, "Multi Pendulum"},
+    {EffectId::NinjaStar, "Ninja Star"},
+    {EffectId::PaletteWave, "Palette Wave"},
+    {EffectId::PolarMoodlight, "Polar Moodlight"},
+    {EffectId::PolarSwipe, "Polar Swipe"},
+    {EffectId::RGBodyProblem, "RG Body Problem"},
+    {EffectId::SaturationGlow, "Saturation Glow"},
 };
 
 const size_t NUM_EFFECTS = sizeof(EFFECT_REGISTRY) / sizeof(EFFECT_REGISTRY[0]);
