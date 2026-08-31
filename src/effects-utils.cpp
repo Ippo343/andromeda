@@ -32,7 +32,7 @@ vector<CHSV> randomComplementaryColors(int N)
 
     for (size_t i = 0; i < N; i++)
     {
-        int h = (a + hueStep * i) % 255;
+        int h = (a + hueStep * i) % 256;
         retval[i] = CHSV(h, 255, 255);
     }
 

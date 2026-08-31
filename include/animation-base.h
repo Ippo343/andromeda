@@ -18,19 +18,11 @@
 class AbstractBlockingAnimation
 {
    public:
-    virtual const char* GetName();
+    virtual const char* GetName() = 0;
 
     control_hints_t controlHints = ControlHints::NONE;
 
     virtual ~AbstractBlockingAnimation() {}
 
-    virtual void run();
-
-    // Reset all buffers to black and brightness to max,
-    // to prevent funny inputs going into the next effect
-    virtual void cleanup()
-    {
-        paint(CRGB::Black);
-        FASTLED_SHOW();
-    }
+    virtual void run() = 0;
 };
