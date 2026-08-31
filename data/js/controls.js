@@ -229,6 +229,34 @@ class ColorWheel {
 // WebSocket management
 let ws = null;
 
+// Reconnect attempt counter (jittered exponential backoff - see
+// nextReconnectDelayMs()) and the previous attempt's timer, so a manual
+// reconnect (e.g. a fresh connectWebSocket() call from elsewhere) can't
+// stack a second pending retry on top of an existing one.
+let reconnectAttempt = 0;
+let reconnectTimer = null;
+
+// Server-side auto-ping keeps the WS connection itself alive (see comms.cpp),
+// but that only prevents the OS/router from reaping an idle connection - it
+// doesn't tell the browser tab anything. Without a client-side check, a WiFi
+// drop that doesn't produce a clean TCP FIN (the normal case for the device
+// losing power or moving out of range) leaves readyState stuck at OPEN for
+// minutes: no close/error event fires, the UI never dims, and every button
+// press silently does nothing. Track the last time *any* message arrived and
+// flag the connection stale if too long passes without one - the state
+// broadcast's own 5s keepalive (see comms.cpp's STATE_KEEPALIVE_INTERVAL_MS)
+// means one should always show up well inside this window on a live link.
+let lastMessageAt = 0;
+let staleCheckTimer = null;
+const STALE_CONNECTION_MS = 15000;
+
+function markConnectionStale() {
+    document.body.classList.add('ws-disconnected');
+    if (ws) {
+        try { ws.close(); } catch (e) { /* already closing/closed */ }
+    }
+}
+
 // Power button toggle state - module scope so both the click handler and
 // incoming state broadcasts (handleServerMessage) can read/update it.
 let deviceIsOn = true;
@@ -251,18 +279,73 @@ let awaitingInitialTab = true;
 // old color-picker drawer used to defer building the wheel until opened.
 let colorWheel = null;
 
+function scheduleReconnect() {
+    if (reconnectTimer) return;
+    const delay = nextReconnectDelayMs(reconnectAttempt);
+    reconnectAttempt++;
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        connectWebSocket();
+    }, delay);
+}
+
 function connectWebSocket() {
+    document.body.classList.add('ws-disconnected');
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    let socket;
+    try {
+        socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    } catch (e) {
+        // A synchronous throw here (e.g. a blocked/invalid URL) previously killed the retry
+        // chain permanently, since nothing downstream of `new WebSocket(...)` ever ran to
+        // schedule the next attempt.
+        scheduleReconnect();
+        return;
+    }
+    ws = socket;
+
+    // The stale-connection check above only starts once onopen has fired - a handshake that
+    // never resolves either way (stuck in CONNECTING, no open/error/close) would otherwise
+    // never be noticed at all. Force-closing a still-CONNECTING socket triggers its own
+    // closing handshake and (per the WebSocket spec) eventually fires onclose, which is what
+    // actually reschedules the reconnect below.
+    const connectTimeout = setTimeout(() => {
+        if (socket.readyState === WebSocket.CONNECTING) {
+            try { socket.close(); } catch (e) { /* already closing/closed */ }
+        }
+    }, 10000);
+
     ws.onopen = () => {
+        clearTimeout(connectTimeout);
+        reconnectAttempt = 0;
         document.body.classList.remove('ws-disconnected');
         awaitingInitialTab = true;
+        lastMessageAt = Date.now();
+        if (staleCheckTimer) clearInterval(staleCheckTimer);
+        staleCheckTimer = setInterval(() => {
+            if (Date.now() - lastMessageAt > STALE_CONNECTION_MS) markConnectionStale();
+        }, STALE_CONNECTION_MS);
+    };
+    ws.onerror = () => {
+        // onclose still fires after onerror for a connection that got far enough to open, so
+        // the reconnect scheduling stays there - this only matters for a failure early enough
+        // that onclose might not (a defensive backstop, not the primary path).
+        scheduleReconnect();
     };
     ws.onclose = () => {
+        clearTimeout(connectTimeout);
         document.body.classList.add('ws-disconnected');
-        setTimeout(connectWebSocket, 2000);
+        if (staleCheckTimer) {
+            clearInterval(staleCheckTimer);
+            staleCheckTimer = null;
+        }
+        scheduleReconnect();
     };
-    ws.onmessage = (event) => handleServerMessage(event.data);
+    ws.onmessage = (event) => {
+        lastMessageAt = Date.now();
+        handleServerMessage(event.data);
+    };
 }
 
 // Shows the panel for `tab` ('random' | 'effect' | 'color') and highlights
@@ -329,16 +412,22 @@ function handleServerMessage(raw) {
     }
     if (msg.type !== 'state') return;
 
-    applyPowerState(msg.power);
-    applyHoldState(msg.holding);
+    // A missing/malformed field here previously flowed straight into the DOM: `undefined`
+    // power/holding rendered the wrong button state (and made its next click send the wrong
+    // command), and `undefined` brightness snapped the slider to its own default with a
+    // rgb(NaN, NaN, NaN) thumb color.
+    const state = sanitizeStateMessage(msg);
+    applyPowerState(state.power);
+    applyHoldState(state.holding);
 
     const brightnessSlider = document.getElementById('brightnessSlider');
-    if (brightnessSlider && !sliderActivelyDragging) {
-        brightnessSlider.value = msg.brightness;
+    if (brightnessSlider && !sliderActivelyDragging && state.brightness !== null) {
+        brightnessSlider.value = state.brightness;
         updateSliderThumb(brightnessSlider);
     }
 
-    if (msg.color) {
+    if (msg.color && typeof msg.color.r === 'number' && typeof msg.color.g === 'number' &&
+        typeof msg.color.b === 'number') {
         const { r, g, b } = msg.color;
         applyColorDisplay(r, g, b);
     }

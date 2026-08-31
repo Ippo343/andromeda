@@ -51,9 +51,19 @@ function rgbToHistogramWidths(r, g, b) {
     };
 }
 
-// Converts an HSV color (h in degrees [0, 360), s and v in [0, 1]) to RGB
-// bytes [0, 255]. Extracted from ColorWheel.hsvToRgb (unchanged behavior).
+// Converts an HSV color (h in degrees, any range - normalized below; s and v
+// in [0, 1]) to RGB bytes [0, 255]. Extracted from ColorWheel.hsvToRgb
+// (unchanged behavior otherwise).
 function hsvToRgb(h, s, v) {
+    // The if-chain below only covers [0, 360) - h === 360 previously fell through every
+    // branch and silently returned grey (r=g=b=m) instead of wrapping back to the same color
+    // as h === 0. Both current call sites in this file already pre-wrap their angle into
+    // [0, 360) before calling this, so 360 isn't reachable through them today - but this is a
+    // shared, exported function, and its own contract shouldn't silently break for any other
+    // caller (a test, or code added later) that passes a boundary or out-of-range value.
+    // Normalizing here, once, is simpler than requiring every caller to know to avoid it.
+    h = ((h % 360) + 360) % 360;
+
     const c = v * s;
     const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
     const m = v - c;
@@ -65,13 +75,28 @@ function hsvToRgb(h, s, v) {
     else if (h >= 120 && h < 180) { r = 0; g = c; b = x; }
     else if (h >= 180 && h < 240) { r = 0; g = x; b = c; }
     else if (h >= 240 && h < 300) { r = x; g = 0; b = c; }
-    else if (h >= 300 && h < 360) { r = c; g = 0; b = x; }
+    else { r = c; g = 0; b = x; }
 
     return [
         Math.round((r + m) * 255),
         Math.round((g + m) * 255),
         Math.round((b + m) * 255),
     ];
+}
+
+// Normalizes a "state" broadcast into the fields controls.js actually applies to the DOM,
+// substituting safe fallbacks for anything missing/malformed rather than letting `undefined`
+// or `null` flow into the UI (a device button rendering the wrong action, a slider snapping
+// to its default with a NaN thumb color, or - worst - a missing device name being read back
+// as the literal string "undefined" and then committed as the new name on blur).
+function sanitizeStateMessage(msg) {
+    return {
+        power: typeof msg.power === 'boolean' ? msg.power : false,
+        holding: typeof msg.holding === 'boolean' ? msg.holding : false,
+        brightness: typeof msg.brightness === 'number' && Number.isFinite(msg.brightness)
+            ? msg.brightness
+            : null,
+    };
 }
 
 // Maps a brightness slider value [0, 255] to the logo's CSS
@@ -92,5 +117,6 @@ if (typeof module !== 'undefined' && module.exports) {
         rgbToHistogramWidths,
         hsvToRgb,
         logoBrightnessFilter,
+        sanitizeStateMessage,
     };
 }

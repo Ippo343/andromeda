@@ -18,7 +18,15 @@ function scanNetworks() {
     const maxPollAttempts = 20;
 
     function pollScan() {
-        fetch('/scan')
+        // Without a timeout, a request that never gets a response (the device gone dark
+        // mid-scan) hangs forever - neither resolving nor rejecting - leaving the spinner
+        // stuck and the button disabled with no way out short of a page reload, since the
+        // pollAttempts budget below only ever kicks in for a response that did arrive.
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+
+        fetch('/scan', { signal: controller.signal })
+            .finally(() => clearTimeout(timeout))
             .then(response => {
                 if (!response.ok) {
                     throw new Error('Scan request failed');
@@ -55,7 +63,16 @@ function scanNetworks() {
                     status.innerHTML = '';
                     scanBtn.disabled = false;
                     scanBtn.innerHTML = 'Scan for Networks';
+                    return;
                 }
+
+                // A response shaped like none of the above (no networks/error/scanning
+                // status - a malformed/empty body, or an edge case in the server's response
+                // building) previously left the spinner running and the button disabled with
+                // no way out short of a page reload.
+                status.innerHTML = '<div class="status error">Unexpected response from device. Please try again.</div>';
+                scanBtn.disabled = false;
+                scanBtn.innerHTML = 'Scan for Networks';
             })
             .catch(error => {
                 console.error('Scan error:', error);

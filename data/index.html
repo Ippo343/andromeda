@@ -148,14 +148,27 @@
 
     <!-- External JavaScript -->
     <script src="js/utils.js"></script>
+    <script src="js/ws-client-utils.js"></script>
     <script src="js/controls-logic.js"></script>
     <script src="js/controls.js"></script>
 
     <!-- FPS monitoring -->
     <script>
+        // Guards against a stalled/unreachable device: without a timeout, a fetch to a device
+        // that's gone dark just queues up behind the browser's own (much longer) connection
+        // timeout, and without the in-flight guard, a slow response left the next interval
+        // tick free to fire a second overlapping request - piling up exactly when the link is
+        // already struggling.
+        let fpsRequestInFlight = false;
         function updateFPS() {
-            fetch('/fps')
-                .then(r => r.text())
+            if (fpsRequestInFlight) return;
+            fpsRequestInFlight = true;
+
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 2000);
+
+            fetch('/fps', { signal: controller.signal })
+                .then(r => (r.ok ? r.text() : Promise.reject(new Error('not ok'))))
                 .then(fps => {
                     const fpsValue = parseFloat(fps);
                     document.getElementById('fps').textContent =
@@ -163,6 +176,10 @@
                 })
                 .catch(() => {
                     document.getElementById('fps').textContent = '-- FPS';
+                })
+                .finally(() => {
+                    clearTimeout(timeout);
+                    fpsRequestInFlight = false;
                 });
         }
         setInterval(updateFPS, 500);
