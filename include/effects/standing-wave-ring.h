@@ -39,7 +39,6 @@ class StandingWaveRing : public RingFieldEffect
     RandParam<uint8_t, 90, 170> pluckAmplitude_;
     // Raised-cosine half-width of a pluck, in tenths of a cell (1.6 .. 3.0).
     RandParam<uint8_t, 16, 30> pluckWidthDeci_;
-    static constexpr uint32_t PLUCK_ROLL_LIMIT = 100000;
     // Mean |displacement| per cell below which the strip counts as "rung down"
     // and gets a fresh pluck regardless of the random roll - at this level the
     // whole ring is within ~2 palette steps of the midpoint, i.e. visually flat.
@@ -59,8 +58,7 @@ class StandingWaveRing : public RingFieldEffect
             return;
         }
 
-        uint32_t threshold = rateToThreshold(pluckRateCentiHz_ / 100.0f, dt, PLUCK_ROLL_LIMIT);
-        if ((uint32_t)random(PLUCK_ROLL_LIMIT) < threshold) pluck(strip, random(stripLen(strip)));
+        if (rollEvent(pluckRateCentiHz_ / 100.0f, dt)) pluck(strip, random(stripLen(strip)));
     }
 
     void stepStrip(size_t strip, float dtSeconds) override

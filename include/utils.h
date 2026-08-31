@@ -44,6 +44,13 @@ void shuffle(int* array, int size);  // Fisher-Yates shuffle
 // makes it safe, and it isn't a case where visual precision matters.
 uint32_t rateToThreshold(float ratePerSecond, milliseconds_t dt, uint32_t rollLimit);
 
+// Single-event version of the same roll: "did an event of rate ratePerSecond happen this
+// frame". Wraps rateToThreshold() with a fixed roll limit precise enough for any realistic
+// per-second rate, so callers that just want a one-shot Bernoulli trial (a pluck, a kick, a
+// spawn) don't each need their own private *_ROLL_LIMIT constant and random()/threshold
+// dance.
+bool rollEvent(float ratePerSecond, milliseconds_t dt);
+
 // Accumulates a per-second loss rate into a fade amount for fadeToBlackBy/scale8 (0-255),
 // carrying the sub-quantum remainder forward in `debt` so the time-averaged decay rate is
 // correct even when a single frame's loss is smaller than 1/255 - without this, a fast
