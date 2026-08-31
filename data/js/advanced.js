@@ -61,6 +61,11 @@ function renderMetrics(metrics) {
         .join('');
 }
 
+function renderFirmware(metrics) {
+    const el = document.getElementById('firmwareVersion');
+    if (el) el.textContent = firmwareLabel(metrics);
+}
+
 function renderLogs(text) {
     const box = document.getElementById('logbox');
     const atBottom =
@@ -90,7 +95,10 @@ function renderLogs(text) {
 function refresh() {
     fetch('/metrics')
         .then((r) => r.json())
-        .then(renderMetrics)
+        .then((m) => {
+            renderMetrics(m);
+            renderFirmware(m);
+        })
         .catch(() => {
             const el = document.getElementById('metrics');
             if (!el.children.length) {

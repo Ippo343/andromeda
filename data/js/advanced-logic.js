@@ -100,6 +100,13 @@ function metricTiles(m) {
     ];
 }
 
+// The build-time git-describe string from /metrics, or "-" when absent. Shown
+// in its own box on the Advanced page rather than as a metrics tile - it's far
+// longer than any other value and looked lopsided in the 2-column grid.
+function firmwareLabel(m) {
+    return (m && m.version) || '-';
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         parseLogLine,
@@ -109,5 +116,6 @@ if (typeof module !== 'undefined' && module.exports) {
         resetReasonLabel,
         formatTemp,
         metricTiles,
+        firmwareLabel,
     };
 }
