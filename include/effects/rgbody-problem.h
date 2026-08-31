@@ -35,11 +35,8 @@ class RGBodyProblem : public EmitterFieldEffect
         // More bodies means more simultaneous light sources, so shrink each one (smaller
         // brightness falloff radius) as N grows, from the size tuned for 3 bodies down to
         // the smallest size tried (at 6 bodies), so the scene doesn't get overly bright/busy.
-        float t = (float)(positions.size() - MIN_BODIES) / (float)(MAX_BODIES - MIN_BODIES);
-        brightnessFactor =
-            defaultBrightnessFactor *
-            (BRIGHTNESS_FACTOR_AT_MIN_BODIES +
-             t * (BRIGHTNESS_FACTOR_AT_MAX_BODIES - BRIGHTNESS_FACTOR_AT_MIN_BODIES));
+        scaleGlowByEmitterCount(MIN_BODIES, MAX_BODIES, BRIGHTNESS_FACTOR_AT_MIN_BODIES,
+                                BRIGHTNESS_FACTOR_AT_MAX_BODIES);
 
         // Use the narrower half-dimension, not getScreenRadius() (== the *wider* one):
         // NBodySystem places/bounds bodies in a full circle of this radius, so on a

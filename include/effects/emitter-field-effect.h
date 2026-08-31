@@ -62,6 +62,28 @@ class EmitterFieldEffect : public AbstractEffect
     }
 
    protected:
+    // Shrink each emitter's inverse-square glow (brightnessFactor - the falloff
+    // radius) as the emitter count rises. N light sources summed additively
+    // otherwise saturate the whole field to a flat blend with no spatial
+    // gradient once every LED sits inside every emitter's saturation radius -
+    // which is exactly what BezierSwarm did on the small L10 panels (#112),
+    // where it alone kept the raw defaultBrightnessFactor.
+    //
+    // `glowAtMinCount` / `glowAtMaxCount` are the fraction of
+    // defaultBrightnessFactor to keep at the low / high end of the
+    // [minCount, maxCount] emitter-count range; the emitter count clamps into
+    // that range. Call once from the subclass constructor, after the base
+    // ctor has sized positions[].
+    void scaleGlowByEmitterCount(int minCount, int maxCount, float glowAtMinCount,
+                                 float glowAtMaxCount)
+    {
+        float span = (float)(maxCount - minCount);
+        float f = span > 0.0f ? ((float)positions.size() - (float)minCount) / span : 0.0f;
+        f = f < 0.0f ? 0.0f : (f > 1.0f ? 1.0f : f);
+        brightnessFactor =
+            defaultBrightnessFactor * (glowAtMinCount + f * (glowAtMaxCount - glowAtMinCount));
+    }
+
     // Shared "copy the physics state into positions[]" step every subclass's
     // updatePositions() needs. `elementAt(i)` returns the Vec2f for emitter i - a
     // lambda rather than a plain container reference, since not every subclass's
