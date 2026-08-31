@@ -21,11 +21,15 @@
         <div id="status"></div>
         <div id="networks"></div>
 
-        <form method="post" action="/save" id="wifiForm" onsubmit="return validateForm()">
+        <!-- Hidden until a network is selected from the scan list or "Enter manually..."
+             is chosen (see wifi.js) - nothing here is focusable while hidden, so iOS has
+             no text field to aggressively autofocus/zoom into while a scan is running. -->
+        <form method="post" action="/save" id="wifiForm" onsubmit="return validateForm()"
+              class="hidden">
 
             <div class="form-group">
                 <label for="ssid">WiFi Network Name (SSID):</label>
-                <input type="text" id="ssid" name="ssid" required placeholder="Enter network name or select from scan">
+                <input type="text" id="ssid" name="ssid" required placeholder="Enter network name">
             </div>
 
             <div class="form-group">
