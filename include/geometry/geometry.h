@@ -99,6 +99,14 @@ class Geometry
     LedStrip* _fixedStrips;
     LedStrip* strips;  // The actual strips used for math and rendering
 
+    // Cached max(halfWidth, halfHeight), set once per initialize()/
+    // initializeForTest() call. Used to be a function-local `static` inside
+    // getScreenRadius(), which computed it once for the whole process and
+    // never picked up a later re-initialize() with a different model - and
+    // paid a static-init guard check on every call (hot: two effects read
+    // it per LED per frame).
+    unsigned short screenRadius = 0;
+
     // Load model coordinates from PROGMEM into RAM
     void loadCoordinates();
 
@@ -140,12 +148,7 @@ class Geometry
     inline unsigned short getScreenHalfHeight() const { return getScreenHeight() / 2; }
     inline unsigned short getScreenHalfWidth() const { return getScreenWidth() / 2; }
 
-    inline unsigned short getScreenRadius() const
-    {
-        static unsigned short screenRadius = 0;
-        if (screenRadius == 0) { screenRadius = max(getScreenHalfHeight(), getScreenHalfWidth()); }
-        return screenRadius;
-    }
+    inline unsigned short getScreenRadius() const { return screenRadius; }
 
     // Apply random rotation transform to all LED coordinates
     void applyGlobalRandomRotation();
@@ -159,7 +162,9 @@ extern Geometry GEOMETRY;
 
 // Convenience macros for iterating over strips and LEDs
 // These now use the dynamic geometry
-#define FOR_EACH_STRIP for (size_t iStrip = 0; iStrip < GEOMETRY.getNumStrips(); iStrip++)
+#define FOR_EACH_STRIP                                                    \
+    for (size_t iStrip = 0, _forEachStripCount = GEOMETRY.getNumStrips(); \
+         iStrip < _forEachStripCount; iStrip++)
 // Reads num_leds once into the for-loop's own init-clause instead of
 // re-evaluating GEOMETRY.getStrip(iStrip) on every iteration.
 #define FOR_EACH_LED(iStrip)                                                     \

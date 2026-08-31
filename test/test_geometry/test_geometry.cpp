@@ -247,6 +247,20 @@ void test_geometry_screen_dimension_helpers()
     TEST_ASSERT_EQUAL_UINT16(467, GEOMETRY.getScreenHalfWidth());
 }
 
+void test_geometry_screen_radius_updates_on_reinitialize_with_different_model()
+{
+    // getScreenRadius() used to be a function-local `static` computed once
+    // for the whole process, so a runtime model switch (MODEL command) kept
+    // reporting the first model's radius forever. Reinitializing with a
+    // different model must pick up its own screen dimensions.
+    GEOMETRY.initializeForTest(ModelId::SINGLE_STRIP_TEST_DEVICE);
+    TEST_ASSERT_EQUAL_UINT16(467, GEOMETRY.getScreenRadius());  // max(5, 934)/2 halves = max(5,467)
+
+    GEOMETRY.initializeForTest(ModelId::L70_MK1);
+    TEST_ASSERT_EQUAL_UINT16(340,
+                             GEOMETRY.getScreenRadius());  // max(480,680)/2 halves = max(240,340)
+}
+
 void test_geometry_reset_global_transform_restores_original_coordinates()
 {
     GEOMETRY.initializeForTest(ModelId::SINGLE_STRIP_TEST_DEVICE);
@@ -433,6 +447,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_geometry_fallback_target_does_not_recurse);
     RUN_TEST(test_geometry_reinitialize_frees_previous_allocation);
     RUN_TEST(test_geometry_screen_dimension_helpers);
+    RUN_TEST(test_geometry_screen_radius_updates_on_reinitialize_with_different_model);
     RUN_TEST(test_geometry_reset_global_transform_restores_original_coordinates);
     RUN_TEST(test_geometry_apply_global_random_rotation_preserves_radius);
 
