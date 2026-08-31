@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <vector>
 
 #include "effects-base.h"
@@ -124,10 +125,15 @@ class ElectricSparks : public AbstractEffect
         // Random injection of new spikes
         if (random(DICE_LIMIT) < sparkThreshold)
         {
-            int width = 1;
+            size_t width = 1;
 
-            // Keep rolling for a chance to increase the spark's size
-            while (random(100) < bigSparkChance) width *= 2;
+            // Keep rolling for a chance to increase the spark's size. Expected work here
+            // diverges (2 * max bigSparkChance/100 > 1), so an unclamped width can in rare
+            // cases double dozens of times before the roll finally fails - clamp to the strip
+            // length so a long roll costs at most one pass over the strip instead of a
+            // multi-second freeze inside evaluate().
+            while (width < strip->num_leds && random(100) < bigSparkChance) width *= 2;
+            width = std::min(width, strip->num_leds);
 
             // Now light up the pixel and its neighbours up to the defined width
             for (size_t w = 0; w < width; w++)
