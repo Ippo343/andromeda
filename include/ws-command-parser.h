@@ -20,9 +20,21 @@ namespace WsCommandParser
 // missing field, or out-of-range field).
 inline bool findField(const char* json, const char* key, long& outValue)
 {
+    if (!json) return false;
     const char* p = strstr(json, key);
     if (!p) return false;
-    outValue = strtol(p + strlen(key), nullptr, 10);
+    p += strlen(key);
+
+    // Tolerate whitespace after the colon - a strict `key` match like `"\"r\":"` otherwise
+    // silently rejects the perfectly valid `"r": 128`.
+    while (*p == ' ' || *p == '\t') p++;
+
+    // strtol() parses "abc", "null", "true", or nothing at all as 0 - previously
+    // indistinguishable from an explicit 0 (e.g. a garbage brightness value turned the
+    // lights off instead of being rejected). Require an actual number to start here.
+    if (*p != '-' && (*p < '0' || *p > '9')) return false;
+
+    outValue = strtol(p, nullptr, 10);
     return true;
 }
 
@@ -34,8 +46,9 @@ inline bool findField(const char* json, const char* key, long& outValue)
 // properly quoted string.
 inline bool findStringField(const char* json, const char* key, char* out, size_t outSize)
 {
+    if (!json || outSize == 0) return false;
     const char* p = strstr(json, key);
-    if (!p || outSize == 0) return false;
+    if (!p) return false;
     p += strlen(key);
     if (*p != '"') return false;
     p++;
@@ -55,6 +68,8 @@ inline bool findStringField(const char* json, const char* key, char* out, size_t
 
 inline bool parse(const char* json, Command& out)
 {
+    if (!json) return false;
+
     if (strstr(json, "\"type\":\"next\""))
     {
         out = Command::Next();
@@ -136,7 +151,7 @@ inline bool parse(const char* json, Command& out)
 // value to NVS, rather than doing so on every drag-speed update.
 inline bool parseBrightness(const char* json, uint8_t& outValue, bool& outCommit)
 {
-    if (!strstr(json, "\"type\":\"brightness\"")) return false;
+    if (!json || !strstr(json, "\"type\":\"brightness\"")) return false;
     long value;
     if (!findField(json, "\"value\":", value)) return false;
     if (value < 0 || value > 255) return false;
