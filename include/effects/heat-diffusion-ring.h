@@ -24,6 +24,15 @@ class HeatDiffusionRing : public RingFieldEffect
         CRGBPalette16 heat = HeatColors_p;
         UpscalePalette(heat, palette_);
         flames_.resize(GEOMETRY.getNumStrips());
+
+        // One persistent scratch buffer per strip, sized once here instead of
+        // reallocated/zero-filled via assign(n, 0.0f) on every substep (up to
+        // 4x/frame) in stepStrip() - every element gets overwritten by the
+        // diffusion loop before it's read, so zero-filling it was always wasted
+        // work, and reusing a single shared buffer across strips of different
+        // lengths meant reallocating every time the strip changed too.
+        scratch_.resize(GEOMETRY.getNumStrips());
+        FOR_EACH_STRIP scratch_[iStrip].resize(GEOMETRY.getStrip(iStrip).num_leds);
     }
 
     const char* GetName() override { return "Heat Diffusion Ring"; }
@@ -113,17 +122,19 @@ class HeatDiffusionRing : public RingFieldEffect
             f++;
         }
 
-        // 2. Diffuse + Newton-cool.
-        scratch_.assign(n, 0.0f);
+        // 2. Diffuse + Newton-cool. scratch_[strip] is preallocated once at
+        // construction (see the ctor) and every entry is overwritten below
+        // before T.swap(scratch_[strip]) hands it back, so no zero-fill needed.
+        auto& scratch = scratch_[strip];
         float a = (float)alpha_;
         float cool = coolingPct_ / 100.0f;
         for (size_t i = 0; i < n; i++)
         {
             float v = T[i] + a * laplacian(T, i) * dtSeconds;
             v -= cool * v * dtSeconds;
-            scratch_[i] = v < 0.0f ? 0.0f : v;
+            scratch[i] = v < 0.0f ? 0.0f : v;
         }
-        T.swap(scratch_);
+        T.swap(scratch);
     }
 
     uint8_t colorIndex(size_t strip, size_t led) const override
@@ -155,6 +166,6 @@ class HeatDiffusionRing : public RingFieldEffect
         flames_[strip].push_back(fl);
     }
 
-    std::vector<float> scratch_;
+    std::vector<std::vector<float>> scratch_;  // [strip] -> per-LED diffusion scratch buffer
     std::vector<std::vector<Flame>> flames_;
 };
