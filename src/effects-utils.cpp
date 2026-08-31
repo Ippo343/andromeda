@@ -27,7 +27,7 @@ vector<CHSV> randomComplementaryColors(int N)
 {
     vector<CHSV> retval(N);
 
-    const int hueStep = (int)(255.0 / N);
+    const int hueStep = (int)(255.0f / N);
     short a = random8();
 
     for (size_t i = 0; i < N; i++)

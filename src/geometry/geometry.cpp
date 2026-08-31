@@ -274,10 +274,10 @@ void Geometry::loadCoordinates()
 void Geometry::applyGlobalRandomRotation()
 {
     // Pick a random angle for the rotation
-    float theta = (random(0, 1000) / 1000.0) * 2 * PI;
+    float theta = (random(0, 1000) / 1000.0f) * 2 * PI;
 
     // Same angle, in centidegrees (to transform the polar coordinates)
-    int tcDeg = (int)(theta * (100 * 180.0 / PI));
+    int tcDeg = (int)(theta * (100 * 180.0f / PI));
 
     Log.noticeln("Applying global rotation: %d degrees", (tcDeg / 100));
 
@@ -295,9 +295,14 @@ void Geometry::applyGlobalRandomRotation()
             strips[iStrip].leds[iLed].cartesian.x = (short)(r.x * cosT + r.y * sinT);
             strips[iStrip].leds[iLed].cartesian.y = (short)(-r.x * sinT + r.y * cosT);
 
-            // Update polar angle
+            // Update polar angle. cdegrees - tcDeg is negative for roughly half the
+            // LEDs at any given rotation, and C++'s % truncates toward zero rather
+            // than floors - so a bare "% FULL_CIRCLE" stays negative there and wraps
+            // to 36000..65535 once assigned into the uint16_t field below. Add
+            // FULL_CIRCLE before the modulo so the result is always in [0, FULL_CIRCLE).
             strips[iStrip].leds[iLed].polar.cdegrees =
-                ((int)_fixedStrips[iStrip].leds[iLed].polar.cdegrees - tcDeg) % FULL_CIRCLE;
+                ((int)_fixedStrips[iStrip].leds[iLed].polar.cdegrees - tcDeg + FULL_CIRCLE) %
+                FULL_CIRCLE;
         }
     }
 }

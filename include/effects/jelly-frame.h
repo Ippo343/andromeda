@@ -62,7 +62,11 @@ class JellyFrame : public RingFieldEffect
 
     uint8_t colorIndex(size_t strip, size_t led) const override
     {
-        return (uint8_t)((float)baseHue_ + channel(strip, U)[led] * (hueGainDeci_ / 10.0f));
+        // Clamp before the cast - baseHue_ + displacement*gain can land outside
+        // [0, 255] (unlike StandingWaveRing's colorIndex(), which already clamps),
+        // and float->uint8_t on an out-of-range value is UB rather than a wrap.
+        float x = (float)baseHue_ + channel(strip, U)[led] * (hueGainDeci_ / 10.0f);
+        return (uint8_t)(x < 0.0f ? 0.0f : (x > 255.0f ? 255.0f : x));
     }
 
    private:
