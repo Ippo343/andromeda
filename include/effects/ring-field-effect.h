@@ -66,7 +66,8 @@ class RingFieldEffect : public AbstractEffect
             if (steppable(iStrip)) injectStrip(iStrip, t, dt);
         }
 
-        physics::steppedSimulate(dt, MAX_SUBSTEP_MS, MAX_TOTAL_STEP_MS,
+        physics::steppedSimulate(dt, physics::DEFAULT_MAX_SUBSTEP_MS,
+                                 physics::DEFAULT_MAX_TOTAL_STEP_MS,
                                  [this](float dtSeconds)
                                  {
                                      FOR_EACH_STRIP
@@ -150,7 +151,4 @@ class RingFieldEffect : public AbstractEffect
     std::vector<std::array<std::vector<float>, 2>> ch_;  // ch_[strip][channel][led]
     FrameClock clock_;
     bool seeded_ = false;
-
-    static constexpr milliseconds_t MAX_SUBSTEP_MS = 16;
-    static constexpr milliseconds_t MAX_TOTAL_STEP_MS = 64;
 };

@@ -10,6 +10,13 @@
 
 namespace physics
 {
+// Shared default caps for the four modules that call steppedSimulate() with no
+// module-specific reason to differ: 16ms substeps (well inside every integrator's
+// stability margin), capped at 64ms of total catch-up per call (a few dropped frames'
+// worth) so a long stall substeps forward at a bounded cost instead of free-running.
+constexpr milliseconds_t DEFAULT_MAX_SUBSTEP_MS = 16;
+constexpr milliseconds_t DEFAULT_MAX_TOTAL_STEP_MS = 64;
+
 template <class F>
 void steppedSimulate(milliseconds_t dtMs, milliseconds_t maxSubstepMs, milliseconds_t maxTotalMs,
                      F&& substepFn)
