@@ -372,7 +372,7 @@ size_t Comms::buildCurrentStateJson(char* outBuffer, size_t outBufferSize)
         .colorG = mc.staticColor.g,
         .colorB = mc.staticColor.b,
         .colorActive = mc.isColorActive(),
-        .effectName = mc.getEffectName(),
+        .effectName = mc.getTargetEffectName(),
         .runningModel = {static_cast<uint16_t>(runningConfig->id), runningConfig->name},
         .configuredModel = {static_cast<uint16_t>(configuredId),
                             configuredConfig ? configuredConfig->name : "Unknown"},
