@@ -194,6 +194,20 @@ class MissionControl
     inline bool isHoldPending() const { return holdPending; }
     inline const char* getEffectName() const { return effect ? effect->GetName() : "none"; }
 
+    // The effect the device is committed to showing: the incoming (pending)
+    // effect while a transition to a specific effect is in flight, otherwise
+    // the current one. Comms sends this as the wire "effect" name so the web
+    // UI's effect dropdown reflects a just-accepted selection immediately,
+    // instead of lagging behind the outgoing effect for the whole transition
+    // (mirrors how isHoldPending() feeds the wire "holding" bit). Falls back
+    // to the current effect when the transition target is a random effect,
+    // which isn't instantiated yet and has no name to show.
+    inline const char* getTargetEffectName() const
+    {
+        if (mode == RenderMode::TRANSITIONING && pendingEffect) return pendingEffect->GetName();
+        return getEffectName();
+    }
+
     // Consumes (reads and clears) the flag set whenever broadcast-worthy state
     // changes, so Comms can poll it from its own task to know when to push a
     // fresh state message over the WebSocket.

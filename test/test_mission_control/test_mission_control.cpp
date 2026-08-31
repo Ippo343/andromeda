@@ -559,6 +559,34 @@ void test_queue_effect_command_transitions_to_selected_effect_and_holds()
     MissionControlTestAccess::cancelTransition(mc);
 }
 
+// getTargetEffectName() names the effect the device is committed to: the
+// pending one mid-transition, the current one otherwise. Comms wires this to
+// the "effect" state field so the web dropdown updates the instant a
+// selection is accepted rather than after the transition (#113).
+void test_target_effect_name_reports_pending_effect_during_transition()
+{
+    MissionControl& mc = MissionControl::Instance();
+    ElectricSparks* current = new ElectricSparks();
+    MissionControlTestAccess::setEffect(mc, current);
+    MissionControlTestAccess::setMode(mc, RenderMode::FX_LOOP);
+
+    // Not transitioning: target == current.
+    TEST_ASSERT_EQUAL_STRING(current->GetName(), mc.getTargetEffectName());
+
+    TEST_ASSERT_TRUE(
+        mc.queueWebCommand(Command::Effect(static_cast<uint8_t>(EffectId::NinjaStar))));
+    mc.update(0);
+
+    // Mid-transition: target is the incoming effect, even though the outgoing
+    // ElectricSparks is still the one being rendered.
+    TEST_ASSERT_EQUAL(RenderMode::TRANSITIONING, MissionControlTestAccess::getMode(mc));
+    AbstractEffect* pending = MissionControlTestAccess::getPendingEffect(mc);
+    TEST_ASSERT_NOT_NULL(pending);
+    TEST_ASSERT_EQUAL_STRING(pending->GetName(), mc.getTargetEffectName());
+
+    MissionControlTestAccess::cancelTransition(mc);
+}
+
 void test_queue_effect_command_with_out_of_range_id_is_ignored()
 {
     MissionControl& mc = MissionControl::Instance();
@@ -1040,6 +1068,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_queue_color_command_while_already_in_static_mode_updates_color);
     RUN_TEST(test_color_command_mid_transition_cancels_transition_and_applies_color);
     RUN_TEST(test_queue_effect_command_transitions_to_selected_effect_and_holds);
+    RUN_TEST(test_target_effect_name_reports_pending_effect_during_transition);
     RUN_TEST(test_queue_effect_command_with_out_of_range_id_is_ignored);
     RUN_TEST(test_queue_model_command_updates_factory_config);
     RUN_TEST(test_queue_device_name_command_persists_via_device_identity);
