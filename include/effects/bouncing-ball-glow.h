@@ -14,9 +14,6 @@
 
 #include <math.h>
 
-#include <algorithm>
-#include <vector>
-
 #include "effects-base.h"
 #include "effects-utils.h"
 #include "geometry/geometry.h"
@@ -34,9 +31,6 @@ class BouncingBallGlow : public AbstractEffect
         box_.initRandom(1, (float)GEOMETRY.getScreenHalfWidth(),
                         (float)GEOMETRY.getScreenHalfHeight(), MIN_SPEED_MM_S, MAX_SPEED_MM_S);
         box_.setBounceJitter((float)(uint8_t)bounceJitterDeg_ * (PI / 180.0f));
-
-        flash_.resize(GEOMETRY.getNumStrips());
-        FOR_EACH_STRIP flash_[iStrip].assign(GEOMETRY.getStrip(iStrip).num_leds, 0);
     }
 
     void precompute(milliseconds_t t) override
@@ -67,8 +61,8 @@ class BouncingBallGlow : public AbstractEffect
             out.nscale8((uint8_t)(255.0f * k * k));  // smooth, hard cutoff at RADIUS_MM
         }
 
-        uint8_t w = flash_[strip->idx][led_idx];
-        if (w) out += CRGB(w, w, w);
+        if (flashLevel_ && strip->idx == flashStrip_ && led_idx == flashLed_)
+            out += CRGB(flashLevel_, flashLevel_, flashLevel_);
         return out;
     }
 
@@ -89,36 +83,45 @@ class BouncingBallGlow : public AbstractEffect
 
    private:
     // Paint the LED nearest the ball's most recent wall impact white, fading out
-    // over FLASH_MS. Rebuilt every frame from BoxBounce's contact record.
+    // over FLASH_MS. At most one LED is ever lit at a time, so instead of a
+    // per-strip vector zeroed and rescanned in full every frame, track just
+    // that one {strip, led, level} triple. The nearest-LED scan itself only
+    // needs to run on the frame a bounce actually happens - BoxBounce resets
+    // sinceHit[0] to exactly 0.0f on that frame - since the impact point is
+    // fixed between bounces and only the fade level changes frame to frame.
     void rebuildFlash()
     {
-        FOR_EACH_STRIP std::fill(flash_[iStrip].begin(), flash_[iStrip].end(), 0);
-
         float ageMs = box_.sinceHit[0] * 1000.0f;
-        if (ageMs >= FLASH_MS) return;
-        uint8_t level = (uint8_t)(255.0f * (1.0f - ageMs / FLASH_MS));
-
-        float hx = box_.hitPoint[0].x;
-        float hy = box_.hitPoint[0].y;
-        size_t bestStrip = 0, bestLed = 0;
-        float bestD2 = 1e18f;
-        FOR_EACH_STRIP
+        if (ageMs >= FLASH_MS)
         {
-            LedStrip& s = GEOMETRY.getStrip(iStrip);
-            for (size_t l = 0; l < s.num_leds; l++)
+            flashLevel_ = 0;
+            return;
+        }
+
+        if (box_.sinceHit[0] == 0.0f)
+        {
+            float hx = box_.hitPoint[0].x;
+            float hy = box_.hitPoint[0].y;
+            float bestD2 = 1e18f;
+            FOR_EACH_STRIP
             {
-                float dx = (float)s.leds[l].cartesian.x - hx;
-                float dy = (float)s.leds[l].cartesian.y - hy;
-                float d2 = dx * dx + dy * dy;
-                if (d2 < bestD2)
+                LedStrip& s = GEOMETRY.getStrip(iStrip);
+                for (size_t l = 0; l < s.num_leds; l++)
                 {
-                    bestD2 = d2;
-                    bestStrip = iStrip;
-                    bestLed = l;
+                    float dx = (float)s.leds[l].cartesian.x - hx;
+                    float dy = (float)s.leds[l].cartesian.y - hy;
+                    float d2 = dx * dx + dy * dy;
+                    if (d2 < bestD2)
+                    {
+                        bestD2 = d2;
+                        flashStrip_ = iStrip;
+                        flashLed_ = l;
+                    }
                 }
             }
         }
-        flash_[bestStrip][bestLed] = level;
+
+        flashLevel_ = (uint8_t)(255.0f * (1.0f - ageMs / FLASH_MS));
     }
 
     // RADIUS_MM is fixed for the instance once radiusMm_ is drawn.
@@ -126,7 +129,9 @@ class BouncingBallGlow : public AbstractEffect
 
     BoxBounce box_;
     CRGB ballColor_ = CRGB::White;
-    std::vector<std::vector<uint8_t>> flash_;  // [strip][led] white-flash level
+    size_t flashStrip_ = 0;
+    size_t flashLed_ = 0;
+    uint8_t flashLevel_ = 0;
     FrameClock clock_;
 
 #ifdef UNIT_TEST
