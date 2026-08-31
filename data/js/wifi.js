@@ -144,8 +144,19 @@ function validateForm() {
     connectBtn.disabled = true;
     connectBtn.innerHTML = '<span class="spinner"></span>Connecting...';
 
+    // Lock the form down while the native POST to /save runs, but keep the
+    // credential fields *submittable*: a `disabled` control is excluded from
+    // the submitted form data (HTML spec), which dropped ssid/password from
+    // the request and made the server reject it with "SSID required" (#114).
+    // `readonly` inputs still submit; buttons/checkbox have no readonly, and
+    // disabling those is harmless since they carry no submitted value.
     form.querySelectorAll('input, button').forEach(el => {
-        if (el !== connectBtn) el.disabled = true;
+        if (el === connectBtn) return;
+        if (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'password')) {
+            el.readOnly = true;
+        } else {
+            el.disabled = true;
+        }
     });
 
     showStatus('Testing connection to "' + ssid + '"...', 'loading');
@@ -191,6 +202,7 @@ window.addEventListener('pageshow', function(event) {
         document.getElementById('connectBtn').innerHTML = 'Connect to WiFi';
         document.querySelectorAll('input, button').forEach(el => {
             el.disabled = false;
+            el.readOnly = false;
         });
     }
 });
