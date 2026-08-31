@@ -5,6 +5,8 @@
 
 #include <limits>
 
+#include "utils.h"
+
 // Optional per-frame callback, set only by the native runtime
 // (src/native-runtime.cpp) to export the LED buffer to the browser
 // visualizer bridge after every real frame. nullptr (its default, and the
@@ -41,7 +43,7 @@ class PerformanceMonitor
 
     inline void tick()
     {
-        unsigned short now = millis();
+        milliseconds_t now = millis();
 
         if (lastFrameTime != 0)
         {
@@ -54,8 +56,11 @@ class PerformanceMonitor
 
     float fps()
     {
-        unsigned short totalTime = 0;
-
+        // Deliberately always averages over the full SAMPLE_COUNT, including any
+        // still-zero slots at boot or right after stop() - a simple, cheap
+        // running average that trades a little accuracy in that narrow window
+        // for not having to track how many of the slots hold a real sample.
+        uint32_t totalTime = 0;
         for (size_t i = 0; i < SAMPLE_COUNT; i++) { totalTime += frameTimes[i]; }
 
         if (totalTime == 0) { return std::numeric_limits<float>::quiet_NaN(); }
@@ -87,8 +92,8 @@ class PerformanceMonitor
     static constexpr size_t SAMPLE_COUNT = 128;
     static constexpr size_t INDEX_MASK = SAMPLE_COUNT - 1;
 
-    unsigned short frameTimes[SAMPLE_COUNT] = {0};  // Circular buffer of frame intervals
-    unsigned short lastFrameTime = 0;               // Last frame timestamp
+    milliseconds_t frameTimes[SAMPLE_COUNT] = {0};  // Circular buffer of frame intervals
+    milliseconds_t lastFrameTime = 0;               // Last frame timestamp
     size_t frameIndex = 0;                          // Current position in buffer
 
 #ifdef UNIT_TEST
