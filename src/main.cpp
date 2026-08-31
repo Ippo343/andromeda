@@ -30,8 +30,11 @@ void setup()
     // init still visibly shows it has power.
     statusLedOn();
 
+    // No wait for Serial to become ready: the device normally runs on battery/mains with no
+    // monitor attached, and that has to be the fast path, not the one that pays a timeout.
+    // Serial.begin() + the CDC driver buffer early output regardless, so a monitor attached
+    // shortly after boot still catches the startup log.
     Serial.begin(115200);
-    while (!Serial && !Serial.available()) {}
 
     // Wait a little bit to allow the PC to start the serial monitor before we start spamming it
     // with logs
@@ -119,6 +122,15 @@ void setup()
     setCpuFrequencyMhz(80);
 #endif
     MissionControl::Instance().setFrameDurationCap(config->min_frame_duration_ms);
+
+#ifndef NATIVE_RUNTIME
+    // Nothing previously recovered from a hang inside an effect, FASTLED_SHOW(), or
+    // MissionControl::update() - the device would just sit frozen forever. The framework's
+    // loopTask() already resets the TWDT for us once we're subscribed (esp32-hal-misc.c),
+    // and the SDK default (5s, panic-on-trigger - see sdkconfig CONFIG_ESP_TASK_WDT_*)
+    // reboots the device instead. Enabled last, once setup() itself can no longer trip it.
+    enableLoopWDT();
+#endif
 }
 
 #ifdef NATIVE_RUNTIME
