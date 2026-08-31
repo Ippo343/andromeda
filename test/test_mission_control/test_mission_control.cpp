@@ -434,6 +434,49 @@ void test_update_does_not_dereference_null_effect_before_first_transition()
     TEST_ASSERT_NOT_NULL(MissionControlTestAccess::getEffect(mc));
 }
 
+// The gap the test above doesn't cover: a HOLD/RESUME/POWER_ON command processed by
+// processWebCommands() on the very first tick (the web server is already up before the first
+// update() call) can push nextTransition far enough into the future - holdEffect() sets it to
+// ~0UL - that "t >= nextTransition" never catches the missing effect at all. Simulates that
+// exact state directly (effect == nullptr, nextTransition == ~0UL, as holdEffect() would
+// leave it) rather than routing a real HOLD through the command queue, since queueWebCommand()
+// isn't exposed to this test file and the point is update()'s own null-effect guard, not the
+// queue plumbing.
+void test_update_with_null_effect_and_max_next_transition_does_not_crash()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setEffect(mc, nullptr);
+    MissionControlTestAccess::setNextTransitionValue(mc, ~0UL);
+    MissionControlTestAccess::setMode(mc, RenderMode::HOLDING);
+
+    mc.update(1000);  // must not crash despite effect == nullptr and nextTransition == ~0UL
+
+    // The explicit `!effect` check (not the t >= nextTransition fallthrough, which never
+    // fires here) is what forces handleTransition() to actually acquire an effect.
+    TEST_ASSERT_EQUAL(RenderMode::TRANSITIONING, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_NOT_NULL(MissionControlTestAccess::getAnimation(mc));
+}
+
+// holdEffect() must not flip straight to HOLDING with nothing to hold - it should defer, the
+// same way it already does for a hold requested mid-transition, so finishTransition() applies
+// it once a real effect lands instead of leaving the device stuck HOLDING on nothing. Routes
+// a real HOLD through the command queue (holdEffect() itself is private) exactly like a
+// client's HOLD arriving on literally the first tick would.
+void test_hold_effect_with_no_effect_yet_defers_instead_of_holding_nothing()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setEffect(mc, nullptr);
+    MissionControlTestAccess::setNextTransitionValue(mc, 0);
+    MissionControlTestAccess::setMode(mc, RenderMode::FX_LOOP);
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Hold()));
+    mc.update(0);  // drains the queue and calls holdEffect() with effect still null
+
+    TEST_ASSERT_NOT_EQUAL(static_cast<int>(RenderMode::HOLDING),
+                          static_cast<int>(MissionControlTestAccess::getMode(mc)));
+    TEST_ASSERT_TRUE(MissionControlTestAccess::holdPending(mc));
+}
+
 void test_power_off_and_on_toggle_state()
 {
     MissionControl& mc = MissionControl::Instance();
