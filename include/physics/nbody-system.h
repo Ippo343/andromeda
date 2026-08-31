@@ -36,8 +36,6 @@ class NBodySystem
     static constexpr float SOFTENING_MM = 30.0f;        // Plummer softening length
     static constexpr float LEASH_ACCEL_PER_MM = 0.05f;  // tuning constant, needs a visual pass
     static constexpr float ESCAPE_DISTANCE_MARGIN = 1.5f;
-    static constexpr milliseconds_t MAX_SUBSTEP_MS = 16;
-    static constexpr milliseconds_t MAX_TOTAL_STEP_MS = 64;
 
     void initRandom(size_t n, float boundsRadiusMm, float minMass, float maxMass, float minSpeed,
                     float maxSpeed)
@@ -74,7 +72,8 @@ class NBodySystem
     // permanently unbound and was regenerated from scratch).
     bool step(milliseconds_t dtMs)
     {
-        physics::steppedSimulate(dtMs, MAX_SUBSTEP_MS, MAX_TOTAL_STEP_MS,
+        physics::steppedSimulate(dtMs, physics::DEFAULT_MAX_SUBSTEP_MS,
+                                 physics::DEFAULT_MAX_TOTAL_STEP_MS,
                                  [this](float dtSeconds) { substep(dtSeconds); });
 
         if (detectEscape())

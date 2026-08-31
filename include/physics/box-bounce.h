@@ -44,9 +44,6 @@ class BoxBounce
     std::vector<Vec2f> hitPoint;
     std::vector<float> sinceHit;
 
-    static constexpr milliseconds_t MAX_SUBSTEP_MS = 16;
-    static constexpr milliseconds_t MAX_TOTAL_STEP_MS = 64;
-
     void initRandom(size_t n, float halfWidthMm, float halfHeightMm, float minSpeed, float maxSpeed)
     {
         halfW = halfWidthMm;
@@ -67,7 +64,8 @@ class BoxBounce
 
     void step(milliseconds_t dtMs)
     {
-        physics::steppedSimulate(dtMs, MAX_SUBSTEP_MS, MAX_TOTAL_STEP_MS,
+        physics::steppedSimulate(dtMs, physics::DEFAULT_MAX_SUBSTEP_MS,
+                                 physics::DEFAULT_MAX_TOTAL_STEP_MS,
                                  [this](float dtSeconds) { substep(dtSeconds); });
     }
 

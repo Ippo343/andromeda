@@ -31,8 +31,6 @@ class VerletChain
 
     static constexpr float GRAVITY_MM_PER_S2 = 4000.0f;  // tuning constant, needs a visual pass
     static constexpr int CONSTRAINT_ITERATIONS = 6;
-    static constexpr milliseconds_t MAX_SUBSTEP_MS = 16;
-    static constexpr milliseconds_t MAX_TOTAL_STEP_MS = 64;
 
     // Frictionless by design: no damping is applied anywhere in this class.
     void initRandom(size_t n, Vec2f anchorPoint, float minRodLen, float maxRodLen, float minMass,
@@ -87,7 +85,8 @@ class VerletChain
     // never causes the a*dt^2 term to blow up or forces a "catch-up" backlog.
     void step(milliseconds_t dtMs)
     {
-        physics::steppedSimulate(dtMs, MAX_SUBSTEP_MS, MAX_TOTAL_STEP_MS,
+        physics::steppedSimulate(dtMs, physics::DEFAULT_MAX_SUBSTEP_MS,
+                                 physics::DEFAULT_MAX_TOTAL_STEP_MS,
                                  [this](float dtSeconds)
                                  {
                                      verletIntegrate(dtSeconds);
