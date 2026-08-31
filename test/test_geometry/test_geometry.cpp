@@ -1,3 +1,4 @@
+#include <Preferences.h>
 #include <unity.h>
 
 #include <cmath>
@@ -166,15 +167,27 @@ void test_geometry_initialize_for_test_loads_l10_mk2_model()
     TEST_ASSERT_EQUAL_INT16(-47, last.cartesian.y);
 }
 
-// getModelConfig(UNKNOWN) returns null; allocateAndLoadCoordinates() must log
-// and bail out instead of dereferencing it (regression test for a latent
-// null-deref: it used to unconditionally read config->name right after this
-// check).
-void test_geometry_initialize_for_test_with_unknown_model_does_not_crash()
+// getModelConfig(UNKNOWN) returns null. allocateAndLoadCoordinates() used to just log and
+// return, leaving config == nullptr - every caller (bindHardwareDrivers(), main.cpp's
+// config->name) then dereferenced it, bricking the boot on any unresolvable model id (a
+// corrupt NVS value, or - unrelated to this specific id - a stray WS MODEL command that slips
+// past the write-side guard). It now falls back to the always-registered
+// SINGLE_STRIP_TEST_DEVICE instead of leaving config null.
+void test_geometry_initialize_for_test_with_unknown_model_falls_back_to_test_device()
 {
     Geometry local;
     local.initializeForTest(ModelId::UNKNOWN);
-    TEST_ASSERT_TRUE(true);
+    TEST_ASSERT_NOT_NULL(local.getConfig());
+    TEST_ASSERT_TRUE(local.getConfig()->id == ModelId::SINGLE_STRIP_TEST_DEVICE);
+    TEST_ASSERT_EQUAL_INT(1, local.getNumStrips());
+}
+
+// The fallback itself (SINGLE_STRIP_TEST_DEVICE) must never trigger the same fallback again -
+// otherwise an unregistered fallback target would recurse forever instead of leaving config
+// null as a last resort.
+void test_geometry_fallback_target_does_not_recurse()
+{
+    TEST_ASSERT_NOT_NULL(getModelConfig(ModelId::SINGLE_STRIP_TEST_DEVICE));
 }
 
 // Calling initializeForTest() twice on the same instance must free the first
@@ -313,6 +326,31 @@ void test_factory_config_is_configured_reflects_model_id()
     TEST_ASSERT_TRUE(FactoryConfig::isConfigured());
 }
 
+// setModelId() only writes what it's given - the actual defense against a corrupt/garbage
+// stored value (independent of the write-side guard in MissionControl's MODEL command
+// handler) lives in getModelId() itself. Simulates corruption by writing directly to the same
+// NVS namespace/key FactoryConfig uses, bypassing setModelId() entirely.
+void test_factory_config_get_model_id_rejects_unregistered_stored_value()
+{
+    Preferences prefs;
+    prefs.begin("device", false);
+    prefs.putUShort("model_id", 12345);  // no registry entry for this id
+    prefs.end();
+
+    TEST_ASSERT_TRUE(FactoryConfig::getModelId() == ModelId::UNKNOWN);
+    TEST_ASSERT_FALSE(FactoryConfig::isConfigured());
+}
+
+void test_factory_config_get_model_id_accepts_registered_stored_value()
+{
+    Preferences prefs;
+    prefs.begin("device", false);
+    prefs.putUShort("model_id", (uint16_t)ModelId::L70_MK1);
+    prefs.end();
+
+    TEST_ASSERT_TRUE(FactoryConfig::getModelId() == ModelId::L70_MK1);
+}
+
 // ---------------------------------------------------------------------------
 // Destructor
 // ---------------------------------------------------------------------------
@@ -391,7 +429,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_geometry_initialize_for_test_loads_single_strip_device);
     RUN_TEST(test_geometry_initialize_for_test_loads_multi_strip_l70_mk1_model);
     RUN_TEST(test_geometry_initialize_for_test_loads_l10_mk2_model);
-    RUN_TEST(test_geometry_initialize_for_test_with_unknown_model_does_not_crash);
+    RUN_TEST(test_geometry_initialize_for_test_with_unknown_model_falls_back_to_test_device);
+    RUN_TEST(test_geometry_fallback_target_does_not_recurse);
     RUN_TEST(test_geometry_reinitialize_frees_previous_allocation);
     RUN_TEST(test_geometry_screen_dimension_helpers);
     RUN_TEST(test_geometry_reset_global_transform_restores_original_coordinates);
@@ -403,6 +442,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_model_config_is_in_family);
 
     RUN_TEST(test_factory_config_is_configured_reflects_model_id);
+    RUN_TEST(test_factory_config_get_model_id_rejects_unregistered_stored_value);
+    RUN_TEST(test_factory_config_get_model_id_accepts_registered_stored_value);
 
     RUN_TEST(test_geometry_destructor_frees_allocated_strips);
     RUN_TEST(test_geometry_destructor_on_never_initialized_instance_is_a_no_op);
