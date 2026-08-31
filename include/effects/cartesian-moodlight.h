@@ -41,6 +41,11 @@ class CartesianMoodlight : public AbstractEffect
     {
         // Initialize LUT with sentinel value
         memset(sinPowerLUT, 0xFF, 256);
+
+        // randomize() was never wired up anywhere in production - createEffect() just does
+        // `new CartesianMoodlight()` - so redAmp/greenAmp/blueAmp, the direction vectors and
+        // wavelengths were left as indeterminate heap bytes on every real instantiation.
+        randomize();
     }
 
     void randomize()
