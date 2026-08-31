@@ -1,5 +1,7 @@
 #include "geometry/geometry.h"
 
+#include "nvs-utils.h"
+
 // Global geometry instance
 Geometry GEOMETRY;
 
@@ -163,9 +165,19 @@ void Geometry::allocateAndLoadCoordinates(ModelId model_id)
     config = getModelConfig(model_id);
     if (!config)
     {
-        Log.errorln("Failed to find model configuration for ID %d", (uint8_t)model_id);
-        // TODO: handle this more gracefully (e.g., fallback to a default model or enter a safe
-        // mode)
+        Log.errorln("Failed to find model configuration for ID %d", (uint16_t)model_id);
+
+        // An unresolvable model id (corrupt NVS, or a bug elsewhere that let one slip past
+        // the write-side guards) used to leave `config == nullptr` here, which
+        // bindHardwareDrivers()/callers then dereference on the next line - bricking the
+        // device with WiFi never coming up, since this runs before Comms::setup(). Fall back
+        // to the always-registered test device instead, guarding against the fallback itself
+        // somehow being unregistered so this can't recurse forever.
+        if (model_id != ModelId::SINGLE_STRIP_TEST_DEVICE)
+        {
+            Log.errorln("Falling back to SINGLE_STRIP_TEST_DEVICE");
+            allocateAndLoadCoordinates(ModelId::SINGLE_STRIP_TEST_DEVICE);
+        }
         return;
     }
 
@@ -314,8 +326,8 @@ const char* MODEL_ID_KEY = "model_id";
 void setModelId(ModelId model_id)
 {
     Preferences prefs;
-    prefs.begin(PREFS_NAMESPACE, false);
-    prefs.putUShort(MODEL_ID_KEY, (uint16_t)model_id);
+    if (!beginPreferencesOrWarn(prefs, PREFS_NAMESPACE, false)) return;
+    putUShortOrWarn(prefs, MODEL_ID_KEY, (uint16_t)model_id);
     prefs.end();
 
     Log.noticeln("Factory config: Set model ID to %d (%s)", (uint16_t)model_id,
@@ -325,11 +337,23 @@ void setModelId(ModelId model_id)
 ModelId getModelId()
 {
     Preferences prefs;
-    prefs.begin(PREFS_NAMESPACE, true);  // read-only
+    if (!beginPreferencesOrWarn(prefs, PREFS_NAMESPACE, true)) return ModelId::UNKNOWN;
     uint16_t id = prefs.getUShort(MODEL_ID_KEY, (uint16_t)ModelId::UNKNOWN);
     prefs.end();
 
-    return (ModelId)id;
+    ModelId model = (ModelId)id;
+
+    // Defense in depth against a corrupt/garbage NVS value, independent of the write-side
+    // guard in MissionControl's MODEL command handler: isConfigured() below only checks
+    // != UNKNOWN, so a stored id with no registry entry would otherwise still make it to
+    // Geometry::initialize() with a null config and brick the boot.
+    if (model != ModelId::UNKNOWN && !getModelConfig(model))
+    {
+        Log.errorln("Factory config: stored model ID %d has no registry entry, ignoring", id);
+        return ModelId::UNKNOWN;
+    }
+
+    return model;
 }
 
 bool isConfigured() { return getModelId() != ModelId::UNKNOWN; }
