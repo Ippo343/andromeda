@@ -1,5 +1,7 @@
 #include "device-identity.h"
 
+#include "nvs-utils.h"
+
 namespace DeviceIdentity
 {
 
@@ -24,7 +26,7 @@ String getDefaultName() { return String("Andromeda-") + getUid(); }
 String getCustomName()
 {
     Preferences prefs;
-    prefs.begin(PREFS_NAMESPACE, true);  // read-only
+    if (!beginPreferencesOrWarn(prefs, PREFS_NAMESPACE, true)) return "";
     String name = prefs.getString(NAME_KEY, "");
     prefs.end();
     return name;
@@ -47,11 +49,11 @@ void setDeviceName(const String& name)
     DeviceUid::sanitize(name.c_str(), sanitized, sizeof(sanitized));
 
     Preferences prefs;
-    prefs.begin(PREFS_NAMESPACE, false);
+    if (!beginPreferencesOrWarn(prefs, PREFS_NAMESPACE, false)) return;
     if (sanitized[0] == '\0')
         prefs.remove(NAME_KEY);
     else
-        prefs.putString(NAME_KEY, sanitized);
+        putStringOrWarn(prefs, NAME_KEY, sanitized);
     prefs.end();
 }
 
