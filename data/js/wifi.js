@@ -194,36 +194,119 @@ function togglePassword() {
     passwordField.type = checkbox.checked ? 'text' : 'password';
 }
 
-function validateForm() {
+function setFormBusy(busy) {
+    document.getElementById('wifiForm')
+        .querySelectorAll('input, button')
+        .forEach(el => { el.disabled = busy; });
+}
+
+function resetConnectButton() {
+    setFormBusy(false);
+    document.getElementById('connectBtn').innerHTML = 'Connect to WiFi';
+}
+
+// AJAX submit (returns false so the native form POST never fires). The device
+// can't run the ~10s blocking connection probe on its web-server task without
+// tripping its watchdog (#114), so /save kicks the probe to a worker and
+// answers 202 immediately; we then poll /save-status for the verdict, mirroring
+// the /scan -> pollScan() pattern above. This is what restores inline "bad
+// password" feedback that the synchronous full-page POST couldn't carry.
+function submitCredentials(event) {
+    if (event) event.preventDefault();
+
     const ssid = document.getElementById('ssid').value.trim();
-    const connectBtn = document.getElementById('connectBtn');
-    const form = document.getElementById('wifiForm');
+    const password = document.getElementById('password').value;
 
     if (!ssid) {
         showStatus('Please enter a WiFi network name', 'error');
         return false;
     }
 
-    connectBtn.disabled = true;
-    connectBtn.innerHTML = '<span class="spinner"></span>Connecting...';
+    setFormBusy(true);
+    document.getElementById('connectBtn').innerHTML = '<span class="spinner"></span>Connecting...';
+    showStatus('Testing connection to "' + ssid + '"...', 'loading');
 
-    // Lock the form down while the native POST to /save runs, but keep the
-    // credential fields *submittable*: a `disabled` control is excluded from
-    // the submitted form data (HTML spec), which dropped ssid/password from
-    // the request and made the server reject it with "SSID required" (#114).
-    // `readonly` inputs still submit; buttons/checkbox have no readonly, and
-    // disabling those is harmless since they carry no submitted value.
-    form.querySelectorAll('input, button').forEach(el => {
-        if (el === connectBtn) return;
-        if (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'password')) {
-            el.readOnly = true;
-        } else {
-            el.disabled = true;
-        }
-    });
+    fetch('/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ ssid: ssid, password: password }).toString()
+    })
+        .then(response => {
+            if (response.status === 202) {
+                pollSaveStatus(ssid);
+                return;
+            }
+            // 400 (validation) / 500 - surface the server's own message.
+            return response.text().then(text => {
+                showStatus(text || ('Save failed (' + response.status + ')'), 'error');
+                resetConnectButton();
+            });
+        })
+        .catch(error => {
+            showStatus('Save failed: ' + error.message, 'error');
+            resetConnectButton();
+        });
 
-    showStatus('Saving "' + ssid + '" and restarting to connect...', 'loading');
-    return true;
+    return false;
+}
+
+function pollSaveStatus(ssid) {
+    let attempts = 0;
+    const maxAttempts = 25;  // ~25s, comfortably past the device's 10s probe
+
+    function poll() {
+        // Same guard as pollScan(): a request that never gets a response (the device
+        // juggling the radio, or briefly dropping the setup AP) must not hang the poll.
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+
+        fetch('/save-status', { signal: controller.signal })
+            .finally(() => clearTimeout(timeout))
+            .then(response => {
+                if (!response.ok) throw new Error('status ' + response.status);
+                return response.text();
+            })
+            .then(state => {
+                const s = (state || '').trim();
+
+                if (s === 'connected') {
+                    showStatus('Connected to "' + ssid + '"! The device is restarting to join '
+                        + 'that network - reconnect your phone or laptop to your normal WiFi to '
+                        + 'reach it again.', 'success');
+                    return;
+                }
+
+                if (s === 'failed') {
+                    showStatus('Could not connect to "' + ssid + '". Double-check the password '
+                        + 'and try again.', 'error');
+                    resetConnectButton();
+                    return;
+                }
+
+                // pending
+                if (++attempts < maxAttempts) {
+                    setTimeout(poll, 1000);
+                } else {
+                    showStatus('Still trying to reach "' + ssid + '". If the device dropped the '
+                        + 'setup network, wait a moment for it to reappear and reload this page.',
+                        'error');
+                    resetConnectButton();
+                }
+            })
+            .catch(() => {
+                // One missed poll isn't fatal - the device may be mid-probe with the radio
+                // busy. Keep trying within the same budget.
+                if (++attempts < maxAttempts) {
+                    setTimeout(poll, 1000);
+                } else {
+                    showStatus('Lost contact with the device while connecting. Reconnect to the '
+                        + 'setup network to check, or try again.', 'error');
+                    resetConnectButton();
+                }
+            });
+    }
+
+    poll();
 }
 
 function resetCredentials() {
@@ -258,16 +341,10 @@ function initWifiPage() {
     setTimeout(scanNetworks, 500);
 }
 
-// Handle form submission errors (if user navigates back)
+// If the page is restored from the bfcache (user navigated away mid-submit and
+// came back), drop any leftover busy state so the form is usable again.
 window.addEventListener('pageshow', function(event) {
-    if (event.persisted) {
-        document.getElementById('connectBtn').disabled = false;
-        document.getElementById('connectBtn').innerHTML = 'Connect to WiFi';
-        document.querySelectorAll('input, button').forEach(el => {
-            el.disabled = false;
-            el.readOnly = false;
-        });
-    }
+    if (event.persisted) resetConnectButton();
 });
 
 document.addEventListener('DOMContentLoaded', initWifiPage);

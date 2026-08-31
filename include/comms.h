@@ -64,6 +64,28 @@ class Comms
     // wall-clock-bound WiFi.status() polling loops.
     WifiManager* wifiManager;
 
+    // Outcome of the most recent /save credential probe, driven off the
+    // async_tcp task by saveWorkerTask() and polled by the still-connected
+    // setup client via GET /save-status. Idle until the first /save; each
+    // accepted /save resets it to Pending. Written from the worker task, read
+    // from the async_tcp task - a plain scalar, single writer, so volatile is
+    // enough (same treatment as scanInProgress/scanComplete).
+    enum class SaveStatus
+    {
+        Idle,
+        Pending,
+        Connected,
+        Failed
+    };
+    volatile SaveStatus saveStatus = SaveStatus::Idle;
+
+    // Blocking WiFi-probe worker for the /save handler. Takes ownership of a
+    // heap-allocated SaveJob (ssid/password copied off the request) and frees
+    // it. Runs testAndPersistCredentials(); on success, reboots into station
+    // mode after a short grace period so the client can still poll the
+    // "connected" result. Never runs on the async_tcp task (#114).
+    static void saveWorkerTask(void* param);
+
     volatile bool scanInProgress;
     volatile bool scanComplete;
     // Written from the WiFi event task (onWiFiScanComplete()), read from the async_tcp task
