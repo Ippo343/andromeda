@@ -42,3 +42,12 @@ inline BaseType_t xTaskCreatePinnedToCore(void (*)(void*), const char*, uint32_t
 
 inline void vTaskDelete(void*) {}
 inline int xPortGetCoreID() { return 0; }
+
+// Critical-section spinlock: comms.cpp guards scanResults (written from the WiFi event
+// callback, read from the web server task) with one. No real concurrency on the host - both
+// "tasks" are just regular function calls on the same thread - so these are no-ops, matching
+// vTaskDelay()/xTaskCreate() above.
+using portMUX_TYPE = int;
+constexpr portMUX_TYPE portMUX_INITIALIZER_UNLOCKED = 0;
+inline void portENTER_CRITICAL(portMUX_TYPE*) {}
+inline void portEXIT_CRITICAL(portMUX_TYPE*) {}

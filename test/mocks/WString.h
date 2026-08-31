@@ -13,6 +13,7 @@ class String
     String() = default;
     String(const char* s) : value(s ? s : "") {}
     String(const std::string& s) : value(s) {}
+    explicit String(char c) : value(1, c) {}
     String(int v) : value(std::to_string(v)) {}
     String(unsigned int v) : value(std::to_string(v)) {}
     String(long v) : value(std::to_string(v)) {}

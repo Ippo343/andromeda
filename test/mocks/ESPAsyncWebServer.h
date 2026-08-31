@@ -95,6 +95,10 @@ class AsyncWebSocketClient
     // Test helper: captures what the production code sent via client->text(...).
     std::string lastSentText;
     void text(const char* msg, size_t len) { lastSentText.assign(msg, len); }
+
+    // Test helper: captures the auto-ping period the production code configured.
+    uint16_t lastKeepAlivePeriodSeconds = 0;
+    void keepAlivePeriod(uint16_t seconds) { lastKeepAlivePeriodSeconds = seconds; }
 };
 
 using AwsEventHandler = std::function<void(class AsyncWebSocket*, AsyncWebSocketClient*,
@@ -122,6 +126,16 @@ class AsyncWebSocket
     // Test helper: captures what the production code broadcast via textAll(...).
     std::string lastBroadcastText;
     void textAll(const char* msg, size_t len) { lastBroadcastText.assign(msg, len); }
+
+    // Test helper: records the cap comms.cpp asked for, and how many times it asked -
+    // there's no simulated client list here to actually prune.
+    uint16_t lastCleanupMaxClients = 0;
+    unsigned cleanupClientsCallCount = 0;
+    void cleanupClients(uint16_t maxClients = 4)
+    {
+        lastCleanupMaxClients = maxClients;
+        cleanupClientsCallCount++;
+    }
 
     AwsEventHandler eventHandler;
 };
