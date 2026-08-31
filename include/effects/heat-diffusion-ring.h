@@ -68,7 +68,6 @@ class HeatDiffusionRing : public RingFieldEffect
     RandParam<uint8_t, 3, 7> whitePct_;
 
     static constexpr size_t MAX_FLAMES_PER_STRIP = 4;
-    static constexpr uint32_t SPAWN_ROLL_LIMIT = 100000;
 
     void seedField(size_t strip) override
     {
@@ -79,8 +78,7 @@ class HeatDiffusionRing : public RingFieldEffect
     void injectStrip(size_t strip, milliseconds_t t, milliseconds_t dt) override
     {
         if (flames_[strip].size() >= MAX_FLAMES_PER_STRIP) return;
-        uint32_t threshold = rateToThreshold(spawnRateCentiHz_ / 100.0f, dt, SPAWN_ROLL_LIMIT);
-        if ((uint32_t)random(SPAWN_ROLL_LIMIT) < threshold) spawnFlame(strip);
+        if (rollEvent(spawnRateCentiHz_ / 100.0f, dt)) spawnFlame(strip);
     }
 
     void stepStrip(size_t strip, float dtSeconds) override

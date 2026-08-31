@@ -222,6 +222,18 @@ void test_rate_to_threshold_clamps_to_roll_limit()
     TEST_ASSERT_EQUAL_UINT32(100000, rateToThreshold(10.0f, 1000000, 100000));
 }
 
+void test_roll_event_zero_rate_never_fires()
+{
+    for (int i = 0; i < 200; i++) TEST_ASSERT_FALSE(rollEvent(0.0f, 16));
+}
+
+void test_roll_event_saturated_rate_always_fires()
+{
+    // rate*dt/1000 >> 1 saturates the underlying threshold to the roll limit, so
+    // every roll must succeed regardless of the RNG draw.
+    for (int i = 0; i < 200; i++) TEST_ASSERT_TRUE(rollEvent(1000.0f, 1000));
+}
+
 // ---------------------------------------------------------------------------
 // accumulateFadeAmount
 // ---------------------------------------------------------------------------
@@ -315,6 +327,9 @@ int main(int argc, char** argv)
     RUN_TEST(test_rate_to_threshold_scales_linearly_with_dt);
     RUN_TEST(test_rate_to_threshold_scales_linearly_with_rate);
     RUN_TEST(test_rate_to_threshold_clamps_to_roll_limit);
+
+    RUN_TEST(test_roll_event_zero_rate_never_fires);
+    RUN_TEST(test_roll_event_saturated_rate_always_fires);
 
     RUN_TEST(test_accumulate_fade_amount_zero_dt_is_zero);
     RUN_TEST(test_accumulate_fade_amount_carries_sub_quantum_loss_over_time);

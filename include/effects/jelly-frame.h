@@ -44,14 +44,12 @@ class JellyFrame : public RingFieldEffect
     RandParam<uint8_t, 30, 70> kickRateCentiHz_;  // shear re-excitations per second, /100
     RandParam<uint8_t, 60, 120> kickSpeed_;       // shear impulse velocity amplitude
     RandParam<uint8_t, 9, 18> hueGainDeci_;       // hue units per unit displacement, /10
-    static constexpr uint32_t KICK_ROLL_LIMIT = 100000;
 
     void seedField(size_t strip) override { shearKick(strip); }
 
     void injectStrip(size_t strip, milliseconds_t t, milliseconds_t dt) override
     {
-        uint32_t threshold = rateToThreshold(kickRateCentiHz_ / 100.0f, dt, KICK_ROLL_LIMIT);
-        if ((uint32_t)random(KICK_ROLL_LIMIT) < threshold) shearKick(strip);
+        if (rollEvent(kickRateCentiHz_ / 100.0f, dt)) shearKick(strip);
     }
 
     void stepStrip(size_t strip, float dtSeconds) override

@@ -23,6 +23,13 @@ uint32_t rateToThreshold(float ratePerSecond, milliseconds_t dt, uint32_t rollLi
     return (uint32_t)(constrain(p, 0.0f, 1.0f) * rollLimit);
 }
 
+bool rollEvent(float ratePerSecond, milliseconds_t dt)
+{
+    constexpr uint32_t ROLL_LIMIT = 100000;
+    uint32_t threshold = rateToThreshold(ratePerSecond, dt, ROLL_LIMIT);
+    return (uint32_t)random(ROLL_LIMIT) < threshold;
+}
+
 uint8_t accumulateFadeAmount(float& debt, float lossRatePerSecond, milliseconds_t dt)
 {
     float loss = lossRatePerSecond * dt / 1000.0f;
