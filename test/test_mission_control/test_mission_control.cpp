@@ -12,14 +12,6 @@
 #include "platforms/stub/time_stub.h"
 #include "ws-command-parser.h"
 
-// AbstractBlockingAnimation::GetName()/run() are declared in
-// animation-base.h but never defined anywhere in production code - every
-// real animation overrides both, so this dead code path never needed a
-// definition until now. StubAnimation (below) overrides them too, but the
-// compiler still needs base-class vtable entries to exist at link time.
-const char* AbstractBlockingAnimation::GetName() { return "AbstractBlockingAnimation"; }
-void AbstractBlockingAnimation::run() {}
-
 // Minimal rotation-animation stand-in so mission-control.cpp links without
 // pulling in the real animations.cpp (out of scope for this test target -
 // see test_animations.cpp for the real per-animation frame tests). Finishes

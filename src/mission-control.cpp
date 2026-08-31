@@ -164,7 +164,7 @@ void MissionControl::setNextTransition()
     fadeOutStart = fadeInEnd + random(MIN_EFFECT_DURATION, MAX_EFFECT_DURATION);
     nextTransition = fadeOutStart + FADE_OUT_DURATION;
 
-    Log.noticeln("Next transition in %d ms", nextTransition);
+    Log.noticeln("Next transition in %lu ms", nextTransition - effectStart);
 }
 
 // Return the master brightness to fade the effects in and out
@@ -312,7 +312,6 @@ void MissionControl::handleTransition(AbstractEffect* nextEffect, bool playAnima
     Log.noticeln("Handling transition");
 
     cancelTransition();
-    mode = RenderMode::FX_LOOP;  // provisional; overridden below if playAnimation
 
     if (!playAnimation)
     {
@@ -384,7 +383,7 @@ void MissionControl::resumeEffect()
     if (mode != RenderMode::TRANSITIONING) mode = RenderMode::FX_LOOP;
     stateDirty = true;
 
-    Log.noticeln("Resuming effect rotation, next transition in %d ms", remaining);
+    Log.noticeln("Resuming effect rotation, next transition in %lu ms", remaining);
 }
 
 void MissionControl::powerOff()
@@ -439,9 +438,9 @@ void MissionControl::update(milliseconds_t t)
     // this same seam for palette-reference colors in a future effect.
     if (effect && effect->wantsLiveColorUpdates()) effect->setColor(staticColor);
 
-    Energy::set(slowSin(millis(), 0.5, 0, 255));
+    Energy::set(slowSin(t, 0.5, 0, 255));
 
-    milliseconds_t frameStart = millis();
+    milliseconds_t frameStart = t;
 
     if (mode == RenderMode::TRANSITIONING) { updateTransition(t); }
     else

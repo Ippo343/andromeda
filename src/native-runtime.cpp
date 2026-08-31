@@ -21,17 +21,6 @@
 #include "ws-command-parser.h"
 #include "ws-state-builder.h"
 
-// AbstractBlockingAnimation::GetName()/run() are declared in
-// animation-base.h but never defined anywhere in production code - every
-// real animation overrides both, so this dead code path never needed a
-// definition until now. main.cpp's NATIVE_RUNTIME branch never instantiates
-// AbstractBlockingAnimation (or its indicator subclasses) directly, but
-// MinGW's linker still needs the base class's vtable key function defined
-// somewhere in the link - see the identical stand-in in
-// test_mission_control.cpp/test_animations.cpp/test_comms_integration.cpp.
-const char* AbstractBlockingAnimation::GetName() { return "AbstractBlockingAnimation"; }
-void AbstractBlockingAnimation::run() {}
-
 namespace NativeRuntime
 {
 

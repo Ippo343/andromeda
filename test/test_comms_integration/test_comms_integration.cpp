@@ -19,9 +19,6 @@
 #include "animation-base.h"
 #include "animation-frame-base.h"
 
-const char* AbstractBlockingAnimation::GetName() { return "AbstractBlockingAnimation"; }
-void AbstractBlockingAnimation::run() {}
-
 class StubAnimation : public AbstractFrameAnimation
 {
    public:

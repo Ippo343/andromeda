@@ -176,7 +176,6 @@ class MissionControl
     // Queue a web command from the comms
     bool queueWebCommand(Command command);
 
-    // TODO: this is different from "public uint8_t maxBrightness"... how?
     inline uint8_t getMaxBrightness() const { return maxBrightness; }
     inline void setMaxBrightness(uint8_t b)
     {
