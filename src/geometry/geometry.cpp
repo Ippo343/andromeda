@@ -183,6 +183,8 @@ void Geometry::allocateAndLoadCoordinates(ModelId model_id)
 
     Log.noticeln("Initializing geometry for: %s", config->name);
 
+    screenRadius = max(getScreenHalfHeight(), getScreenHalfWidth());
+
     // Free any previously allocated strips before re-initializing
     if (strips) delete[] strips;
     if (_fixedStrips) delete[] _fixedStrips;
