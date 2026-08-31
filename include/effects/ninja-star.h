@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include "effects-base.h"
 #include "moodlight.h"
 #include "utils.h"
@@ -46,18 +48,57 @@ class NinjaStar : public AbstractEffect
         innerColor = inner.evaluate();
         outerColor = outer.evaluate();
         offset = map((flip * t) % duration, 0, duration, 0, 255);
+        ensurePerLedCache();
     }
 
     CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
     {
-        // TODO: precompute the mapping of the LEDs during the constructor
-        uint8_t theta = map((led->polar.cdegrees * beams) % FULL_CIRCLE, 0, FULL_CIRCLE, 0, 255);
-
+        uint8_t theta = thetaCache[strip->idx][led_idx];
         uint8_t v = pow16(sin8(theta + offset));
 
-        unsigned short scaledRadius = map(led->polar.radius, 0, GEOMETRY.getScreenRadius(), 0, 255);
+        uint8_t scaledRadius = radiusCache[strip->idx][led_idx];
         CRGB color = blend(innerColor, outerColor, scaledRadius);
 
         return color % v;
+    }
+
+    // Public so tests can build the per-LED cache without going through the
+    // full precompute() (which also samples inner/outer MoodLight colors and
+    // derives offset from real t - more than some tests want to control).
+    // theta and scaledRadius are pure functions of a LED's fixed polar
+    // coordinates (and beams, itself fixed for the effect's lifetime) - no
+    // time dependency, so they're computed once instead of remapped every
+    // LED every frame. Built lazily on the first precompute() rather than
+    // in the constructor, since a ROTATE_SPACE effect's coordinates aren't
+    // final until MissionControl::finishTransition() applies the rotation,
+    // which happens after construction but before the first frame.
+    std::vector<std::vector<uint8_t>> thetaCache;
+    std::vector<std::vector<uint8_t>> radiusCache;
+    bool perLedCacheReady = false;
+
+    void ensurePerLedCache()
+    {
+        if (perLedCacheReady) return;
+
+        thetaCache.resize(GEOMETRY.getNumStrips());
+        radiusCache.resize(GEOMETRY.getNumStrips());
+
+        FOR_EACH_STRIP
+        {
+            LedStrip& strip = GEOMETRY.getStrip(iStrip);
+            thetaCache[iStrip].resize(strip.num_leds);
+            radiusCache[iStrip].resize(strip.num_leds);
+
+            FOR_EACH_LED(iStrip)
+            {
+                Led& led = strip.leds[iLed];
+                thetaCache[iStrip][iLed] =
+                    map((led.polar.cdegrees * beams) % FULL_CIRCLE, 0, FULL_CIRCLE, 0, 255);
+                radiusCache[iStrip][iLed] =
+                    map(led.polar.radius, 0, GEOMETRY.getScreenRadius(), 0, 255);
+            }
+        }
+
+        perLedCacheReady = true;
     }
 };

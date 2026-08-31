@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include "effects-base.h"
 #include "utils.h"
 
@@ -43,15 +45,17 @@ class HexagonalRippleGalaxy : public AbstractEffect
 
         // Hue cycling with randomized period
         baseHue = t >> static_cast<uint8_t>(hueShift);
+
+        ensurePerLedCache();
     }
 
     CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
     {
-        // Geometry already precomputes polar radius/angle per LED at load time
-        // (Geometry::loadCoordinates()) -- reuse it instead of recomputing
-        // sqrt/atan2 here every frame.
-        uint8_t radius8 = map(led->polar.radius, 0, GEOMETRY.getScreenRadius(), 0, 255);
-        uint8_t angle8 = map(led->polar.cdegrees % FULL_CIRCLE, 0, FULL_CIRCLE, 0, 255);
+        // radius8/angle8 are pure functions of a LED's fixed polar coordinates
+        // - no time dependency - so they're precomputed once instead of
+        // remapped every LED every frame (see ensurePerLedCache()).
+        uint8_t radius8 = radius8Cache[strip->idx][led_idx];
+        uint8_t angle8 = angle8Cache[strip->idx][led_idx];
 
         // Create ripples with randomized parameters
         uint8_t ripple1 = sin8((radius8 * static_cast<uint8_t>(ripple1Freq)) -
@@ -75,5 +79,40 @@ class HexagonalRippleGalaxy : public AbstractEffect
 
         // Use FastLED's built-in HSV to RGB conversion
         return CHSV(hue, 255, 255);  // Maximum saturation and brightness
+    }
+
+   private:
+    std::vector<std::vector<uint8_t>> radius8Cache;
+    std::vector<std::vector<uint8_t>> angle8Cache;
+    bool perLedCacheReady = false;
+
+    // Lazy, not constructor-time: this effect has no ROTATE_SPACE hint today,
+    // but building the cache on first precompute() rather than construction
+    // keeps the pattern safe regardless (see ninja-star.h for the ROTATE_SPACE
+    // case this matters for).
+    void ensurePerLedCache()
+    {
+        if (perLedCacheReady) return;
+
+        radius8Cache.resize(GEOMETRY.getNumStrips());
+        angle8Cache.resize(GEOMETRY.getNumStrips());
+
+        FOR_EACH_STRIP
+        {
+            LedStrip& strip = GEOMETRY.getStrip(iStrip);
+            radius8Cache[iStrip].resize(strip.num_leds);
+            angle8Cache[iStrip].resize(strip.num_leds);
+
+            FOR_EACH_LED(iStrip)
+            {
+                Led& led = strip.leds[iLed];
+                radius8Cache[iStrip][iLed] =
+                    map(led.polar.radius, 0, GEOMETRY.getScreenRadius(), 0, 255);
+                angle8Cache[iStrip][iLed] =
+                    map(led.polar.cdegrees % FULL_CIRCLE, 0, FULL_CIRCLE, 0, 255);
+            }
+        }
+
+        perLedCacheReady = true;
     }
 };
