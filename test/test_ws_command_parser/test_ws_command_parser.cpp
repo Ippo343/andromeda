@@ -195,6 +195,100 @@ void test_rejects_malformed_message()
     TEST_ASSERT_FALSE(WsCommandParser::parse("not json at all", out));
 }
 
+void test_parse_null_json_is_rejected_not_ub()
+{
+    Command out;
+    TEST_ASSERT_FALSE(WsCommandParser::parse(nullptr, out));
+}
+
+void test_parse_brightness_null_json_is_rejected_not_ub()
+{
+    uint8_t value;
+    bool commit;
+    TEST_ASSERT_FALSE(WsCommandParser::parseBrightness(nullptr, value, commit));
+}
+
+void test_rejects_color_with_string_value()
+{
+    // strtol("abc", ...) parses as 0 - previously indistinguishable from an explicit 0,
+    // silently turning e.g. a garbage red channel into black instead of being rejected.
+    Command out;
+    TEST_ASSERT_FALSE(
+        WsCommandParser::parse("{\"type\":\"color\",\"r\":\"abc\",\"g\":0,\"b\":0}", out));
+}
+
+void test_rejects_color_with_null_value()
+{
+    Command out;
+    TEST_ASSERT_FALSE(
+        WsCommandParser::parse("{\"type\":\"color\",\"r\":null,\"g\":0,\"b\":0}", out));
+}
+
+void test_rejects_color_with_boolean_value()
+{
+    Command out;
+    TEST_ASSERT_FALSE(
+        WsCommandParser::parse("{\"type\":\"color\",\"r\":true,\"g\":0,\"b\":0}", out));
+}
+
+void test_rejects_color_with_empty_value()
+{
+    Command out;
+    TEST_ASSERT_FALSE(WsCommandParser::parse("{\"type\":\"color\",\"r\":,\"g\":0,\"b\":0}", out));
+}
+
+void test_rejects_brightness_with_string_value()
+{
+    uint8_t value;
+    bool commit;
+    TEST_ASSERT_FALSE(WsCommandParser::parseBrightness(
+        "{\"type\":\"brightness\",\"value\":\"abc\"}", value, commit));
+}
+
+void test_rejects_brightness_with_null_value()
+{
+    uint8_t value;
+    bool commit;
+    TEST_ASSERT_FALSE(WsCommandParser::parseBrightness("{\"type\":\"brightness\",\"value\":null}",
+                                                       value, commit));
+}
+
+void test_parse_tolerates_whitespace_after_colon_for_numeric_fields()
+{
+    // findField() (used for r/g/b/id/value) now skips whitespace after the key - a strict,
+    // no-whitespace match previously rejected perfectly valid JSON with a space after the
+    // colon, which any real JSON serializer (the browser's own JSON.stringify included) is
+    // free to emit. Note this is specifically about findField()'s numeric fields, not the
+    // fixed `"type":"next"`-style literal command matches, which are unaffected either way
+    // since this client's own JSON.stringify never emits that whitespace in practice.
+    Command out;
+    TEST_ASSERT_TRUE(
+        WsCommandParser::parse("{\"type\":\"color\",\"r\": 10,\"g\":\t20,\"b\":30}", out));
+    TEST_ASSERT_EQUAL(10, out.r);
+    TEST_ASSERT_EQUAL(20, out.g);
+}
+
+void test_parses_negative_color_value_after_whitespace()
+{
+    // Whitespace-skipping must not interfere with a legitimate leading '-' (rejected later by
+    // the existing range check, not by findField() itself).
+    Command out;
+    TEST_ASSERT_FALSE(
+        WsCommandParser::parse("{\"type\":\"color\",\"r\": -1,\"g\":0,\"b\":0}", out));
+}
+
+void test_rejects_model_with_unregistered_id()
+{
+    // Handler-side validation (mission-control.cpp) is what actually protects the device from
+    // a null-config brick - the parser itself only range-checks (id >= 0), matching
+    // test_rejects_model_with_negative_id above. This is a regression guard for that
+    // boundary staying exactly where it is: parse() must keep accepting any non-negative id
+    // so the reject-unknown-id logic has a value to reject in the first place.
+    Command out;
+    TEST_ASSERT_TRUE(WsCommandParser::parse("{\"type\":\"model\",\"id\":65000}", out));
+    TEST_ASSERT_EQUAL(65000, out.modelId);
+}
+
 int main(int argc, char** argv)
 {
     UNITY_BEGIN();
@@ -224,6 +318,17 @@ int main(int argc, char** argv)
     RUN_TEST(test_rejects_device_name_unterminated_string);
     RUN_TEST(test_rejects_unrecognized_type);
     RUN_TEST(test_rejects_malformed_message);
+    RUN_TEST(test_parse_null_json_is_rejected_not_ub);
+    RUN_TEST(test_parse_brightness_null_json_is_rejected_not_ub);
+    RUN_TEST(test_rejects_color_with_string_value);
+    RUN_TEST(test_rejects_color_with_null_value);
+    RUN_TEST(test_rejects_color_with_boolean_value);
+    RUN_TEST(test_rejects_color_with_empty_value);
+    RUN_TEST(test_rejects_brightness_with_string_value);
+    RUN_TEST(test_rejects_brightness_with_null_value);
+    RUN_TEST(test_parse_tolerates_whitespace_after_colon_for_numeric_fields);
+    RUN_TEST(test_parses_negative_color_value_after_whitespace);
+    RUN_TEST(test_rejects_model_with_unregistered_id);
 
     return UNITY_END();
 }
