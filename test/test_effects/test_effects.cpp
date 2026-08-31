@@ -371,6 +371,28 @@ void test_jelly_frame_stays_bounded_over_long_run()
     }
 }
 
+// Regression: colorIndex() used to cast baseHue_ + displacement*gain to uint8_t
+// without clamping first (StandingWaveRing's equivalent already clamped). Two
+// different displacements that both push the pre-cast value far outside
+// [0, 255] must land on the same clamped index (255) rather than wrapping to
+// different, essentially arbitrary values.
+void test_jelly_frame_color_index_clamps_extreme_displacement()
+{
+    JellyFrame fx;
+    fx.precompute(1000);
+
+    std::vector<float>& u = fx.fieldForTest(0, 0);
+    for (auto& x : u) x = 0.0f;
+    LedStrip& strip = GEOMETRY.getStrip(0);
+
+    u[1] = 1e6f;
+    CRGB a = fx.evaluate(&strip, &strip.leds[1], 1, 1000);
+    u[1] = 5e7f;
+    CRGB b = fx.evaluate(&strip, &strip.leds[1], 1, 1000);
+
+    TEST_ASSERT_TRUE(a == b);
+}
+
 void test_jelly_frame_evaluates_on_l10_and_multi_strip_models()
 {
     for (ModelId model : {ModelId::L10_MK2, ModelId::ANDROMEDA_MK1})
@@ -1392,6 +1414,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_jelly_frame_runs_full_frame_cycle);
     RUN_TEST(test_jelly_frame_color_tracks_displacement);
     RUN_TEST(test_jelly_frame_stays_bounded_over_long_run);
+    RUN_TEST(test_jelly_frame_color_index_clamps_extreme_displacement);
     RUN_TEST(test_jelly_frame_evaluates_on_l10_and_multi_strip_models);
 
     RUN_TEST(test_standing_wave_ring_runs_full_frame_cycle);

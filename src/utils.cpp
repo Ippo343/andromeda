@@ -86,7 +86,7 @@ long cmap(long x, long in_low, long in_high, long out_low, long out_high)
 float slowSin(unsigned long ms, float bpm, uint8_t minVal, uint8_t maxVal)
 {
     float phase = (float(ms) / 1000.0f) * (bpm / 60.0f) * 2.0f * PI;
-    float raw = sin(phase);            // -1 to 1
+    float raw = sinf(phase);           // -1 to 1
     float norm = (raw + 1.0f) / 2.0f;  // 0 to 1
     return minVal + norm * (maxVal - minVal);
 }

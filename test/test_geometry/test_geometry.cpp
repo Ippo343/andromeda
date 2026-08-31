@@ -296,6 +296,31 @@ void test_geometry_apply_global_random_rotation_preserves_radius()
     TEST_ASSERT_EQUAL_UINT16(original_radius, rotated_radius);
 }
 
+// Regression: cdegrees - tcDeg is negative for roughly half the LEDs at any
+// given rotation angle, and C++'s % truncates toward zero rather than
+// floors - a bare "% FULL_CIRCLE" left the result negative there, which
+// wrapped to 36000..65535 once stored in the uint16_t field. Try enough
+// distinct rotation angles that both signs of (cdegrees - tcDeg) are
+// exercised, and assert every LED's angle stays in [0, FULL_CIRCLE).
+void test_geometry_apply_global_random_rotation_keeps_cdegrees_in_range()
+{
+    GEOMETRY.initializeForTest(ModelId::SINGLE_STRIP_TEST_DEVICE);
+
+    for (int seed = 0; seed < 20; seed++)
+    {
+        randomSeed(seed);
+        GEOMETRY.applyGlobalRandomRotation();
+
+        LedStrip& strip = GEOMETRY.getStrip(0);
+        for (size_t i = 0; i < strip.num_leds; i++)
+        {
+            TEST_ASSERT_TRUE(strip.leds[i].polar.cdegrees < FULL_CIRCLE);
+        }
+    }
+
+    GEOMETRY.resetGlobalTransform();
+}
+
 // ---------------------------------------------------------------------------
 // model_registry lookups
 // ---------------------------------------------------------------------------
@@ -450,6 +475,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_geometry_screen_radius_updates_on_reinitialize_with_different_model);
     RUN_TEST(test_geometry_reset_global_transform_restores_original_coordinates);
     RUN_TEST(test_geometry_apply_global_random_rotation_preserves_radius);
+    RUN_TEST(test_geometry_apply_global_random_rotation_keeps_cdegrees_in_range);
 
     RUN_TEST(test_get_model_config_known_id);
     RUN_TEST(test_get_model_config_unknown_id_returns_null);

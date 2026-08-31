@@ -35,7 +35,7 @@ struct PolarCoordinates
         // Calculate radius
         float x_sq = (float)cart.x * cart.x;
         float y_sq = (float)cart.y * cart.y;
-        radius = (uint16_t)sqrt(x_sq + y_sq);
+        radius = (uint16_t)sqrtf(x_sq + y_sq);
 
         // Calculate angle in centi-degrees (0-36000 for 0-360 degrees)
         float angle_rad = atan2f((float)cart.y, (float)cart.x);
