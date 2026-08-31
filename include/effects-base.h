@@ -47,7 +47,7 @@ class AbstractEffect
     virtual void setColor(CRGB c) {}
 
     // Computes the function over all the strips
-    void render(milliseconds_t t)
+    virtual void render(milliseconds_t t)
     {
         FOR_EACH_STRIP
         {

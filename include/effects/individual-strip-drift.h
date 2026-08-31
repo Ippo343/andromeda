@@ -2,15 +2,15 @@
 
 #include <vector>
 
-#include "effects-base.h"
 #include "effects-utils.h"
+#include "effects/per-strip-color-effect.h"
 #include "energy-param.h"
 #include "utils.h"
 
 using std::vector;
 
 // Each strip slowly drifts to a new random color independently
-class IndividualStripDrift : public AbstractEffect
+class IndividualStripDrift : public PerStripColorEffect
 {
    public:
     virtual const char* GetName() { return "Individual Strip Drift"; }
@@ -23,17 +23,16 @@ class IndividualStripDrift : public AbstractEffect
     vector<milliseconds_t> transitionStartTimes;
     vector<milliseconds_t> transitionEndTimes;
 
-    // Per-strip color info
+    // Per-strip color info (colors holds the current interpolated color - see
+    // PerStripColorEffect)
     vector<CRGB> prevColors;
     vector<CRGB> targetColors;
-    vector<CRGB> currentColors;
 
     IndividualStripDrift()
         : prevColors(GEOMETRY.getNumStrips(), CRGB::Black),
           targetColors(GEOMETRY.getNumStrips(), CRGB::Black),
-          currentColors(GEOMETRY.getNumStrips(), CRGB::Black),
-          transitionEndTimes(GEOMETRY.getNumStrips(), 0),
-          transitionStartTimes(GEOMETRY.getNumStrips(), 0)
+          transitionStartTimes(GEOMETRY.getNumStrips(), 0),
+          transitionEndTimes(GEOMETRY.getNumStrips(), 0)
     {
         // Initialize all strips to a random color and set up the first transition
         milliseconds_t now = millis();
@@ -65,12 +64,7 @@ class IndividualStripDrift : public AbstractEffect
                 cmap(t, transitionStartTimes[iStrip], transitionEndTimes[iStrip], 0, 255);
             factor = ease8InOutCubic(factor);
 
-            currentColors[iStrip] = CRGB::blend(prevColors[iStrip], targetColors[iStrip], factor);
+            colors[iStrip] = CRGB::blend(prevColors[iStrip], targetColors[iStrip], factor);
         }
-    }
-
-    CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
-    {
-        return currentColors[strip->idx];
     }
 };

@@ -474,7 +474,7 @@ void test_saturation_glow_evaluate_matches_precomputed_color()
     fx.precompute(2000);
     LedStrip& strip = GEOMETRY.getStrip(0);
     CRGB c = fx.evaluate(&strip, &strip.leds[0], 0, 2000);
-    TEST_ASSERT_TRUE(c == fx.color[0]);
+    TEST_ASSERT_TRUE(c == fx.colors[0]);
 }
 
 void test_saturation_glow_amplitude_keeps_center_wave_in_range()
@@ -494,9 +494,9 @@ void test_saturation_glow_color_varies_over_time()
 {
     SaturationGlow fx;
     fx.precompute(0);
-    CRGB early = fx.color[0];
+    CRGB early = fx.colors[0];
     fx.precompute(120000);  // 2 minutes later - within the 1-4 minute cycleTime range
-    CRGB late = fx.color[0];
+    CRGB late = fx.colors[0];
     TEST_ASSERT_FALSE(early == late);
 }
 
@@ -1073,7 +1073,7 @@ void test_individual_strip_drift_transitions_to_new_target()
 
     LedStrip& strip = GEOMETRY.getStrip(0);
     CRGB c = fx.evaluate(&strip, &strip.leds[0], 0, initialEnd + 1);
-    TEST_ASSERT_TRUE(c == fx.currentColors[0]);
+    TEST_ASSERT_TRUE(c == fx.colors[0]);
 }
 
 // The transition's midpoint should have moved measurably closer to the target than the
@@ -1087,10 +1087,10 @@ void test_individual_strip_drift_current_color_moves_toward_target_over_the_tran
     milliseconds_t end = fx.transitionEndTimes[0];
 
     fx.precompute(start);
-    CRGB atStart = fx.currentColors[0];
+    CRGB atStart = fx.colors[0];
 
     fx.precompute(start + (end - start) / 2);
-    CRGB atMid = fx.currentColors[0];
+    CRGB atMid = fx.colors[0];
 
     auto colorDistanceToTarget = [&](CRGB c)
     {
