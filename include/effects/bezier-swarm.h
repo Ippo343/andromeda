@@ -34,9 +34,21 @@ class BezierSwarm : public EmitterFieldEffect
     static constexpr float HUE_DRIFT_DEG_PER_SECOND = 12.0f;
     float hueDeg = 0;
 
+    // Per-emitter glow scale-down across the 1..6 emitter range (see
+    // EmitterFieldEffect::scaleGlowByEmitterCount). BezierSwarm previously used
+    // the raw defaultBrightnessFactor, whose ~70mm saturation radius floods the
+    // whole 84-103mm L10 panel to a flat colour (#112). First-pass fractions -
+    // want tuning on real L10 hardware.
+    static constexpr int MIN_EMITTERS = 1;
+    static constexpr int MAX_EMITTERS = 6;
+    static constexpr float GLOW_AT_MIN_EMITTERS = 0.40f;
+    static constexpr float GLOW_AT_MAX_EMITTERS = 0.15f;
+
     BezierSwarm() : EmitterFieldEffect(RandParam<int, 1, 6>()), paths(positions.size())
     {
         controlHints = ControlHints::ROTATE_SPACE;
+        scaleGlowByEmitterCount(MIN_EMITTERS, MAX_EMITTERS, GLOW_AT_MIN_EMITTERS,
+                                GLOW_AT_MAX_EMITTERS);
 
         if (positions.size() == 1)
         {

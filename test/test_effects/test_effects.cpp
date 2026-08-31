@@ -877,6 +877,39 @@ void test_bezier_swarm_sets_rotate_space_hint()
     TEST_ASSERT_TRUE(fx.controlHints & ControlHints::ROTATE_SPACE);
 }
 
+// #112: BezierSwarm used to keep the raw defaultBrightnessFactor, whose ~70mm
+// saturation radius floods the small L10 panels to a flat colour. It now takes
+// the same N-dependent glow scale-down the other emitter-field effects have, so
+// its brightnessFactor must land inside the configured fraction band and never
+// at the unscaled default.
+void test_bezier_swarm_scales_glow_down_by_emitter_count()
+{
+    randomSeed(3);
+    for (int attempt = 0; attempt < 40; attempt++)
+    {
+        BezierSwarm fx;
+        TEST_ASSERT_TRUE(fx.brightnessFactor <
+                         defaultBrightnessFactor * BezierSwarm::GLOW_AT_MIN_EMITTERS + 1.0f);
+        TEST_ASSERT_TRUE(fx.brightnessFactor >
+                         defaultBrightnessFactor * BezierSwarm::GLOW_AT_MAX_EMITTERS - 1.0f);
+        TEST_ASSERT_TRUE(fx.brightnessFactor < defaultBrightnessFactor);
+    }
+}
+
+void test_multi_pendulum_scales_glow_down_by_emitter_count()
+{
+    randomSeed(4);
+    for (int attempt = 0; attempt < 40; attempt++)
+    {
+        MultiPendulum fx;
+        TEST_ASSERT_TRUE(fx.brightnessFactor <
+                         defaultBrightnessFactor * MultiPendulum::GLOW_AT_MIN_EMITTERS + 1.0f);
+        TEST_ASSERT_TRUE(fx.brightnessFactor >
+                         defaultBrightnessFactor * MultiPendulum::GLOW_AT_MAX_EMITTERS - 1.0f);
+        TEST_ASSERT_TRUE(fx.brightnessFactor < defaultBrightnessFactor);
+    }
+}
+
 // Guards against the single-emitter case regressing to a static color: retries
 // construction (bounded) until landing on the N=1 branch, then confirms the emitted
 // hue actually changes after several seconds of simulated time.
@@ -1450,11 +1483,13 @@ int main(int argc, char** argv)
     RUN_TEST(test_bezier_swarm_brighter_near_an_emitter_than_far_away);
     RUN_TEST(test_bezier_swarm_sets_rotate_space_hint);
     RUN_TEST(test_bezier_swarm_single_emitter_hue_changes_over_time);
+    RUN_TEST(test_bezier_swarm_scales_glow_down_by_emitter_count);
 
     RUN_TEST(test_multi_pendulum_evaluates);
     RUN_TEST(test_multi_pendulum_brighter_near_an_emitter_than_far_away);
     RUN_TEST(test_multi_pendulum_sets_rotate_space_hint);
     RUN_TEST(test_multi_pendulum_initial_reach_uses_narrower_screen_dimension);
+    RUN_TEST(test_multi_pendulum_scales_glow_down_by_emitter_count);
 
     RUN_TEST(test_bouncing_ball_glow_evaluates);
     RUN_TEST(test_bouncing_ball_glow_brighter_near_a_ball_than_far_away);

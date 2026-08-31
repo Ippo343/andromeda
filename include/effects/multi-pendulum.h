@@ -20,10 +20,23 @@ class MultiPendulum : public EmitterFieldEffect
     static constexpr float MIN_MASS = 1.0f;
     static constexpr float MAX_MASS = 4.0f;
 
+    // Per-emitter glow scale-down across the 2..6 emitter range (see
+    // EmitterFieldEffect::scaleGlowByEmitterCount). Like BezierSwarm,
+    // MultiPendulum was left on the raw defaultBrightnessFactor; its emitters
+    // cluster near the pivot so the flat-flooding is less obvious, but the same
+    // shrink applies (#112). First-pass fractions - want tuning on real L10
+    // hardware.
+    static constexpr int MIN_EMITTERS = 2;
+    static constexpr int MAX_EMITTERS = 6;
+    static constexpr float GLOW_AT_MIN_EMITTERS = 0.40f;
+    static constexpr float GLOW_AT_MAX_EMITTERS = 0.15f;
+
     // A chain needs at least 2 links to be meaningfully "multi".
     MultiPendulum() : EmitterFieldEffect(RandParam<int, 2, 6>())
     {
         controlHints = ControlHints::ROTATE_SPACE;
+        scaleGlowByEmitterCount(MIN_EMITTERS, MAX_EMITTERS, GLOW_AT_MIN_EMITTERS,
+                                GLOW_AT_MAX_EMITTERS);
         colors = randomComplementaryColors((int)positions.size());
 
         // Use the narrower half-dimension, not getScreenRadius() (== the *wider* one):
