@@ -45,6 +45,7 @@ const STATIC_ROUTES = {
     '/wifi': { file: 'wifi-setup.html', type: 'text/html' },
     '/fonts/cinzel.woff2': { file: 'fonts/cinzel.woff2', type: 'font/woff2' },
     '/js/utils.js': { file: 'js/utils.js', type: 'application/javascript' },
+    '/js/ws-client-utils.js': { file: 'js/ws-client-utils.js', type: 'application/javascript' },
     '/js/controls-logic.js': { file: 'js/controls-logic.js', type: 'application/javascript' },
     '/js/controls.js': { file: 'js/controls.js', type: 'application/javascript' },
     '/js/wifi.js': { file: 'js/wifi.js', type: 'application/javascript' },

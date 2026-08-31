@@ -7,14 +7,52 @@
 
 let ws = null;
 let editing = false;
+let reconnectAttempt = 0;
+let reconnectTimer = null;
+
+function scheduleReconnect() {
+    if (reconnectTimer) return;
+    const delay = nextReconnectDelayMs(reconnectAttempt);
+    reconnectAttempt++;
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        connectWebSocket();
+    }, delay);
+}
 
 function connectWebSocket() {
+    document.body.classList.add('ws-disconnected');
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-    ws.onopen = () => document.body.classList.remove('ws-disconnected');
+    let socket;
+    try {
+        socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    } catch (e) {
+        // See controls.js's connectWebSocket() for why this guard exists - a synchronous
+        // throw here previously killed the retry chain permanently.
+        scheduleReconnect();
+        return;
+    }
+    ws = socket;
+
+    // See controls.js's connectWebSocket() for why this exists - a handshake stuck in
+    // CONNECTING forever (no open/error/close) would otherwise never trigger a reconnect.
+    const connectTimeout = setTimeout(() => {
+        if (socket.readyState === WebSocket.CONNECTING) {
+            try { socket.close(); } catch (e) { /* already closing/closed */ }
+        }
+    }, 10000);
+
+    ws.onopen = () => {
+        clearTimeout(connectTimeout);
+        reconnectAttempt = 0;
+        document.body.classList.remove('ws-disconnected');
+    };
+    ws.onerror = () => scheduleReconnect();
     ws.onclose = () => {
+        clearTimeout(connectTimeout);
         document.body.classList.add('ws-disconnected');
-        setTimeout(connectWebSocket, 2000);
+        scheduleReconnect();
     };
     ws.onmessage = (event) => handleStateMessage(event.data);
 }
@@ -36,11 +74,14 @@ function handleStateMessage(raw) {
     }
     if (msg.type !== 'state' || !msg.device) return;
 
+    // A missing/non-string name here previously set the input's value to the literal text
+    // "undefined" (HTMLInputElement.value stringifies whatever it's assigned) - and the blur
+    // handler below then committed that string as the new device name.
     const input = document.getElementById('deviceNameInput');
-    if (input && !editing) input.value = msg.device.name;
+    if (input && !editing && typeof msg.device.name === 'string') input.value = msg.device.name;
 
     const hint = document.getElementById('deviceUidHint');
-    if (hint) hint.textContent = `Device ID: ${msg.device.uid}`;
+    if (hint && typeof msg.device.uid === 'string') hint.textContent = `Device ID: ${msg.device.uid}`;
 
     setRebootIndicator(msg.device.nameRebootRequired);
 }
