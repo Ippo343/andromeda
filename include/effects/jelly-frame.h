@@ -56,16 +56,10 @@ class JellyFrame : public RingFieldEffect
 
     void stepStrip(size_t strip, float dtSeconds) override
     {
-        auto& u = channel(strip, U);
-        auto& v = channel(strip, V);
-        size_t n = u.size();
         float c2 = (float)stiffness_;
         float kTether = tetherPerCenti_ / 100.0f;
         float damp = 1.0f - (dampPerCenti_ / 100.0f) * dtSeconds;
-
-        for (size_t i = 0; i < n; i++)
-            v[i] = (v[i] + (c2 * laplacian(u, i) - kTether * u[i]) * dtSeconds) * damp;
-        for (size_t i = 0; i < n; i++) u[i] += v[i] * dtSeconds;
+        dampedWaveStep(strip, dtSeconds, c2, kTether, damp);
     }
 
     uint8_t colorIndex(size_t strip, size_t led) const override

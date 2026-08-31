@@ -65,17 +65,9 @@ class StandingWaveRing : public RingFieldEffect
 
     void stepStrip(size_t strip, float dtSeconds) override
     {
-        auto& u = channel(strip, U);
-        auto& v = channel(strip, V);
-        size_t n = u.size();
         float c2 = (float)stiffness_;
         float damp = 1.0f - (dampPerMille_ / 1000.0f) * dtSeconds;
-
-        // v uses the current u (via the Laplacian), u then uses the new v -
-        // reading each other in this order keeps the update symplectic without a
-        // scratch buffer.
-        for (size_t i = 0; i < n; i++) v[i] = (v[i] + c2 * laplacian(u, i) * dtSeconds) * damp;
-        for (size_t i = 0; i < n; i++) u[i] += v[i] * dtSeconds;
+        dampedWaveStep(strip, dtSeconds, c2, /*kTether=*/0.0f, damp);
     }
 
     uint8_t colorIndex(size_t strip, size_t led) const override

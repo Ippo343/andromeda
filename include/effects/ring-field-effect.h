@@ -113,6 +113,23 @@ class RingFieldEffect : public AbstractEffect
         return left - 2.0f * f[i] + right;
     }
 
+    // Shared leapfrog integrator for the two "damped wave on a ring" effects
+    // (StandingWaveRing, JellyFrame): channel 0 is displacement (u), channel 1 is
+    // velocity (v). v += (c2*laplacian(u) - kTether*u) * dt, damped, then
+    // u += v*dt - symplectic (v uses the old u, u then uses the new v) so no
+    // scratch buffer is needed. kTether = 0 recovers the plain wave equation
+    // (StandingWaveRing); JellyFrame passes a nonzero tether to pull the field
+    // back toward rest between kicks.
+    void dampedWaveStep(size_t strip, float dtSeconds, float c2, float kTether, float damp)
+    {
+        auto& u = channel(strip, 0);
+        auto& v = channel(strip, 1);
+        size_t n = u.size();
+        for (size_t i = 0; i < n; i++)
+            v[i] = (v[i] + (c2 * laplacian(u, i) - kTether * u[i]) * dtSeconds) * damp;
+        for (size_t i = 0; i < n; i++) u[i] += v[i] * dtSeconds;
+    }
+
     CRGBPalette256 palette_;
 
 #ifdef UNIT_TEST
