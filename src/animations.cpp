@@ -403,10 +403,26 @@ void ErrorAnimation::run()
 // Utility Functions
 // ============================================================================
 
+namespace
+{
+using AnimationFactory = AbstractFrameAnimation* (*)();
+
+// Table-driven mirror of EFFECT_REGISTRY: getRandomAnimation() used to switch on a
+// selection index against a hand-maintained ANIMATIONS_COUNT that had to be kept in
+// sync with the case list by hand. Deriving the count from the array itself removes
+// that failure mode - adding an animation only means adding a line here.
+constexpr AnimationFactory ANIMATION_REGISTRY[] = {
+    []() -> AbstractFrameAnimation* { return new SweepStrips(); },
+    []() -> AbstractFrameAnimation* { return new SequentialFadeIn(); },
+    []() -> AbstractFrameAnimation* { return new ClockSweep(); },
+    []() -> AbstractFrameAnimation* { return new RadialSweep(); },
+    []() -> AbstractFrameAnimation* { return new Swipe(); },
+};
+constexpr size_t ANIMATIONS_COUNT = sizeof(ANIMATION_REGISTRY) / sizeof(ANIMATION_REGISTRY[0]);
+}  // namespace
+
 AbstractFrameAnimation* getRandomAnimation()
 {
-    size_t ANIMATIONS_COUNT = 5;
-
     // Set this to the index of the animation you want to force while testing
     short forcedSelection = -1;
 
@@ -421,17 +437,5 @@ AbstractFrameAnimation* getRandomAnimation()
 
     previousSelection = selection;
 
-    switch (selection)
-    {
-        case 0:
-            return new SweepStrips();
-        case 1:
-            return new SequentialFadeIn();
-        case 2:
-            return new ClockSweep();
-        case 3:
-            return new RadialSweep();
-        default:
-            return new Swipe();
-    }
+    return ANIMATION_REGISTRY[selection]();
 }
