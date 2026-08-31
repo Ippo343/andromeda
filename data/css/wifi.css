@@ -16,3 +16,13 @@ body {
     color: #aaa;
     margin-bottom: 1rem;
 }
+
+.hidden {
+    display: none;
+}
+
+.network-option.manual-entry {
+    font-style: italic;
+    color: #ccc;
+    justify-content: center;
+}

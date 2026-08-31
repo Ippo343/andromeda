@@ -43,6 +43,7 @@ function scanNetworks() {
                     status.innerHTML = '<div class="status error">Scan failed: ' + data.error + '</div>';
                     scanBtn.disabled = false;
                     scanBtn.innerHTML = 'Scan for Networks';
+                    appendManualEntryOption(networks);
                     return;
                 }
 
@@ -54,6 +55,7 @@ function scanNetworks() {
                         status.innerHTML = '<div class="status error">Scan timeout. Please try again.</div>';
                         scanBtn.disabled = false;
                         scanBtn.innerHTML = 'Scan for Networks';
+                        appendManualEntryOption(networks);
                     }
                     return;
                 }
@@ -63,6 +65,7 @@ function scanNetworks() {
                     status.innerHTML = '';
                     scanBtn.disabled = false;
                     scanBtn.innerHTML = 'Scan for Networks';
+                    appendManualEntryOption(networks);
                     return;
                 }
 
@@ -73,12 +76,14 @@ function scanNetworks() {
                 status.innerHTML = '<div class="status error">Unexpected response from device. Please try again.</div>';
                 scanBtn.disabled = false;
                 scanBtn.innerHTML = 'Scan for Networks';
+                appendManualEntryOption(networks);
             })
             .catch(error => {
                 console.error('Scan error:', error);
                 status.innerHTML = '<div class="status error">Scan failed: ' + error.message + '</div>';
                 scanBtn.disabled = false;
                 scanBtn.innerHTML = 'Scan for Networks';
+                appendManualEntryOption(networks);
             });
     }
 
@@ -112,9 +117,28 @@ function scanNetworks() {
                 networks.appendChild(div);
             }
         });
+
+        appendManualEntryOption(networks);
     }
 
     pollScan();
+}
+
+// Scanning is the primary way to pick a network - the SSID text box stays
+// hidden (see wifi-setup.html) until either a scan result or this entry is
+// picked, so there's nothing for iOS to aggressively autofocus/zoom into
+// while a scan is in progress. Appended after every scan outcome (results,
+// no networks found, error, or timeout) so manual entry is never a dead end.
+function appendManualEntryOption(container) {
+    const div = document.createElement('div');
+    div.className = 'network-option manual-entry';
+    div.textContent = 'Enter manually…';
+    div.onclick = () => enterManually(div);
+    container.appendChild(div);
+}
+
+function revealCredentialsForm() {
+    document.getElementById('wifiForm').classList.remove('hidden');
 }
 
 function selectNetwork(network, element) {
@@ -128,9 +152,31 @@ function selectNetwork(network, element) {
     document.getElementById('ssid').value = network.ssid;
     document.getElementById('password').value = '';
 
+    revealCredentialsForm();
+
     if (network.encryption !== 'none') {
         document.getElementById('password').focus();
     }
+}
+
+// "Enter manually..." from the scan list: reveals the same form as
+// selectNetwork() but with an empty, editable SSID field instead of one
+// pre-filled from a scan result - covers hidden SSIDs and networks the
+// scan missed. Focuses the SSID field directly, since this is the one path
+// where the user actually wants to type into it right away.
+function enterManually(element) {
+    document.querySelectorAll('.network-option').forEach(el => {
+        el.classList.remove('selected');
+    });
+    if (element) element.classList.add('selected');
+    selectedNetwork = null;
+
+    const ssidField = document.getElementById('ssid');
+    ssidField.value = '';
+    document.getElementById('password').value = '';
+
+    revealCredentialsForm();
+    ssidField.focus();
 }
 
 function getSignalBars(rssi) {
