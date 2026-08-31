@@ -345,6 +345,18 @@ void Comms::setupRoutes()
               { r->send(200, "application/json", scanWiFiNetworks()); });
     server.on("/save", HTTP_POST, [this](AsyncWebServerRequest* r)
               { processWiFiCredentials(r, r->arg("ssid"), r->arg("password")); });
+    // Polled by the setup page after a 202 from /save, until it reads a terminal verdict.
+    // "pending" covers Idle too (the page only polls once a probe is in flight).
+    server.on("/save-status", HTTP_GET,
+              [this](AsyncWebServerRequest* r)
+              {
+                  const char* status = "pending";
+                  if (saveStatus == SaveStatus::Connected)
+                      status = "connected";
+                  else if (saveStatus == SaveStatus::Failed)
+                      status = "failed";
+                  r->send(200, "text/plain", status);
+              });
     server.on("/reset", HTTP_POST,
               [this](AsyncWebServerRequest* r)
               {
@@ -454,10 +466,52 @@ String Comms::scanWiFiNetworks()
     return result;
 }
 
+// ssid/password copied off the AsyncWebServerRequest before it's freed, handed to
+// saveWorkerTask() as its FreeRTOS parameter. Heap-allocated by the /save handler, deleted by
+// the worker.
+struct SaveJob
+{
+    String ssid;
+    String password;
+};
+
+void Comms::saveWorkerTask(void* param)
+{
+    SaveJob* job = static_cast<SaveJob*>(param);
+    Comms& comms = Comms::Instance();
+
+    bool connected = comms.wifiManager->testAndPersistCredentials(job->ssid, job->password);
+    String ssid = job->ssid;
+    delete job;
+
+    comms.saveStatus = connected ? SaveStatus::Connected : SaveStatus::Failed;
+
+    if (connected)
+    {
+        // Credentials are persisted and verified. Give the setup client a beat to poll
+        // /save-status and see "connected", then reboot - Comms::setup() re-joins with the
+        // stored credentials before the web server task exists (blocking there is harmless).
+        Log.noticeln("WiFi credential probe succeeded for SSID '%s' - rebooting to connect",
+                     ssid.c_str());
+        vTaskDelay(3000 / portTICK_PERIOD_MS);
+        ESP.restart();
+    }
+    else
+    {
+        // testConnection() has already reverted the radio to the setup AP, so the client is
+        // still connected and its poll will report "failed". Nothing persisted; stay put for
+        // the user to correct the password and resubmit.
+        Log.warningln("WiFi credential probe failed for SSID '%s' - staying in AP mode",
+                      ssid.c_str());
+    }
+
+    vTaskDelete(NULL);
+}
+
 bool Comms::processWiFiCredentials(AsyncWebServerRequest* request, const String& ssid,
                                    const String& password)
 {
-    switch (wifiManager->saveNewCredentials(ssid, password))
+    switch (wifiManager->validateNewCredentials(ssid, password))
     {
         case WifiManager::SaveResult::RejectEmptySsid:
             request->send(400, "text/plain", "SSID required");
@@ -471,20 +525,15 @@ bool Comms::processWiFiCredentials(AsyncWebServerRequest* request, const String&
             request->send(400, "text/plain", "Password too long (63 characters max)");
             return true;
 
-        case WifiManager::SaveResult::Persisted:
-            // The credentials are only saved here, not tested - a blocking
-            // WiFi join on this (async_tcp) task trips its watchdog (#114).
-            // The device reboots and Comms::setup() attempts the join before
-            // the web server starts; on failure it falls back to AP mode and
-            // this page is served again.
-            request->send(200, "text/html", "<h2>Saved</h2><p>Restarting to connect...</p>");
-            xTaskCreate(
-                [](void*)
-                {
-                    vTaskDelay(3000 / portTICK_PERIOD_MS);
-                    ESP.restart();
-                },
-                "Restart", 2048, NULL, 1, NULL);
+        case WifiManager::SaveResult::Accepted:
+            // The blocking connection probe can't run here - this handler is on the async_tcp
+            // task and a 10s WiFi.status() poll trips its watchdog (#114). Kick it to a worker
+            // task and return immediately; the setup client polls GET /save-status for the
+            // verdict (pending -> connected | failed). On success the worker reboots into
+            // station mode.
+            saveStatus = SaveStatus::Pending;
+            xTaskCreate(saveWorkerTask, "SaveWiFi", 8192, new SaveJob{ssid, password}, 1, NULL);
+            request->send(202, "text/plain", "Testing connection...");
             return true;
     }
 

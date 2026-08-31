@@ -24,7 +24,7 @@
         <!-- Hidden until a network is selected from the scan list or "Enter manually..."
              is chosen (see wifi.js) - nothing here is focusable while hidden, so iOS has
              no text field to aggressively autofocus/zoom into while a scan is running. -->
-        <form method="post" action="/save" id="wifiForm" onsubmit="return validateForm()"
+        <form method="post" action="/save" id="wifiForm" onsubmit="return submitCredentials(event)"
               class="hidden">
 
             <div class="form-group">

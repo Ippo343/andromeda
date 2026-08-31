@@ -100,6 +100,25 @@ bool EspWiFiConnector::connect(const char* ssid, const char* password)
     return connected;
 }
 
+bool EspWiFiConnector::testConnection(const char* ssid, const char* password)
+{
+    // A candidate-credential probe, driven from Comms::saveWorkerTask (never
+    // async_tcp, #114). Deliberately shorter than connect()'s 15s boot budget:
+    // the setup client is holding the page waiting on /save-status, so favour
+    // a quick verdict. Always reverts to the setup AP afterwards - on failure
+    // so the user can retry, on success so the client can still read the
+    // "connected" result before the device reboots into station mode.
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+
+    unsigned long startTime = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - startTime < 10000) { delay(100); }
+
+    bool ok = (WiFi.status() == WL_CONNECTED);
+    enterAPMode();
+    return ok;
+}
+
 void EspWiFiConnector::enterAPMode()
 {
     WiFi.disconnect();

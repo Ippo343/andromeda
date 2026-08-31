@@ -37,6 +37,7 @@ AbstractFrameAnimation* getRandomAnimation() { return new StubAnimation(); }
 // every test below redirects Comms::wifiManager to a fake-backed
 // WifiManager before calling anything - these real ones are never invoked.
 bool EspWiFiConnector::connect(const char*, const char*) { return false; }
+bool EspWiFiConnector::testConnection(const char*, const char*) { return false; }
 void EspWiFiConnector::enterAPMode() {}
 void EspPreferencesStore::saveCredentials(const String&, const String&) {}
 bool EspPreferencesStore::loadCredentials(String&, String&) { return false; }
@@ -50,13 +51,21 @@ class FakeWiFiConnector : public IWiFiConnector
 {
    public:
     bool connectResult = true;
+    bool testConnectionResult = true;
     int connectCalls = 0;
+    int testConnectionCalls = 0;
     int enterAPModeCalls = 0;
 
     bool connect(const char*, const char*) override
     {
         connectCalls++;
         return connectResult;
+    }
+    bool testConnection(const char*, const char*) override
+    {
+        testConnectionCalls++;
+        enterAPModeCalls++;  // real EspWiFiConnector::testConnection always reverts to AP mode
+        return testConnectionResult;
     }
     void enterAPMode() override { enterAPModeCalls++; }
 };
@@ -118,6 +127,11 @@ class CommsTestAccess
     static unsigned long stateKeepaliveIntervalMs() { return Comms::STATE_KEEPALIVE_INTERVAL_MS; }
     static void setNowFn(Comms& c, unsigned long (*fn)()) { c.nowMsFn = fn; }
     static void onWiFiScanComplete(Comms& c, int n) { c.onWiFiScanComplete(n); }
+    // saveStatus is a private nested enum; expose the three post-probe states the
+    // /save-status route test needs to reach without the (native no-op) worker task running.
+    static void setSaveStatusPending(Comms& c) { c.saveStatus = Comms::SaveStatus::Pending; }
+    static void setSaveStatusConnected(Comms& c) { c.saveStatus = Comms::SaveStatus::Connected; }
+    static void setSaveStatusFailed(Comms& c) { c.saveStatus = Comms::SaveStatus::Failed; }
     static bool scanInProgress(Comms& c) { return c.scanInProgress; }
     static void setScanInProgress(Comms& c, bool v) { c.scanInProgress = v; }
     static void setScanComplete(Comms& c, bool v) { c.scanComplete = v; }
@@ -173,7 +187,12 @@ void tearDown() {}
 // /save
 // ---------------------------------------------------------------------------
 
-void test_save_success_persists_and_returns_200()
+// Valid credentials are accepted with a 202 and handed to the worker task - the /save handler
+// itself must not connect or persist (it runs on the async_tcp task; a ~10s blocking
+// WiFi.status() poll there starves the task past its watchdog and panics the device, #114).
+// The worker (saveWorkerTask, driven by a native no-op xTaskCreate here) is what probes and
+// persists; the setup client polls /save-status for the verdict.
+void test_save_valid_credentials_returns_202_without_blocking_or_persisting()
 {
     AsyncWebServerRequest req;
     req.setArg("ssid", "MyNetwork");
@@ -183,27 +202,72 @@ void test_save_success_persists_and_returns_200()
     TEST_ASSERT_NOT_NULL(handler);
     (*handler)(&req);
 
-    TEST_ASSERT_EQUAL_INT(200, req.responseCode);
-    TEST_ASSERT_TRUE(fakeStore().hasCredentials);
-    TEST_ASSERT_TRUE(fakeStore().storedSsid == String("MyNetwork"));
+    TEST_ASSERT_EQUAL_INT(202, req.responseCode);
+    TEST_ASSERT_FALSE(fakeStore().hasCredentials);
+    TEST_ASSERT_EQUAL_INT(0, fakeConnector().testConnectionCalls);
+    TEST_ASSERT_EQUAL_INT(0, fakeConnector().connectCalls);
+
+    // /save-status now reports the in-flight probe.
+    AsyncWebServerRequest statusReq;
+    auto* statusHandler =
+        CommsTestAccess::server(Comms::Instance()).findHandler("/save-status", HTTP_GET);
+    TEST_ASSERT_NOT_NULL(statusHandler);
+    (*statusHandler)(&statusReq);
+    TEST_ASSERT_EQUAL_INT(200, statusReq.responseCode);
+    TEST_ASSERT_TRUE(statusReq.responseBody == String("pending"));
 }
 
-// The /save handler runs on the async_tcp task; a blocking WiFi join there
-// starves the task past its watchdog and panics the device (#114). The
-// credentials must be persisted without the connector being touched - the
-// join is retried on the next boot instead.
-void test_save_does_not_block_on_a_connection_attempt()
+// The worker's actual probe-then-persist step, exercised directly against the fakes since the
+// native xTaskCreate never runs saveWorkerTask. On a successful probe the pair is persisted...
+void test_test_and_persist_persists_on_successful_probe()
 {
-    AsyncWebServerRequest req;
-    req.setArg("ssid", "MyNetwork");
-    req.setArg("password", "hunter2");
+    fakeConnector().testConnectionResult = true;
 
-    auto* handler = CommsTestAccess::server(Comms::Instance()).findHandler("/save", HTTP_POST);
-    (*handler)(&req);
+    bool ok = fakeWifiManager().testAndPersistCredentials("MyNetwork", "hunter2");
 
-    TEST_ASSERT_EQUAL_INT(200, req.responseCode);
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_EQUAL_INT(1, fakeConnector().testConnectionCalls);
     TEST_ASSERT_TRUE(fakeStore().hasCredentials);
-    TEST_ASSERT_EQUAL_INT(0, fakeConnector().connectCalls);
+    TEST_ASSERT_TRUE(fakeStore().storedSsid == String("MyNetwork"));
+    TEST_ASSERT_TRUE(fakeStore().storedPassword == String("hunter2"));
+}
+
+// ...and on a failed probe (wrong password) nothing is persisted and the caller learns it
+// failed, so the setup page can say so instead of the device silently rebooting (#134).
+void test_test_and_persist_does_not_persist_on_failed_probe()
+{
+    fakeConnector().testConnectionResult = false;
+
+    bool ok = fakeWifiManager().testAndPersistCredentials("MyNetwork", "wrongpass");
+
+    TEST_ASSERT_FALSE(ok);
+    TEST_ASSERT_EQUAL_INT(1, fakeConnector().testConnectionCalls);
+    TEST_ASSERT_FALSE(fakeStore().hasCredentials);
+    // testConnection() reverts the radio to the setup AP regardless of outcome.
+    TEST_ASSERT_TRUE(fakeConnector().enterAPModeCalls > 0);
+}
+
+// /save-status maps the worker's cross-task flag to the strings the setup page polls for.
+void test_save_status_route_reports_probe_outcome()
+{
+    auto* handler =
+        CommsTestAccess::server(Comms::Instance()).findHandler("/save-status", HTTP_GET);
+    TEST_ASSERT_NOT_NULL(handler);
+
+    CommsTestAccess::setSaveStatusPending(Comms::Instance());
+    AsyncWebServerRequest pendingReq;
+    (*handler)(&pendingReq);
+    TEST_ASSERT_TRUE(pendingReq.responseBody == String("pending"));
+
+    CommsTestAccess::setSaveStatusConnected(Comms::Instance());
+    AsyncWebServerRequest connectedReq;
+    (*handler)(&connectedReq);
+    TEST_ASSERT_TRUE(connectedReq.responseBody == String("connected"));
+
+    CommsTestAccess::setSaveStatusFailed(Comms::Instance());
+    AsyncWebServerRequest failedReq;
+    (*handler)(&failedReq);
+    TEST_ASSERT_TRUE(failedReq.responseBody == String("failed"));
 }
 
 void test_save_empty_ssid_returns_400_and_does_not_persist()
@@ -611,11 +675,13 @@ int main(int argc, char** argv)
 {
     UNITY_BEGIN();
 
-    RUN_TEST(test_save_success_persists_and_returns_200);
-    RUN_TEST(test_save_does_not_block_on_a_connection_attempt);
+    RUN_TEST(test_save_valid_credentials_returns_202_without_blocking_or_persisting);
     RUN_TEST(test_save_empty_ssid_returns_400_and_does_not_persist);
     RUN_TEST(test_save_over_long_ssid_returns_400_and_does_not_persist);
     RUN_TEST(test_save_over_long_password_returns_400_and_does_not_persist);
+    RUN_TEST(test_test_and_persist_persists_on_successful_probe);
+    RUN_TEST(test_test_and_persist_does_not_persist_on_failed_probe);
+    RUN_TEST(test_save_status_route_reports_probe_outcome);
 
     RUN_TEST(test_reset_clears_stored_credentials);
 

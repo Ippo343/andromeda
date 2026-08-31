@@ -9,12 +9,15 @@
 // directly, so a test-double IWiFiConnector can return a scripted result
 // instantly instead of polling in real time.
 //
-// Newly-submitted credentials are persisted immediately and verified on the
-// next boot (Comms::setup() -> connectUsingStoredCredentials(), which runs
-// before the web server task exists). saveNewCredentials() deliberately does
-// NOT connect: it is invoked from the /save HTTP handler on the async_tcp
-// task, and a 10-15s blocking WiFi.status() poll there starves that task past
-// its watchdog and panics the device (#114).
+// Submitting new credentials is a two-step dance, split precisely so the
+// blocking half never runs on the async_tcp task (a 10-15s WiFi.status() poll
+// there starves the task past its watchdog and panics the device, #114):
+//   1. validateNewCredentials() - pure length checks, safe to call straight
+//      from the /save HTTP handler.
+//   2. testAndPersistCredentials() - blocking connection probe that persists
+//      only on success. MUST be driven from a dedicated worker task (see
+//      Comms::saveWorkerTask); the still-connected setup client polls
+//      /save-status for the outcome.
 
 class IWiFiConnector
 {
@@ -29,6 +32,14 @@ class IWiFiConnector
     // Comms::setup(), before the web server / async_tcp task is started, so
     // blocking here is harmless.
     virtual bool connect(const char* ssid, const char* password) = 0;
+
+    // Blocking probe of a candidate credential pair, used to give the WiFi
+    // setup page inline "bad password" feedback before anything is persisted.
+    // Real implementations poll WiFi.status() to a timeout and then revert to
+    // the setup AP (via enterAPMode()) regardless of outcome, so the
+    // still-connected setup client can read the result. MUST be called from a
+    // dedicated worker task, never the async_tcp task (#114).
+    virtual bool testConnection(const char* ssid, const char* password) = 0;
 
     // Falls back to broadcasting the setup access point.
     virtual void enterAPMode() = 0;
@@ -58,7 +69,7 @@ class WifiManager
         RejectEmptySsid,
         RejectSsidTooLong,
         RejectPasswordTooLong,
-        Persisted
+        Accepted
     };
 
     // 802.11 hard limits: SSID is at most 32 bytes, a WPA passphrase at most 63 characters.
@@ -69,18 +80,28 @@ class WifiManager
     static constexpr size_t MAX_SSID_LENGTH = 32;
     static constexpr size_t MAX_PASSWORD_LENGTH = 63;
 
-    // Persists the given credentials, rejecting an empty or over-long SSID or an over-long
-    // password. Does not connect - see the file header: the actual join is attempted on the
-    // next boot, off the async_tcp task. Never touches previously-stored credentials until the
-    // new ones pass validation.
-    SaveResult saveNewCredentials(const String& ssid, const String& password)
+    // Pure, non-blocking validation of a submitted credential pair: rejects an empty or
+    // over-long SSID or an over-long password, otherwise Accepted. Safe to call straight from
+    // the /save HTTP handler - it neither connects nor persists. Step 1 of 2; see the file
+    // header.
+    SaveResult validateNewCredentials(const String& ssid, const String& password) const
     {
         if (ssid.length() == 0) return SaveResult::RejectEmptySsid;
         if (ssid.length() > MAX_SSID_LENGTH) return SaveResult::RejectSsidTooLong;
         if (password.length() > MAX_PASSWORD_LENGTH) return SaveResult::RejectPasswordTooLong;
+        return SaveResult::Accepted;
+    }
 
+    // Step 2 of 2: blocking connection probe, persisting the pair only if it actually joined.
+    // Returns true on success (credentials now stored), false if the probe failed to connect
+    // (nothing persisted; previously-stored credentials left untouched). Blocks for as long as
+    // the connector's probe does - MUST be driven from a worker task, never the async_tcp task
+    // (#114). Callers pass the already-validated ssid/password from validateNewCredentials().
+    bool testAndPersistCredentials(const String& ssid, const String& password)
+    {
+        if (!connector.testConnection(ssid.c_str(), password.c_str())) return false;
         store.saveCredentials(ssid, password);
-        return SaveResult::Persisted;
+        return true;
     }
 
     // Attempts to connect using whatever credentials are currently stored.
