@@ -53,21 +53,6 @@ bool EspWiFiConnector::connect(const char* ssid, const char* password)
     return WiFi.status() == WL_CONNECTED;
 }
 
-bool EspWiFiConnector::testConnection(const char* ssid, const char* password)
-{
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
-    int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 40)
-    {
-        delay(250);
-        attempts++;
-    }
-    bool ok = (WiFi.status() == WL_CONNECTED);
-    enterAPMode();
-    return ok;
-}
-
 void EspWiFiConnector::enterAPMode()
 {
     WiFi.disconnect();

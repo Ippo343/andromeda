@@ -40,7 +40,6 @@ AbstractFrameAnimation* getRandomAnimation() { return new StubAnimation(); }
 // every test below redirects Comms::wifiManager to a fake-backed
 // WifiManager before calling anything - these real ones are never invoked.
 bool EspWiFiConnector::connect(const char*, const char*) { return false; }
-bool EspWiFiConnector::testConnection(const char*, const char*) { return false; }
 void EspWiFiConnector::enterAPMode() {}
 void EspPreferencesStore::saveCredentials(const String&, const String&) {}
 bool EspPreferencesStore::loadCredentials(String&, String&) { return false; }
@@ -54,14 +53,13 @@ class FakeWiFiConnector : public IWiFiConnector
 {
    public:
     bool connectResult = true;
-    bool testConnectionResult = true;
+    int connectCalls = 0;
     int enterAPModeCalls = 0;
 
-    bool connect(const char*, const char*) override { return connectResult; }
-    bool testConnection(const char*, const char*) override
+    bool connect(const char*, const char*) override
     {
-        enterAPModeCalls++;  // real EspWiFiConnector::testConnection always reverts to AP mode
-        return testConnectionResult;
+        connectCalls++;
+        return connectResult;
     }
     void enterAPMode() override { enterAPModeCalls++; }
 };
@@ -159,8 +157,6 @@ void tearDown() {}
 
 void test_save_success_persists_and_returns_200()
 {
-    fakeConnector().testConnectionResult = true;
-
     AsyncWebServerRequest req;
     req.setArg("ssid", "MyNetwork");
     req.setArg("password", "hunter2");
@@ -174,6 +170,24 @@ void test_save_success_persists_and_returns_200()
     TEST_ASSERT_TRUE(fakeStore().storedSsid == String("MyNetwork"));
 }
 
+// The /save handler runs on the async_tcp task; a blocking WiFi join there
+// starves the task past its watchdog and panics the device (#114). The
+// credentials must be persisted without the connector being touched - the
+// join is retried on the next boot instead.
+void test_save_does_not_block_on_a_connection_attempt()
+{
+    AsyncWebServerRequest req;
+    req.setArg("ssid", "MyNetwork");
+    req.setArg("password", "hunter2");
+
+    auto* handler = CommsTestAccess::server(Comms::Instance()).findHandler("/save", HTTP_POST);
+    (*handler)(&req);
+
+    TEST_ASSERT_EQUAL_INT(200, req.responseCode);
+    TEST_ASSERT_TRUE(fakeStore().hasCredentials);
+    TEST_ASSERT_EQUAL_INT(0, fakeConnector().connectCalls);
+}
+
 void test_save_empty_ssid_returns_400_and_does_not_persist()
 {
     AsyncWebServerRequest req;
@@ -185,23 +199,6 @@ void test_save_empty_ssid_returns_400_and_does_not_persist()
 
     TEST_ASSERT_EQUAL_INT(400, req.responseCode);
     TEST_ASSERT_FALSE(fakeStore().hasCredentials);
-}
-
-void test_save_connection_failure_returns_400_and_does_not_persist()
-{
-    fakeConnector().testConnectionResult = false;
-
-    AsyncWebServerRequest req;
-    req.setArg("ssid", "MyNetwork");
-    req.setArg("password", "wrong");
-
-    auto* handler = CommsTestAccess::server(Comms::Instance()).findHandler("/save", HTTP_POST);
-    (*handler)(&req);
-
-    TEST_ASSERT_EQUAL_INT(400, req.responseCode);
-    TEST_ASSERT_FALSE(fakeStore().hasCredentials);
-    // testConnection() must revert to AP mode on failure too, per production behavior.
-    TEST_ASSERT_TRUE(fakeConnector().enterAPModeCalls > 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -432,8 +429,8 @@ int main(int argc, char** argv)
     UNITY_BEGIN();
 
     RUN_TEST(test_save_success_persists_and_returns_200);
+    RUN_TEST(test_save_does_not_block_on_a_connection_attempt);
     RUN_TEST(test_save_empty_ssid_returns_400_and_does_not_persist);
-    RUN_TEST(test_save_connection_failure_returns_400_and_does_not_persist);
 
     RUN_TEST(test_reset_clears_stored_credentials);
 

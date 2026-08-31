@@ -330,12 +330,13 @@ bool Comms::processWiFiCredentials(AsyncWebServerRequest* request, const String&
             request->send(400, "text/plain", "SSID required");
             return true;
 
-        case WifiManager::SaveResult::RejectConnectionFailed:
-            request->send(400, "text/plain", "Connection failed");
-            return true;
-
         case WifiManager::SaveResult::Persisted:
-            request->send(200, "text/html", "<h2>Success</h2><p>Restarting...</p>");
+            // The credentials are only saved here, not tested - a blocking
+            // WiFi join on this (async_tcp) task trips its watchdog (#114).
+            // The device reboots and Comms::setup() attempts the join before
+            // the web server starts; on failure it falls back to AP mode and
+            // this page is served again.
+            request->send(200, "text/html", "<h2>Saved</h2><p>Restarting to connect...</p>");
             xTaskCreate(
                 [](void*)
                 {
