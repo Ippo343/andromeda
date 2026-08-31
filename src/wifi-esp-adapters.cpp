@@ -5,12 +5,52 @@
 #include <WiFi.h>
 #include <esp_netif.h>
 
+#include "comms.h"
 #include "device-identity.h"
+#include "nvs-utils.h"
+#include "wifi-recovery.h"
 
 namespace
 {
 constexpr const char* AP_PASSWORD = "";
 constexpr const char* PREFERENCES_NAMESPACE = "wifi";
+
+// Tracks a mid-run disconnect and decides when to retry vs. fall back to AP mode - see
+// wifi-recovery.h. Lives for the process lifetime alongside the WiFi event handler that
+// drives it; only ever touched from the WiFi event task and the monitor task below, both of
+// which are effectively serialized by how rarely they run (an event per disconnect/reconnect,
+// a tick once a second), so no additional locking.
+WifiRecovery wifiRecovery;
+
+// Polls wifiRecovery roughly once a second and acts on its decision. A dedicated low-priority
+// task rather than piggybacking on an existing loop, since neither Comms' web server task nor
+// MissionControl's render loop are appropriate owners of WiFi reconnect timing, and this is
+// the same "small xTaskCreate for a background concern" shape comms.cpp already uses for its
+// setup-page network scan.
+void wifiRecoveryMonitorTask(void*)
+{
+    while (true)
+    {
+        // Small jitter so multiple devices on the same network don't retry in lockstep.
+        WifiRecovery::Action action = wifiRecovery.tick(millis(), random(0, 250));
+
+        switch (action)
+        {
+            case WifiRecovery::Action::Reconnect:
+                Log.warningln("WiFi lost connection, attempting reconnect...");
+                WiFi.reconnect();
+                break;
+            case WifiRecovery::Action::EnterAPMode:
+                Log.errorln("WiFi has been unreachable for too long, falling back to AP mode");
+                Comms::Instance().enterAPFallbackMode();
+                break;
+            case WifiRecovery::Action::None:
+                break;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
 }  // namespace
 
 bool EspWiFiConnector::connect(const char* ssid, const char* password)
@@ -18,14 +58,11 @@ bool EspWiFiConnector::connect(const char* ssid, const char* password)
     WiFi.mode(WIFI_STA);
     WiFi.setHostname(DeviceIdentity::getDeviceName().c_str());
 
-    // Configure static IP
-    // TODO: this should be configurable
-    IPAddress local_IP(192, 168, 1, 232);
-    IPAddress gateway(192, 168, 1, 1);
-    IPAddress subnet(255, 255, 255, 0);
-    if (!WiFi.config(local_IP, gateway, subnet)) { Log.errorln("Failed to configure static IP"); }
-
-    WiFi.setAutoReconnect(true);
+    // DHCP, not a hard-coded static IP: a fixed 192.168.1.x address only worked on networks
+    // using that exact subnet - on anything else (192.168.0.x, 10.x, a phone hotspot, ...)
+    // the join still "succeeded" but the device was permanently unreachable, and two devices
+    // on the same LAN collided on the same address. mDNS (<device-name>.local, wired up in
+    // Comms::startStationMode()) is the discovery path now.
     WiFi.persistent(false);
 
     WiFi.onEvent(
@@ -34,11 +71,11 @@ bool EspWiFiConnector::connect(const char* ssid, const char* password)
             switch (event)
             {
                 case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-                    Log.warningln("WiFi lost connection, attempting reconnect...");
-                    WiFi.reconnect();
+                    wifiRecovery.onDisconnected(millis());
                     break;
                 case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-                    Log.noticeln("WiFi reconnected with IP %s", WiFi.localIP().toString().c_str());
+                    Log.noticeln("WiFi connected with IP %s", WiFi.localIP().toString().c_str());
+                    wifiRecovery.onConnected();
                     break;
                 default:
                     break;
@@ -50,7 +87,17 @@ bool EspWiFiConnector::connect(const char* ssid, const char* password)
     unsigned long startTime = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - startTime < 15000) { delay(100); }
 
-    return WiFi.status() == WL_CONNECTED;
+    bool connected = WiFi.status() == WL_CONNECTED;
+
+    // Only start the recovery monitor once we've actually joined - if the initial connect
+    // failed, Comms::setup() falls back to startAPMode() itself and there's no station
+    // connection to recover.
+    if (connected)
+    {
+        xTaskCreate(wifiRecoveryMonitorTask, "WifiRecovery", 2048, nullptr, 1, nullptr);
+    }
+
+    return connected;
 }
 
 void EspWiFiConnector::enterAPMode()
@@ -80,16 +127,19 @@ void EspWiFiConnector::enterAPMode()
 void EspPreferencesStore::saveCredentials(const String& ssid, const String& password)
 {
     Preferences prefs;
-    prefs.begin(PREFERENCES_NAMESPACE, false);
-    prefs.putString("ssid", ssid);
-    prefs.putString("password", password);
+    if (!beginPreferencesOrWarn(prefs, PREFERENCES_NAMESPACE, false)) return;
+    putStringOrWarn(prefs, "ssid", ssid);
+    // putStringOrWarn already only warns when the write reported 0 bytes for a non-empty
+    // value - an empty password (an open network) legitimately writes 0 bytes and is not
+    // itself a failure, so this doesn't need a special case.
+    putStringOrWarn(prefs, "password", password);
     prefs.end();
 }
 
 bool EspPreferencesStore::loadCredentials(String& ssid, String& password)
 {
     Preferences prefs;
-    prefs.begin(PREFERENCES_NAMESPACE, true);
+    if (!beginPreferencesOrWarn(prefs, PREFERENCES_NAMESPACE, true)) return false;
     ssid = prefs.getString("ssid", "");
     password = prefs.getString("password", "");
     prefs.end();
@@ -99,7 +149,7 @@ bool EspPreferencesStore::loadCredentials(String& ssid, String& password)
 void EspPreferencesStore::clearCredentials()
 {
     Preferences prefs;
-    prefs.begin(PREFERENCES_NAMESPACE, false);
+    if (!beginPreferencesOrWarn(prefs, PREFERENCES_NAMESPACE, false)) return;
     prefs.clear();
     prefs.end();
 }
