@@ -74,7 +74,13 @@ float Q_rsqrt(float number)
 
 long cmap(long x, long in_low, long in_high, long out_low, long out_high)
 {
-    return constrain(map(x, in_low, in_high, out_low, out_high), out_low, out_high);
+    // constrain() requires low <= high; a descending output range (out_low > out_high,
+    // e.g. IndividualStripDrift's inverted duration ranges) previously constrained
+    // every mapped value to the single point out_high except at x == in_low, since
+    // constrain(v, out_low, out_high) with out_low > out_high always returns out_high.
+    long lo = out_low < out_high ? out_low : out_high;
+    long hi = out_low < out_high ? out_high : out_low;
+    return constrain(map(x, in_low, in_high, out_low, out_high), lo, hi);
 }
 
 float slowSin(unsigned long ms, float bpm, uint8_t minVal, uint8_t maxVal)

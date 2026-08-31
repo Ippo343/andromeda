@@ -29,6 +29,20 @@ void test_cmap_clamped_high()
 
 void test_cmap_negative_output_range() { TEST_ASSERT_EQUAL_INT(-50, cmap(5, 0, 10, -100, 0)); }
 
+void test_cmap_descending_output_range_in_range()
+{
+    // out_low > out_high (e.g. IndividualStripDrift's inverted energy->duration ranges) -
+    // previously constrain(mapped, out_low, out_high) with out_low > out_high always
+    // returned out_high regardless of x, collapsing the whole response to a constant.
+    TEST_ASSERT_EQUAL_INT(75, cmap(5, 0, 10, 100, 50));
+}
+
+void test_cmap_descending_output_range_clamped_at_each_end()
+{
+    TEST_ASSERT_EQUAL_INT(100, cmap(-5, 0, 10, 100, 50));
+    TEST_ASSERT_EQUAL_INT(50, cmap(15, 0, 10, 100, 50));
+}
+
 // ---------------------------------------------------------------------------
 // Q_rsqrt (fast inverse square root - approximate)
 // ---------------------------------------------------------------------------
@@ -300,6 +314,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_cmap_clamped_low);
     RUN_TEST(test_cmap_clamped_high);
     RUN_TEST(test_cmap_negative_output_range);
+    RUN_TEST(test_cmap_descending_output_range_in_range);
+    RUN_TEST(test_cmap_descending_output_range_clamped_at_each_end);
 
     RUN_TEST(test_q_rsqrt_known_values);
 
