@@ -170,6 +170,24 @@
     text-align: left;
 }
 
+/* --- Firmware version box ---------------------------------------------------
+   Same shell as the .model-select box above (common.css): full-width, faint
+   card. Monospaced like the metric values, and free to wrap - the git-describe
+   string is long. */
+
+.firmware-box {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 0.8rem;
+    text-align: left;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.9);
+    word-break: break-word;
+}
+
 /* Grey out the model control while the WebSocket is down, matching the
    controls page's .ws-disconnected treatment. */
 .ws-disconnected .model-row,

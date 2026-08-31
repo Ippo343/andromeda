@@ -8,6 +8,7 @@ const {
     resetReasonLabel,
     formatTemp,
     metricTiles,
+    firmwareLabel,
 } = require('../../data/js/advanced-logic.js');
 
 describe('parseLogLine', () => {
@@ -142,5 +143,19 @@ describe('metricTiles', () => {
         assert.equal(tiles[5].value, '-');
         assert.equal(tiles[6].value, '-');
         assert.equal(tiles[7].value, '-');
+    });
+});
+
+describe('firmwareLabel', () => {
+    test('returns the version string when present', () => {
+        assert.equal(
+            firmwareLabel({ version: 'v0.8-clanking-replicator-15-ge661613 (main)' }),
+            'v0.8-clanking-replicator-15-ge661613 (main)');
+    });
+    test('missing version / payload -> "-"', () => {
+        assert.equal(firmwareLabel({}), '-');
+        assert.equal(firmwareLabel({ version: '' }), '-');
+        assert.equal(firmwareLabel(null), '-');
+        assert.equal(firmwareLabel(undefined), '-');
     });
 });

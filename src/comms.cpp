@@ -4,6 +4,7 @@
 #include <esp_system.h>
 #include <sys/stat.h>
 
+#include "version.h"
 #include "ws-command-parser.h"
 
 constexpr int DNS_PORT = 53;
@@ -226,16 +227,21 @@ void Comms::setupRoutes()
             if (tempC != tempC) { strcpy(tempBuf, "null"); }
             else { snprintf(tempBuf, sizeof(tempBuf), "%.1f", tempC); }
 
-            char json[320];
+            // VERSION is the build-time git describe string from generate_version.py
+            // (build-scripts/inject_version.py). It only ever contains chars that are
+            // safe unescaped inside a JSON string (word chars, '.', '-', ' ', '(', ')'
+            // and '/' from a branch name) - no quote or backslash is reachable - so it
+            // is interpolated directly.
+            char json[512];
             snprintf(json, sizeof(json),
                      "{\"uptimeMs\":%lu,\"heapFree\":%u,\"heapMin\":%u,\"heapTotal\":%u,"
                      "\"tempC\":%s,\"fps\":%s,\"rssi\":%d,\"cpuMhz\":%u,"
-                     "\"chip\":\"%s\",\"resetReason\":%d}",
+                     "\"chip\":\"%s\",\"resetReason\":%d,\"version\":\"%s\"}",
                      static_cast<unsigned long>(millis()), static_cast<unsigned>(ESP.getFreeHeap()),
                      static_cast<unsigned>(ESP.getMinFreeHeap()),
                      static_cast<unsigned>(ESP.getHeapSize()), tempBuf, fpsBuf,
                      static_cast<int>(WiFi.RSSI()), static_cast<unsigned>(ESP.getCpuFreqMHz()),
-                     ESP.getChipModel(), static_cast<int>(esp_reset_reason()));
+                     ESP.getChipModel(), static_cast<int>(esp_reset_reason()), VERSION);
             r->send(200, "application/json", json);
         });
 
