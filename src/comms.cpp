@@ -50,7 +50,8 @@ Comms::Comms()
       scanInProgress(false),
       scanComplete(false),
       scanResults(""),
-      lastScanTime(0)
+      lastScanTime(0),
+      lastBroadcastMs(0)
 {
 }
 
@@ -386,11 +387,24 @@ size_t Comms::buildCurrentStateJson(char* outBuffer, size_t outBufferSize)
 
 void Comms::broadcastStateIfDirty()
 {
+    // Throttle to a floor interval, regardless of how fast state is being
+    // marked dirty (a live colour/brightness drag does it ~100x/sec). Peek
+    // the dirty flag *without* consuming it while inside the window, so the
+    // latest state still goes out on the next eligible tick - the final drag
+    // value is never lost, just coalesced. Unsigned subtraction is
+    // rollover-safe; lastBroadcastMs == 0 means "never broadcast", always due.
+    unsigned long now = nowMs();
+    if (lastBroadcastMs != 0 && (now - lastBroadcastMs) < MIN_BROADCAST_INTERVAL_MS) return;
+
     if (!MissionControl::Instance().consumeStateDirty()) return;
 
     char buf[WsStateBuilder::JSON_CAPACITY];
     size_t len = buildCurrentStateJson(buf, sizeof(buf));
-    if (len) ws.textAll(buf, len);
+    if (len)
+    {
+        ws.textAll(buf, len);
+        lastBroadcastMs = now;
+    }
 }
 
 void Comms::printWifiStatus()

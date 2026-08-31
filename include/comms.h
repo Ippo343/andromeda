@@ -62,6 +62,22 @@ class Comms
     unsigned long lastScanTime;
     static constexpr unsigned long SCAN_CACHE_MS = 30000;
 
+    // millis() of the last state broadcast that actually went out, and the
+    // floor interval between broadcasts. A colour/brightness drag marks the
+    // state dirty ~100x/sec (setLiveColor()/setMaxBrightness() run straight
+    // from the WS task), and each broadcast is a full ~3 KB state JSON -
+    // pushed that fast they overrun the per-client AsyncWebSocket send queue
+    // and get dropped. See broadcastStateIfDirty().
+    unsigned long lastBroadcastMs;
+    static constexpr unsigned long MIN_BROADCAST_INTERVAL_MS = 100;
+
+    // Monotonic millisecond clock used by the broadcast throttle. The
+    // indirection exists only so the native comms integration test can advance
+    // time deterministically - the FastLED stub millis() it links against is
+    // frozen at 0. nullptr (the only production value) means "use millis()".
+    unsigned long (*nowMsFn)() = nullptr;
+    inline unsigned long nowMs() const { return nowMsFn ? nowMsFn() : millis(); }
+
     bool startAPMode();
     bool startStationMode();
     bool processWiFiCredentials(AsyncWebServerRequest* request, const String& ssid,
