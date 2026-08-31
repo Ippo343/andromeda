@@ -84,6 +84,47 @@ function hsvToRgb(h, s, v) {
     ];
 }
 
+// Converts an RGB color (bytes [0, 255]) to HSV (h in degrees [0, 360), s and
+// v in [0, 1]) - the inverse of hsvToRgb(). Used to move the color wheel
+// selector to reflect an incoming state broadcast, which arrives as RGB.
+function rgbToHsv(r, g, b) {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+
+    let h = 0;
+    if (delta !== 0) {
+        if (max === r) h = 60 * (((g - b) / delta) % 6);
+        else if (max === g) h = 60 * ((b - r) / delta + 2);
+        else h = 60 * ((r - g) / delta + 4);
+    }
+    if (h < 0) h += 360;
+
+    const s = max === 0 ? 0 : delta / max;
+    const v = max;
+
+    return { h, s, v };
+}
+
+// Reverse of the angle/distance math ColorWheel.updateColor() uses to turn a
+// wheel-space (x, y) into a color: given a hue (degrees) and saturation
+// (0-1), returns the (x, y) position whose updateColor() would compute back
+// to (approximately) that hue/saturation. cos/sin don't care that hue here
+// ranges over [0, 360) while atan2 (used by updateColor) returns (-180, 180]
+// - both describe the same point on the circle.
+function hsToWheelPosition(hue, saturation, centerX, centerY, radius) {
+    const angle = (hue * Math.PI) / 180;
+    const distance = Math.min(Math.max(saturation, 0), 1) * radius;
+    return {
+        x: centerX + distance * Math.cos(angle),
+        y: centerY + distance * Math.sin(angle),
+    };
+}
+
 // Normalizes a "state" broadcast into the fields controls.js actually applies to the DOM,
 // substituting safe fallbacks for anything missing/malformed rather than letting `undefined`
 // or `null` flow into the UI (a device button rendering the wrong action, a slider snapping
@@ -116,6 +157,8 @@ if (typeof module !== 'undefined' && module.exports) {
         powerButtonState,
         rgbToHistogramWidths,
         hsvToRgb,
+        rgbToHsv,
+        hsToWheelPosition,
         logoBrightnessFilter,
         sanitizeStateMessage,
     };

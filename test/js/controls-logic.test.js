@@ -7,6 +7,8 @@ const {
     powerButtonState,
     rgbToHistogramWidths,
     hsvToRgb,
+    rgbToHsv,
+    hsToWheelPosition,
     logoBrightnessFilter,
     sanitizeStateMessage,
 } = require('../../data/js/controls-logic.js');
@@ -114,6 +116,87 @@ describe('hsvToRgb', () => {
 
     test('h well past 360 wraps via modulo', () => {
         assert.deepEqual(hsvToRgb(720 + 120, 1, 1), hsvToRgb(120, 1, 1));
+    });
+});
+
+describe('rgbToHsv', () => {
+    test('pure red', () => {
+        const { h, s, v } = rgbToHsv(255, 0, 0);
+        assert.equal(h, 0);
+        assert.equal(s, 1);
+        assert.equal(v, 1);
+    });
+
+    test('pure green', () => {
+        const { h, s, v } = rgbToHsv(0, 255, 0);
+        assert.equal(h, 120);
+        assert.equal(s, 1);
+        assert.equal(v, 1);
+    });
+
+    test('pure blue', () => {
+        const { h, s, v } = rgbToHsv(0, 0, 255);
+        assert.equal(h, 240);
+        assert.equal(s, 1);
+        assert.equal(v, 1);
+    });
+
+    test('white has zero saturation (hue is irrelevant/0)', () => {
+        const { h, s, v } = rgbToHsv(255, 255, 255);
+        assert.equal(h, 0);
+        assert.equal(s, 0);
+        assert.equal(v, 1);
+    });
+
+    test('black has zero value', () => {
+        const { v } = rgbToHsv(0, 0, 0);
+        assert.equal(v, 0);
+    });
+
+    test('round-trips through hsvToRgb for an arbitrary color', () => {
+        const [r, g, b] = hsvToRgb(200, 0.6, 0.9);
+        const { h, s, v } = rgbToHsv(r, g, b);
+        // hsvToRgb rounds to byte values, so the round trip is only exact to
+        // within the resulting rounding error, not bit-for-bit.
+        assert.ok(Math.abs(h - 200) < 2);
+        assert.ok(Math.abs(s - 0.6) < 0.02);
+        assert.ok(Math.abs(v - 0.9) < 0.02);
+    });
+});
+
+describe('hsToWheelPosition', () => {
+    test('zero saturation lands exactly on center regardless of hue', () => {
+        assert.deepEqual(hsToWheelPosition(90, 0, 50, 50, 40), { x: 50, y: 50 });
+    });
+
+    test('full saturation at hue=0 lands on the +x rim', () => {
+        const { x, y } = hsToWheelPosition(0, 1, 50, 50, 40);
+        assert.ok(Math.abs(x - 90) < 1e-9);
+        assert.ok(Math.abs(y - 50) < 1e-9);
+    });
+
+    test('saturation is clamped into [0, 1]', () => {
+        const over = hsToWheelPosition(0, 5, 50, 50, 40);
+        const atOne = hsToWheelPosition(0, 1, 50, 50, 40);
+        assert.deepEqual(over, atOne);
+    });
+
+    test('round-trips with the hue/saturation ColorWheel.updateColor() would derive from the same (x, y)', () => {
+        // Mirrors updateColor()'s own math (angle = atan2(dy, dx), hue = angle in
+        // degrees normalized to [0, 360), saturation = distance / radius) without
+        // importing the DOM-bound ColorWheel class itself.
+        const centerX = 50, centerY = 50, radius = 40;
+        const hue = 217, saturation = 0.42;
+        const { x, y } = hsToWheelPosition(hue, saturation, centerX, centerY, radius);
+
+        const dx = x - centerX, dy = y - centerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx);
+        const derivedHue = (angle * 180 / Math.PI + 360) % 360;
+        const derivedSaturation = distance / radius;
+
+        assert.ok(Math.abs(derivedHue - hue) < 1e-9);
+        assert.ok(Math.abs(derivedSaturation - saturation) < 1e-9);
     });
 });
 
