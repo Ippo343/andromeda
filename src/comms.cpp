@@ -63,7 +63,10 @@ bool Comms::setup()
     return startAPMode();
 }
 
-bool Comms::startAPMode()
+// Shared by startAPMode() (boot-time fallback) and enterAPFallbackMode() (runtime fallback
+// after a mid-run disconnect): flips the radio into AP mode and (re)starts the captive-portal
+// DNS server. Does not touch the web server task - see enterAPFallbackMode()'s comment.
+void Comms::beginAPBroadcast()
 {
     isAPMode = true;
     runningDeviceName = DeviceIdentity::getDeviceName();
@@ -72,9 +75,18 @@ bool Comms::startAPMode()
     IPAddress apIP = WiFi.softAPIP();
     Log.noticeln("AP Mode started. IP: %s", apIP.toString().c_str());
 
+    if (dnsServer)
+    {
+        delete dnsServer;
+        dnsServer = nullptr;
+    }
     dnsServer = new DNSServer();
     dnsServer->start(DNS_PORT, "*", apIP);
+}
 
+bool Comms::startAPMode()
+{
+    beginAPBroadcast();
     createWebServerTask();
 
     // Background scan for setup UI
@@ -90,11 +102,45 @@ bool Comms::startAPMode()
     return true;
 }
 
+void Comms::enterAPFallbackMode()
+{
+    if (isAPMode) return;
+
+    Log.warningln("WiFi unreachable for too long, falling back to AP mode for reconfiguration");
+    beginAPBroadcast();
+
+    // The web server task is already running (createWebServerTask() ran at boot in
+    // startStationMode()) and its loop already checks isAPMode/dnsServer every tick to decide
+    // whether to service the captive portal - nothing else to start. Kick a background scan
+    // so the setup page has networks to show as soon as someone connects to the AP.
+    xTaskCreate(
+        [](void* p)
+        {
+            vTaskDelay(2000 / portTICK_PERIOD_MS);
+            Comms::Instance().startAsyncScan();
+            vTaskDelete(NULL);
+        },
+        "APFallbackScan", 2048, nullptr, 1, nullptr);
+}
+
 bool Comms::startStationMode()
 {
     isAPMode = false;
     runningDeviceName = DeviceIdentity::getDeviceName();
-    if (!MDNS.begin(DeviceIdentity::getMdnsHostname().c_str())) { Log.errorln("MDNS failed"); }
+
+    // mDNS is the primary way to reach the device now that station mode uses DHCP instead of
+    // a fixed IP (see EspWiFiConnector::connect()) - worth a couple of retries rather than
+    // giving up on the first transient failure and leaving the device unreachable by name for
+    // the rest of the boot. Runs before the web server task exists, so blocking briefly here
+    // is harmless (same reasoning as WifiManager's connect()).
+    bool mdnsStarted = false;
+    for (int attempt = 0; !mdnsStarted && attempt < 3; attempt++)
+    {
+        if (attempt > 0) delay(200);
+        mdnsStarted = MDNS.begin(DeviceIdentity::getMdnsHostname().c_str());
+    }
+    if (!mdnsStarted) Log.errorln("MDNS failed to start after retries");
+
     createWebServerTask();
     printWifiStatus();
     return true;
@@ -116,6 +162,10 @@ void Comms::webServerTask(void* parameter)
     {
         if (comms->isAPMode && comms->dnsServer) { comms->dnsServer->processNextRequest(); }
         comms->broadcastStateIfDirty();
+        // Bounds the connected-client list to DEFAULT_MAX_WS_CLIENTS - previously never
+        // called anywhere, so nothing pruned stale/excess clients and each one holds its own
+        // send queue of multi-KB state JSON on a device with no PSRAM.
+        comms->ws.cleanupClients();
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 }
@@ -129,6 +179,16 @@ void Comms::setupRoutes()
         {
             if (type == WS_EVT_CONNECT)
             {
+                // Auto-ping every 30s of silence. Without this, a WiFi drop that doesn't
+                // produce a clean TCP FIN (the normal case for the device losing power or
+                // moving out of range - not a client-side "close the tab") leaves the
+                // client's readyState stuck at OPEN for minutes: no error/close event fires,
+                // the UI never shows as disconnected, and every button press silently does
+                // nothing. This makes the library itself notice a dead peer (a failed/
+                // unacked ping closes the connection) instead of relying only on the
+                // client-side staleness timer in controls.js.
+                client->keepAlivePeriod(30);
+
                 char buf[WsStateBuilder::JSON_CAPACITY];
                 size_t stateLen = Comms::Instance().buildCurrentStateJson(buf, sizeof(buf));
                 if (stateLen) client->text(buf, stateLen);
@@ -164,7 +224,33 @@ void Comms::setupRoutes()
                             mc.queueWebCommand(command);
                     }
                     else
-                        Log.warningln("Unrecognized WS command message: %s", (char*)data);
+                    {
+                        // ArduinoLog's format strings only support a single character after
+                        // '%' (no printf-style width/precision - see ArduinoLog.cpp's
+                        // printFormat()), so truncating has to happen on the string itself
+                        // before logging it, not via the format spec. Bounded because `data`
+                        // is an unvalidated, client-controlled message written into the 32KB
+                        // rotating log - previously unbounded, so a client (accidentally or
+                        // not - no auth on this route) sending large garbage frames could
+                        // flush the real diagnostic history in a handful of messages.
+                        char truncated[129];
+                        snprintf(truncated, sizeof(truncated), "%s", (char*)data);
+                        Log.warningln("Unrecognized WS command message: %s", truncated);
+                    }
+                }
+                else
+                {
+                    // Multi-packet/fragmented frames (info->index != 0, or a partial
+                    // info->len != len) and non-text opcodes previously hit neither branch -
+                    // silently dropped with not even a log line. This client only ever sends
+                    // small single-frame messages, so it's not expected in practice, but a
+                    // proxy or a future non-firmware client fragmenting a message deserves a
+                    // trace instead of vanishing without one.
+                    Log.warningln(
+                        "Dropped WS frame (final=%d index=%u len=%u opcode=%d) - fragmented "
+                        "or non-text frames aren't supported",
+                        (int)info->final, (unsigned long)info->index, (unsigned long)len,
+                        (int)info->opcode);
                 }
             }
         });
@@ -181,6 +267,7 @@ void Comms::setupRoutes()
     STATIC_FILE_ROUTE("/wifi-setup.html", "text/html");
     STATIC_FILE_ROUTE("/fonts/cinzel.woff2", "font/woff2");
     STATIC_FILE_ROUTE("/js/utils.js", "application/javascript");
+    STATIC_FILE_ROUTE("/js/ws-client-utils.js", "application/javascript");
     STATIC_FILE_ROUTE("/js/controls-logic.js", "application/javascript");
     STATIC_FILE_ROUTE("/js/controls.js", "application/javascript");
     STATIC_FILE_ROUTE("/js/wifi.js", "application/javascript");
@@ -294,10 +381,19 @@ void Comms::onWiFiScanComplete(int networksFound)
     for (size_t i = 0; i < networksFound; i++)
     {
         if (i > 0) json += ",";
-        json += "{\"ssid\":\"" + WiFi.SSID(i) + "\",\"rssi\":" + String(WiFi.RSSI(i)) + "}";
+        // wifi.js has always read network.encryption (to pick the lock-icon and to
+        // autofocus the password field for a non-open network) but /scan never actually
+        // sent it - every network showed the literal text "undefined" on the setup page.
+        const char* encryption = WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "none" : "secured";
+        json += "{\"ssid\":\"" + jsonEscape(WiFi.SSID(i)) + "\",\"rssi\":" + String(WiFi.RSSI(i)) +
+                ",\"encryption\":\"" + encryption + "\"}";
     }
     json += "]}";
+
+    portENTER_CRITICAL(&scanResultsMux);
     scanResults = json;
+    portEXIT_CRITICAL(&scanResultsMux);
+
     scanComplete = true;
     scanInProgress = false;
     lastScanTime = millis();
@@ -310,22 +406,52 @@ void Comms::startAsyncScan()
     scanInProgress = true;
     scanComplete = false;
     WiFi.scanNetworks(true);
-    WiFi.onEvent(
-        [](WiFiEvent_t e, WiFiEventInfo_t i)
-        {
-            if (e == ARDUINO_EVENT_WIFI_SCAN_DONE)
+
+    // Registered once rather than on every call: WiFi.onEvent() appends a new callback to the
+    // global event list each time, and none of the previous ones are ever removed - a long
+    // AP-mode session (the setup page's scan cache misses every 30s) would grow that list
+    // without bound and fire every stale copy on each future SCAN_DONE.
+    static bool handlerRegistered = false;
+    if (!handlerRegistered)
+    {
+        handlerRegistered = true;
+        WiFi.onEvent(
+            [](WiFiEvent_t e, WiFiEventInfo_t i)
             {
+                if (e != ARDUINO_EVENT_WIFI_SCAN_DONE) return;
+
                 int n = WiFi.scanComplete();
-                if (n >= 0) Comms::Instance().onWiFiScanComplete(n);
-            }
-        });
+                if (n >= 0) { Comms::Instance().onWiFiScanComplete(n); }
+                else
+                {
+                    // A negative result is scanComplete()'s error code (e.g.
+                    // WIFI_SCAN_FAILED) - onWiFiScanComplete() is what clears
+                    // scanInProgress, so without this branch a failed scan left it stuck
+                    // true forever and /scan returned "scanning" for the rest of the
+                    // session, with no way to retry short of a reboot.
+                    Log.warningln("WiFi scan failed (code %d)", n);
+                    Comms::Instance().scanInProgress = false;
+                }
+            });
+    }
 }
 
 String Comms::scanWiFiNetworks()
 {
-    if (isScanCacheValid(scanComplete, lastScanTime, millis(), SCAN_CACHE_MS)) return scanResults;
+    if (isScanCacheValid(scanComplete, lastScanTime, millis(), SCAN_CACHE_MS))
+    {
+        portENTER_CRITICAL(&scanResultsMux);
+        String result = scanResults;
+        portEXIT_CRITICAL(&scanResultsMux);
+        return result;
+    }
     if (!scanInProgress) startAsyncScan();
-    return scanInProgress ? "{\"networks\":[],\"status\":\"scanning\"}" : scanResults;
+    if (scanInProgress) return "{\"networks\":[],\"status\":\"scanning\"}";
+
+    portENTER_CRITICAL(&scanResultsMux);
+    String result = scanResults;
+    portEXIT_CRITICAL(&scanResultsMux);
+    return result;
 }
 
 bool Comms::processWiFiCredentials(AsyncWebServerRequest* request, const String& ssid,
@@ -335,6 +461,14 @@ bool Comms::processWiFiCredentials(AsyncWebServerRequest* request, const String&
     {
         case WifiManager::SaveResult::RejectEmptySsid:
             request->send(400, "text/plain", "SSID required");
+            return true;
+
+        case WifiManager::SaveResult::RejectSsidTooLong:
+            request->send(400, "text/plain", "SSID too long (32 characters max)");
+            return true;
+
+        case WifiManager::SaveResult::RejectPasswordTooLong:
+            request->send(400, "text/plain", "Password too long (63 characters max)");
             return true;
 
         case WifiManager::SaveResult::Persisted:
@@ -353,6 +487,12 @@ bool Comms::processWiFiCredentials(AsyncWebServerRequest* request, const String&
                 "Restart", 2048, NULL, 1, NULL);
             return true;
     }
+
+    // Every SaveResult value is handled above (kept as a switch, not if/else, precisely so
+    // -Wswitch warns if a future value is added and forgotten here) - this is an actual
+    // safety net for that case, not routine defensive code: falling through with no response
+    // sent leaves the client's request hanging forever instead of erroring cleanly.
+    request->send(500, "text/plain", "Internal error");
     return true;
 }
 
@@ -396,7 +536,14 @@ void Comms::broadcastStateIfDirty()
     unsigned long now = nowMs();
     if (lastBroadcastMs != 0 && (now - lastBroadcastMs) < MIN_BROADCAST_INTERVAL_MS) return;
 
-    if (!MissionControl::Instance().consumeStateDirty()) return;
+    bool dueForKeepalive =
+        lastBroadcastMs != 0 && (now - lastBroadcastMs) >= STATE_KEEPALIVE_INTERVAL_MS;
+
+    // consumeStateDirty() always runs (not short-circuited by dueForKeepalive) so a real
+    // change is never left pending past this tick just because a keepalive also happened to
+    // be due - the flag doesn't need to stay set once we're about to send fresh state anyway.
+    bool dirty = MissionControl::Instance().consumeStateDirty();
+    if (!dirty && !dueForKeepalive) return;
 
     char buf[WsStateBuilder::JSON_CAPACITY];
     size_t len = buildCurrentStateJson(buf, sizeof(buf));
