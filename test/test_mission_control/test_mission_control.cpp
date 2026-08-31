@@ -236,6 +236,16 @@ void test_calc_brightness_ramps_up_during_fade_in()
     TEST_ASSERT_TRUE(late > early);
 }
 
+// #111: the effect fade in/out ramps must stay short so the transition doesn't
+// crawl through FastLED's coarse low-brightness region. Guards against a future
+// bump back to the old multi-second values.
+void test_effect_fades_are_sub_second()
+{
+    MissionControl& mc = MissionControl::Instance();
+    TEST_ASSERT_TRUE(MissionControlTestAccess::FADE_IN_DURATION(mc) < 1000);
+    TEST_ASSERT_TRUE(MissionControlTestAccess::FADE_OUT_DURATION(mc) < 1000);
+}
+
 void test_calc_brightness_is_max_during_hold()
 {
     MissionControl& mc = MissionControl::Instance();
@@ -1013,6 +1023,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_calc_brightness_before_effect_start_is_zero);
     RUN_TEST(test_calc_brightness_when_t_is_before_effect_start_is_zero);
     RUN_TEST(test_calc_brightness_ramps_up_during_fade_in);
+    RUN_TEST(test_effect_fades_are_sub_second);
     RUN_TEST(test_calc_brightness_is_max_during_hold);
     RUN_TEST(test_calc_brightness_ramps_down_during_fade_out);
     RUN_TEST(test_calc_brightness_after_transition_is_zero);

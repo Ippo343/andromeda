@@ -293,9 +293,13 @@ class MissionControl
     // scanComplete cross-task flag pattern.
     volatile bool stateDirty = false;
 
-    // These parameters control how long an effect lasts and how quickly it fades in and out
-    milliseconds_t FADE_IN_DURATION = 2500;
-    milliseconds_t FADE_OUT_DURATION = 5000;
+    // These parameters control how long an effect lasts and how quickly it fades in and out.
+    // The fades are deliberately sub-second: FastLED's output is very coarse at the bottom of
+    // the brightness range, so a slow ramp spends a long, visibly-steppy time crawling through
+    // it. Keeping the ramp short makes the transition read as a smooth fade (see #111, and the
+    // same reasoning behind #106's static-colour settle time).
+    milliseconds_t FADE_IN_DURATION = 700;
+    milliseconds_t FADE_OUT_DURATION = 900;
     milliseconds_t MIN_EFFECT_DURATION = 2 MINUTES;
     milliseconds_t MAX_EFFECT_DURATION = 10 MINUTES;
     milliseconds_t MIN_FRAME_DURATION_MS = 0;
