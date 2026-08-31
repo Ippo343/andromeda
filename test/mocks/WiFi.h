@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <optional>
 #include <vector>
 
 #include "WString.h"
@@ -24,6 +25,10 @@ using WiFiEvent_t = int;
 constexpr WiFiEvent_t ARDUINO_EVENT_WIFI_STA_DISCONNECTED = 1;
 constexpr WiFiEvent_t ARDUINO_EVENT_WIFI_STA_GOT_IP = 2;
 constexpr WiFiEvent_t ARDUINO_EVENT_WIFI_SCAN_DONE = 3;
+
+using wifi_auth_mode_t = int;
+constexpr wifi_auth_mode_t WIFI_AUTH_OPEN = 0;
+constexpr wifi_auth_mode_t WIFI_AUTH_WPA2_PSK = 3;
 
 struct WiFiEventInfo_t
 {
@@ -52,6 +57,10 @@ class WiFiClass
     // nothing here fires a real ARDUINO_EVENT_WIFI_SCAN_DONE callback.
     std::vector<String> scriptedScanSSIDs;
     std::vector<int> scriptedScanRSSIs;
+    // Defaults every scripted network to secured (WPA2) unless a test overrides an entry -
+    // an empty vector here (the common case for tests that don't care) means every index
+    // falls through to that same default in encryptionType() below.
+    std::vector<wifi_auth_mode_t> scriptedScanEncryption;
     wl_status_t scriptedStatus = WL_IDLE_STATUS;
 
     // Test hook: the MAC address macAddress() reports - DeviceIdentity
@@ -74,7 +83,15 @@ class WiFiClass
     void onEvent(std::function<void(WiFiEvent_t, WiFiEventInfo_t)> cb) { lastEventCallback = cb; }
 
     void scanNetworks(bool /*async*/) {}
-    int scanComplete() const { return static_cast<int>(scriptedScanSSIDs.size()); }
+    // Overrides scanComplete()'s return - a negative value (e.g. WIFI_SCAN_FAILED) can't be
+    // expressed by scriptedScanSSIDs.size() (a real WiFiClass::scanComplete() return can be
+    // negative; size() never is), and comms.cpp's WiFi.onEvent(SCAN_DONE) handler has a
+    // dedicated branch for exactly that case.
+    std::optional<int> scriptedScanCompleteResult;
+    int scanComplete() const
+    {
+        return scriptedScanCompleteResult.value_or(static_cast<int>(scriptedScanSSIDs.size()));
+    }
     void scanDelete() {}
 
     String SSID(int index = -1) const
@@ -86,6 +103,13 @@ class WiFiClass
     {
         if (index < 0 || index >= static_cast<int>(scriptedScanRSSIs.size())) return 0;
         return scriptedScanRSSIs[index];
+    }
+
+    wifi_auth_mode_t encryptionType(int index) const
+    {
+        if (index < 0 || index >= static_cast<int>(scriptedScanEncryption.size()))
+            return WIFI_AUTH_WPA2_PSK;
+        return scriptedScanEncryption[index];
     }
 
     // No-arg overload: RSSI of the currently connected AP (comms.cpp /metrics).
