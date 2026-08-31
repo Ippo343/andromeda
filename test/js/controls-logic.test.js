@@ -8,6 +8,7 @@ const {
     rgbToHistogramWidths,
     hsvToRgb,
     logoBrightnessFilter,
+    sanitizeStateMessage,
 } = require('../../data/js/controls-logic.js');
 
 describe('pickInitialTab', () => {
@@ -99,6 +100,48 @@ describe('hsvToRgb', () => {
 
     test('v=0 is black regardless of hue/saturation', () => {
         assert.deepEqual(hsvToRgb(90, 1, 0), [0, 0, 0]);
+    });
+
+    test('h=360 wraps to the same result as h=0 (not grey)', () => {
+        // The if-chain only covers [0, 360) - 360 previously fell through every branch and
+        // silently returned grey (r=g=b=m) instead of wrapping back to red.
+        assert.deepEqual(hsvToRgb(360, 1, 1), hsvToRgb(0, 1, 1));
+    });
+
+    test('negative h wraps into range', () => {
+        assert.deepEqual(hsvToRgb(-120, 1, 1), hsvToRgb(240, 1, 1));
+    });
+
+    test('h well past 360 wraps via modulo', () => {
+        assert.deepEqual(hsvToRgb(720 + 120, 1, 1), hsvToRgb(120, 1, 1));
+    });
+});
+
+describe('sanitizeStateMessage', () => {
+    test('passes through well-formed fields', () => {
+        assert.deepEqual(sanitizeStateMessage({ power: true, holding: false, brightness: 128 }),
+            { power: true, holding: false, brightness: 128 });
+    });
+
+    test('missing power/holding default to false', () => {
+        assert.deepEqual(sanitizeStateMessage({ brightness: 10 }),
+            { power: false, holding: false, brightness: 10 });
+    });
+
+    test('non-boolean power/holding default to false', () => {
+        assert.deepEqual(sanitizeStateMessage({ power: 'on', holding: 1, brightness: 10 }),
+            { power: false, holding: false, brightness: 10 });
+    });
+
+    test('missing/non-number brightness becomes null (caller should skip applying it)', () => {
+        assert.equal(sanitizeStateMessage({ power: true, holding: false }).brightness, null);
+        assert.equal(
+            sanitizeStateMessage({ power: true, holding: false, brightness: 'bright' }).brightness,
+            null);
+    });
+
+    test('NaN brightness becomes null', () => {
+        assert.equal(sanitizeStateMessage({ brightness: NaN }).brightness, null);
     });
 });
 
