@@ -56,16 +56,28 @@ class WifiManager
     enum class SaveResult
     {
         RejectEmptySsid,
+        RejectSsidTooLong,
+        RejectPasswordTooLong,
         Persisted
     };
 
-    // Persists the given credentials (rejecting only an empty SSID). Does not
-    // connect - see the file header: the actual join is attempted on the next
-    // boot, off the async_tcp task. Never touches previously-stored
-    // credentials until the new ones are written.
+    // 802.11 hard limits: SSID is at most 32 bytes, a WPA passphrase at most 63 characters.
+    // Previously unenforced - an over-long value from a client that isn't the WiFi setup page
+    // itself (nothing else validates it) would get persisted and then simply never be able to
+    // join (WiFi.begin() silently truncates or rejects it), stranding the device in AP mode
+    // with credentials that look "saved" but can never work.
+    static constexpr size_t MAX_SSID_LENGTH = 32;
+    static constexpr size_t MAX_PASSWORD_LENGTH = 63;
+
+    // Persists the given credentials, rejecting an empty or over-long SSID or an over-long
+    // password. Does not connect - see the file header: the actual join is attempted on the
+    // next boot, off the async_tcp task. Never touches previously-stored credentials until the
+    // new ones pass validation.
     SaveResult saveNewCredentials(const String& ssid, const String& password)
     {
         if (ssid.length() == 0) return SaveResult::RejectEmptySsid;
+        if (ssid.length() > MAX_SSID_LENGTH) return SaveResult::RejectSsidTooLong;
+        if (password.length() > MAX_PASSWORD_LENGTH) return SaveResult::RejectPasswordTooLong;
 
         store.saveCredentials(ssid, password);
         return SaveResult::Persisted;
