@@ -75,19 +75,23 @@ class RandParam
    public:
     RandParam() { randomize(); }  // including the max
     inline operator T() const { return value; }
-    virtual void randomize() { value = random(min, max + 1); }
+    void randomize() { value = random(min, max + 1); }
 };
 
+// RandBool/RandSign are NOT overriding randomize() below - RandParam::randomize() isn't
+// virtual (there's no need for every value-typed RandParam<T,min,max> instance to carry a
+// vtable pointer/virtual destructor just for these two subclasses). Their randomize()
+// merely hides the base one by name, which is exactly what's wanted here: it's resolved
+// lexically at the call site, not by runtime type, so RandParam's own constructor (which
+// unqualified-calls randomize()) always calls RandParam::randomize() - producing an
+// initial value from the base's [min,max] algorithm, which for RandSign's [-1,1] range can
+// land on 0. Each subclass's own constructor then re-calls randomize() unqualified from
+// its own scope, which resolves to the hiding (derived) overload instead.
 class RandBool : public RandParam<bool, 0, 1>
 {
    public:
-    // RandParam's constructor calls the still-virtual randomize() during base
-    // construction, which resolves to RandParam::randomize() rather than this
-    // override (the vtable isn't set to the derived type yet). Re-randomize
-    // here, once construction of this class has actually started, so `value`
-    // ends up using this class's randomize().
     RandBool() { randomize(); }
-    void randomize() override;
+    void randomize();
 };
 
 // Specialized random parameter that can only be -1 or 1, but not 0.
@@ -99,7 +103,7 @@ class RandSign : public RandParam<char, -1, 1>
     // See RandBool's constructor comment: without this, the base
     // RandParam::randomize() runs instead, which can produce 0.
     RandSign() { randomize(); }
-    void randomize() override;
+    void randomize();
 };
 
 // Represents a sine wave with randomly chosen bpm and direction
