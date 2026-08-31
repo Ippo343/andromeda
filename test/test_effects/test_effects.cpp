@@ -1,5 +1,6 @@
 #include <unity.h>
 
+#include <chrono>
 #include <set>
 #include <string>
 
@@ -206,6 +207,48 @@ void test_electric_sparks_evaluate_color_tracks_energy_level()
     CRGB bright = fx.evaluate(&strip, &strip.leds[0], 0, 1000);
 
     TEST_ASSERT_FALSE(dark == bright);
+}
+
+// Regression test for the unbounded width-doubling loop: with bigSparkChance pinned to its
+// maximum (70, giving the roll an expected value > 1 - it diverges) and sparkThreshold forced
+// to guarantee a spark on every LED, a run of bad luck could previously double the spark width
+// dozens of times before finally failing, freezing evaluate() for a multi-second span. Forcing
+// every LED on every frame to roll the width-doubling chain maximizes how often that can
+// happen; asserts real wall-clock time instead of just "didn't crash", since an unbounded loop
+// doesn't crash, it just doesn't come back for a very long time.
+void test_electric_sparks_spark_width_growth_stays_bounded()
+{
+    ElectricSparks fx;
+    LedStrip& strip = GEOMETRY.getStrip(0);
+
+    // bigSparkChance is an EnergyParam<int, 40, 70> - not a settable field, its value is
+    // derived from the global Energy value on every read - so pin Energy to 255 to force it
+    // to its maximum (70).
+    Energy::set(255);
+
+    auto started = std::chrono::steady_clock::now();
+
+    milliseconds_t t = 0;
+    for (int frame = 0; frame < 100; frame++)
+    {
+        t += 16;
+        fx.precompute(t);
+        // precompute() just recomputed sparkThreshold from sparkRateMilliHz/dt - override it
+        // to guarantee every LED rolls a spark (and therefore the width-doubling chain) this
+        // frame, rather than relying on however high sparkRateMilliHz's own energy-scaled
+        // rate happens to land.
+        fx.sparkThreshold = ElectricSparks::DICE_LIMIT;
+        for (size_t i = 0; i < strip.num_leds; i++) fx.evaluate(&strip, &strip.leds[i], i, t);
+        fx.postprocess(t);
+    }
+
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - started);
+    // Generous budget: unclamped, even a handful of unlucky rolls across 5600 evaluate() calls
+    // (100 frames x 56 LEDs) would blow well past this on any machine.
+    TEST_ASSERT_TRUE(elapsed.count() < 5000);
+
+    Energy::set(0);  // don't leak a maxed global energy value into later tests
 }
 
 // ---------------------------------------------------------------------------
@@ -1071,6 +1114,28 @@ void test_cartesian_moodlight_randomize_and_evaluate()
     exerciseEvaluate(fx, 9000);
 }
 
+// Regression test for createEffect()'s actual production usage: `new CartesianMoodlight()`
+// with no separate randomize() call (unlike every test above, which calls it explicitly).
+// Before the fix, redAmp/greenAmp/blueAmp, the direction vectors, and the wavelengths were
+// left as whatever was in the freed heap block on this exact path - the constructor alone
+// must now be sufficient to leave the effect in a properly randomized, working state.
+void test_cartesian_moodlight_constructor_alone_produces_working_effect()
+{
+    CartesianMoodlight* fx = new CartesianMoodlight();  // no fx->randomize() call
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    Led ledA = strip.leds[0];
+    ledA.cartesian.x = 0;
+    ledA.cartesian.y = 0;
+    Led ledB = strip.leds[0];
+    ledB.cartesian.x = 400;
+    ledB.cartesian.y = -300;
+
+    CRGB a = fx->evaluate(&strip, &ledA, 0, 1000);
+    CRGB b = fx->evaluate(&strip, &ledB, 0, 1000);
+    TEST_ASSERT_FALSE(a == b);
+    delete fx;
+}
+
 void test_cartesian_moodlight_color_varies_with_position()
 {
     CartesianMoodlight fx;
@@ -1304,6 +1369,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_electric_sparks_diffusion_spreads_energy_to_neighbors);
     RUN_TEST(test_electric_sparks_energy_decays_to_near_zero_without_further_injection);
     RUN_TEST(test_electric_sparks_evaluate_color_tracks_energy_level);
+    RUN_TEST(test_electric_sparks_spark_width_growth_stays_bounded);
 
     RUN_TEST(test_heat_diffusion_ring_runs_full_frame_cycle);
     RUN_TEST(test_heat_diffusion_ring_spreads_a_hot_spot_to_neighbours);
@@ -1373,6 +1439,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_individual_strip_drift_current_color_moves_toward_target_over_the_transition);
 
     RUN_TEST(test_cartesian_moodlight_randomize_and_evaluate);
+    RUN_TEST(test_cartesian_moodlight_constructor_alone_produces_working_effect);
     RUN_TEST(test_cartesian_moodlight_color_varies_with_position);
     RUN_TEST(test_cartesian_moodlight_color_varies_with_time);
 
