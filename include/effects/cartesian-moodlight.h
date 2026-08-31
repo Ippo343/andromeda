@@ -8,7 +8,7 @@
 class CartesianMoodlight : public AbstractEffect
 {
    public:
-    virtual const char* GetName() { return "CartesianMoodlight"; }
+    virtual const char* GetName() { return "Cartesian Moodlight"; }
 
     // Tunable parameters
     uint8_t valleyPower = 5;    // Power for stretching valleys (3-7 recommended)

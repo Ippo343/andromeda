@@ -19,7 +19,7 @@ using std::vector;
 class BezierSwarm : public EmitterFieldEffect
 {
    public:
-    const char* GetName() override { return "BezierSwarm"; }
+    const char* GetName() override { return "Bezier Swarm"; }
 
     vector<BezierPath> paths;
 

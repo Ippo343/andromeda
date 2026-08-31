@@ -8,7 +8,7 @@
 class NinjaStar : public AbstractEffect
 {
    public:
-    virtual const char* GetName() { return "NinjaStar"; }
+    virtual const char* GetName() { return "Ninja Star"; }
 
     RandParam<milliseconds_t, 5000, 5000> duration;
     RandParam<unsigned short, 6, 6> beams;

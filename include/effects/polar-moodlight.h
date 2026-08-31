@@ -7,7 +7,7 @@
 class PolarMoodlight : public AbstractEffect
 {
    public:
-    virtual const char* GetName() { return "PolarMoodlight"; }
+    virtual const char* GetName() { return "Polar Moodlight"; }
 
     // minBpm, maxBpm, minScale, maxScale
     RandSine<1, 15> red;

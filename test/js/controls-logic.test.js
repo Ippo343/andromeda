@@ -26,12 +26,12 @@ describe('pickInitialTab', () => {
 
 describe('findEffectIdByName', () => {
     const effects = [
-        { id: 0, name: 'CartesianMoodlight' },
-        { id: 5, name: 'NinjaStar' },
+        { id: 0, name: 'Cartesian Moodlight' },
+        { id: 5, name: 'Ninja Star' },
     ];
 
     test('finds the id of a matching effect', () => {
-        assert.equal(findEffectIdByName(effects, 'NinjaStar'), 5);
+        assert.equal(findEffectIdByName(effects, 'Ninja Star'), 5);
     });
 
     test('returns null when no effect matches', () => {

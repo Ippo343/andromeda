@@ -11,7 +11,7 @@ using std::vector;
 class SaturationGlow : public AbstractEffect
 {
    public:
-    virtual const char* GetName() { return "SaturationGlow"; }
+    virtual const char* GetName() { return "Saturation Glow"; }
 
     // Time scale factor for the perlin random noise
     RandParam<unsigned short, 500, 5000> hueTimeScale;

@@ -13,7 +13,7 @@ using std::vector;
 class IndividualStripDrift : public AbstractEffect
 {
    public:
-    virtual const char* GetName() { return "IndividualStripDrift"; }
+    virtual const char* GetName() { return "Individual Strip Drift"; }
 
     // Random range for the transition duration
     EnergyParam<milliseconds_t, 2 SECONDS, 250> transitionDurationMin;

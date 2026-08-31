@@ -13,7 +13,7 @@
 class MultiPendulum : public EmitterFieldEffect
 {
    public:
-    const char* GetName() override { return "MultiPendulum"; }
+    const char* GetName() override { return "Multi Pendulum"; }
 
     VerletChain chain;
 

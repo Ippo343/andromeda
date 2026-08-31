@@ -7,7 +7,7 @@
 class PaletteWave : public AbstractEffect
 {
    public:
-    virtual const char* GetName() { return "PaletteWave"; }
+    virtual const char* GetName() { return "Palette Wave"; }
 
     CRGBPalette256 palette;
     RandParam<uint8_t, 3, 8> bpm;

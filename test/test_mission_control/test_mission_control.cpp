@@ -547,7 +547,7 @@ void test_queue_effect_command_transitions_to_selected_effect_and_holds()
     TEST_ASSERT_EQUAL(RenderMode::TRANSITIONING, MissionControlTestAccess::getMode(mc));
     AbstractEffect* pending = MissionControlTestAccess::getPendingEffect(mc);
     TEST_ASSERT_NOT_NULL(pending);
-    TEST_ASSERT_EQUAL_STRING("NinjaStar", pending->GetName());
+    TEST_ASSERT_EQUAL_STRING("Ninja Star", pending->GetName());
     // holdEffect() ran immediately after handleTransition(), while mode was
     // already TRANSITIONING, so the hold is deferred rather than applied yet.
     TEST_ASSERT_TRUE(MissionControlTestAccess::holdPending(mc));

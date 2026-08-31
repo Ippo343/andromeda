@@ -12,7 +12,7 @@ using std::vector;
 class ElectricSparks : public AbstractEffect
 {
    public:
-    virtual const char* GetName() { return "ElectricSparks"; }
+    virtual const char* GetName() { return "Electric Sparks"; }
 
     // Palette values for each LED
     // Needs double buffering to correctly compute the averaging of neighbouring pixels
