@@ -20,13 +20,9 @@ class MoodLight
     RandParam<uint8_t, MIN_BPM, MAX_BPM> bpmG;
     RandParam<uint8_t, MIN_BPM, MAX_BPM> bpmB;
 
-    void randomize()
-    {
-        bpmR.randomize();
-        bpmG.randomize();
-        bpmB.randomize();
-    }
-
+    // No separate randomize() here: bpmR/bpmG/bpmB are RandParam, whose own constructor
+    // already randomizes on construction (see RandParam() in utils.h) - unlike
+    // CartesianMoodlight's plain non-self-randomizing fields, there's nothing left to do.
     CRGB evaluate()
     {
         // NOTE: this actually ignores the t argument
