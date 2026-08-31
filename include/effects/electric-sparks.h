@@ -109,13 +109,25 @@ class ElectricSparks : public AbstractEffect
             updatePalette();
         }
 
+        // Interior LEDs never actually wrap - only the first and last LED of a strip
+        // need py_get()'s wraparound modulo (an integer division through a double
+        // indirection). Handle those two directly and let the interior loop index
+        // straight into the vectors instead of paying that cost on every LED.
         FOR_EACH_STRIP
         {
-            FOR_EACH_LED(iStrip)
+            size_t stripLen = GEOMETRY.getStrip(iStrip).num_leds;
+            if (stripLen == 0) continue;
+
+            vector<uint8_t>& pre = preValues[iStrip];
+            vector<uint8_t>& out = newValues[iStrip];
+
+            if (stripLen == 1) { out[0] = avg38(pre[0], pre[0], pre[0]); }
+            else
             {
-                newValues[iStrip][iLed] =
-                    avg38(py_get(preValues[iStrip], iLed - 1), preValues[iStrip][iLed],
-                          py_get(preValues[iStrip], iLed + 1));
+                out[0] = avg38(pre[stripLen - 1], pre[0], pre[1]);
+                for (size_t iLed = 1; iLed + 1 < stripLen; iLed++)
+                    out[iLed] = avg38(pre[iLed - 1], pre[iLed], pre[iLed + 1]);
+                out[stripLen - 1] = avg38(pre[stripLen - 2], pre[stripLen - 1], pre[0]);
             }
         }
     }
@@ -127,12 +139,17 @@ class ElectricSparks : public AbstractEffect
         {
             size_t width = 1;
 
+            // bigSparkChance is an EnergyParam - reading it maps the global energy value
+            // via cmap() on every access. Energy doesn't change mid-roll, so read it once
+            // instead of re-running that map/constrain on every loop iteration.
+            int bigSparkChanceNow = bigSparkChance;
+
             // Keep rolling for a chance to increase the spark's size. Expected work here
             // diverges (2 * max bigSparkChance/100 > 1), so an unclamped width can in rare
             // cases double dozens of times before the roll finally fails - clamp to the strip
             // length so a long roll costs at most one pass over the strip instead of a
             // multi-second freeze inside evaluate().
-            while (width < strip->num_leds && random(100) < bigSparkChance) width *= 2;
+            while (width < strip->num_leds && random(100) < bigSparkChanceNow) width *= 2;
             width = std::min(width, strip->num_leds);
 
             // Now light up the pixel and its neighbours up to the defined width
