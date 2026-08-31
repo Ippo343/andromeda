@@ -116,7 +116,15 @@ class CommsTestAccess
     static bool isAPMode(Comms& c) { return c.isAPMode; }
     static String scanWiFiNetworks(Comms& c) { return c.scanWiFiNetworks(); }
     static void broadcastStateIfDirty(Comms& c) { c.broadcastStateIfDirty(); }
+    static void resetBroadcastThrottle(Comms& c) { c.lastBroadcastMs = 0; }
+    static unsigned long minBroadcastIntervalMs() { return Comms::MIN_BROADCAST_INTERVAL_MS; }
+    static void setNowFn(Comms& c, unsigned long (*fn)()) { c.nowMsFn = fn; }
 };
+
+// Deterministic clock for the broadcast-throttle test - the stub millis() this
+// binary links against is frozen at 0, so real elapsed time can't be observed.
+static unsigned long g_fakeNowMs = 0;
+static unsigned long fakeNowMs() { return g_fakeNowMs; }
 
 namespace
 {
@@ -148,6 +156,14 @@ void setUp()
     // MissionControl::Instance().update(0) call - see MissionControlTestAccess.
     GEOMETRY.initializeForTest(ModelId::SINGLE_STRIP_TEST_DEVICE);
     MissionControlTestAccess::setEffect(MissionControl::Instance(), new StaticColor());
+
+    // Each test starts with the broadcast throttle cleared and back on the
+    // real (frozen) clock, so the first broadcastStateIfDirty() in a test
+    // always fires regardless of a previous test (they share the Comms
+    // singleton). The throttle test opts into the fake clock itself.
+    CommsTestAccess::resetBroadcastThrottle(Comms::Instance());
+    CommsTestAccess::setNowFn(Comms::Instance(), nullptr);
+    g_fakeNowMs = 0;
 }
 void tearDown() {}
 
@@ -392,6 +408,57 @@ void test_state_broadcast_skipped_when_not_dirty()
     TEST_ASSERT_TRUE(ws->lastBroadcastText.empty());
 }
 
+// #109: a live colour/brightness drag marks state dirty ~100x/sec, far faster
+// than TCP can drain a ~3 KB state frame, so the per-client AsyncWebSocket
+// send queue overruns and frames drop ("Too many messages queued").
+// broadcastStateIfDirty() throttles to MIN_BROADCAST_INTERVAL_MS: a burst of
+// dirties inside one window collapses to a single broadcast, and because the
+// window check peeks the dirty flag without consuming it, the next window
+// still sends the latest state.
+void test_state_broadcasts_are_throttled_within_the_interval()
+{
+    AsyncWebSocket* ws = CommsTestAccess::server(Comms::Instance()).webSocket;
+    MissionControl& mc = MissionControl::Instance();
+
+    const unsigned long interval = CommsTestAccess::minBroadcastIntervalMs();
+    g_fakeNowMs = 1000;
+    CommsTestAccess::setNowFn(Comms::Instance(), &fakeNowMs);
+
+    // First poll after setUp()'s reset: state is dirty, so it goes out.
+    ws->lastBroadcastText.clear();
+    mc.setMaxBrightness(10);
+    CommsTestAccess::broadcastStateIfDirty(Comms::Instance());
+    TEST_ASSERT_FALSE(ws->lastBroadcastText.empty());
+
+    // A drag's worth of dirties, all landing inside the same interval window:
+    // no further frame is emitted no matter how many times we poll.
+    ws->lastBroadcastText.clear();
+    uint8_t lastBurstValue = 0;
+    for (unsigned long dt = 1; dt < interval; dt += 5)
+    {
+        g_fakeNowMs = 1000 + dt;
+        lastBurstValue = static_cast<uint8_t>(dt);
+        mc.setMaxBrightness(lastBurstValue);
+        CommsTestAccess::broadcastStateIfDirty(Comms::Instance());
+    }
+    TEST_ASSERT_TRUE(ws->lastBroadcastText.empty());
+
+    // Once the window elapses the still-pending state finally goes out - with
+    // no fresh setMaxBrightness() call, proving the throttled polls above only
+    // peeked the dirty flag rather than consuming it. The frame carries the
+    // last value written during the burst.
+    g_fakeNowMs = 1000 + interval;
+    CommsTestAccess::broadcastStateIfDirty(Comms::Instance());
+    TEST_ASSERT_FALSE(ws->lastBroadcastText.empty());
+    TEST_ASSERT_EQUAL(lastBurstValue, mc.getMaxBrightness());
+
+    // ... and the next immediate poll is throttled again.
+    ws->lastBroadcastText.clear();
+    mc.setMaxBrightness(42);
+    CommsTestAccess::broadcastStateIfDirty(Comms::Instance());
+    TEST_ASSERT_TRUE(ws->lastBroadcastText.empty());
+}
+
 // ---------------------------------------------------------------------------
 // Captive portal
 // ---------------------------------------------------------------------------
@@ -446,6 +513,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_state_broadcast_after_brightness_command);
     RUN_TEST(test_rapid_brightness_commands_bypass_queue_and_dont_drop);
     RUN_TEST(test_state_broadcast_skipped_when_not_dirty);
+    RUN_TEST(test_state_broadcasts_are_throttled_within_the_interval);
 
     RUN_TEST(test_not_found_redirects_in_ap_mode);
     RUN_TEST(test_not_found_returns_404_in_station_mode);
