@@ -3,6 +3,7 @@
 #include <Preferences.h>
 
 #include "device-identity.h"
+#include "nvs-utils.h"
 
 #ifndef UNIT_TEST
 #include <esp_system.h>  // esp_restart()
@@ -15,20 +16,40 @@ static const char* BRIGHTNESS_KEY = "max_bright";
 
 void persist(uint8_t value)
 {
+    // commit:true is sent once per slider drag by a well-behaved client (see the call site's
+    // comment in comms.cpp), but it's client-controlled and unauthenticated (no auth on any
+    // WS route) and this runs straight off the async_tcp task - nothing previously stopped a
+    // buggy or hostile client from spamming it into a flash write per message. Skip the write
+    // (and the blocking NVS round-trip that comes with it) when nothing actually changed.
+    // -1 sentinel: always write the first time, regardless of what load() may or may not have
+    // been called with.
+    static int lastPersisted = -1;
+    if (lastPersisted == value) return;
+
     Preferences prefs;
-    prefs.begin(PREFS_NAMESPACE, false);
-    prefs.putUShort(BRIGHTNESS_KEY, value);
+    if (!beginPreferencesOrWarn(prefs, PREFS_NAMESPACE, false)) return;
+    putUShortOrWarn(prefs, BRIGHTNESS_KEY, value);
     prefs.end();
 
+    lastPersisted = value;
     Log.noticeln("Persisted max brightness: %d", value);
 }
 
 uint8_t load(uint8_t fallback)
 {
     Preferences prefs;
-    prefs.begin(PREFS_NAMESPACE, true);  // read-only
+    if (!beginPreferencesOrWarn(prefs, PREFS_NAMESPACE, true)) return fallback;
     uint16_t value = prefs.getUShort(BRIGHTNESS_KEY, fallback);
     prefs.end();
+
+    // Stored as a uint16_t (see persist() above) but only ever a valid uint8_t brightness -
+    // a corrupt value outside that range used to silently narrow (e.g. 256 -> 0), which looks
+    // exactly like a dead device at boot. Fall back instead of truncating.
+    if (value > 255)
+    {
+        Log.errorln("Stored brightness %d out of range, using fallback %d", value, fallback);
+        return fallback;
+    }
 
     return static_cast<uint8_t>(value);
 }
@@ -78,8 +99,17 @@ void MissionControl::processWebCommands()
                 stateDirty = true;
                 break;
             case CommandType::MODEL:
-                FactoryConfig::setModelId(static_cast<ModelId>(command.modelId));
-                stateDirty = true;
+                // Reject any id that doesn't resolve to a real registry entry (e.g. a
+                // stray/garbage value, or GRID_TEST_DEVICE - a valid enum with no hardware
+                // registry entry) rather than persisting it: an unresolvable model id leaves
+                // config == nullptr on the next boot before WiFi is even up, bricking the
+                // device with no recovery path (see Geometry::allocateAndLoadCoordinates()).
+                if (getModelConfig(static_cast<ModelId>(command.modelId)))
+                {
+                    FactoryConfig::setModelId(static_cast<ModelId>(command.modelId));
+                    stateDirty = true;
+                }
+                else { Log.warningln("Rejected unknown model id %d", command.modelId); }
                 break;
             case CommandType::REBOOT:
                 esp_restart();
@@ -113,6 +143,15 @@ bool MissionControl::queueWebCommand(Command command)
     {
         Log.warningln("Web command queue full, dropping command: %s",
                       commandTypeToString(command.type));
+
+        // The web UI applies commands like NEXT/HOLD optimistically to its own local state
+        // before the response comes back (see controls.js) - a silently dropped command
+        // otherwise leaves it showing the wrong thing until some unrelated change happens to
+        // trigger the next broadcast. Marking dirty here doesn't correct the UI on its own
+        // (this device-side state hasn't actually changed), but it does force the next
+        // broadcast to go out promptly instead of waiting for the periodic keepalive, so the
+        // client resyncs to whatever the device is actually doing as soon as possible.
+        stateDirty = true;
         return false;
     }
 }
@@ -311,8 +350,11 @@ void MissionControl::holdEffect()
 
     // Can't flip to HOLDING mid-transition without abandoning the in-flight
     // animation/effect swap - defer it; finishTransition() re-applies the
-    // hold once the transition actually lands on an effect.
-    if (mode == RenderMode::TRANSITIONING)
+    // hold once the transition actually lands on an effect. Same story if
+    // there's no effect at all yet (a HOLD arriving on literally the first
+    // tick, before update() has ever run a transition) - defer it the same
+    // way rather than flipping straight to HOLDING with nothing to hold.
+    if (mode == RenderMode::TRANSITIONING || !effect)
         holdPending = true;
     else
         mode = RenderMode::HOLDING;
@@ -404,7 +446,12 @@ void MissionControl::update(milliseconds_t t)
     if (mode == RenderMode::TRANSITIONING) { updateTransition(t); }
     else
     {
-        if (t >= nextTransition)
+        // effect is nullptr until the first transition ever completes. A HOLD/RESUME/
+        // POWER_ON command processed by processWebCommands() above on the very first tick
+        // (the web server is up before the first update() call) can set nextTransition far
+        // enough into the future that "t >= nextTransition" below never catches this - so
+        // check for the missing effect explicitly rather than relying on that fallthrough.
+        if (t >= nextTransition || !effect)
         {
             handleTransition();
             return;
@@ -421,9 +468,16 @@ void MissionControl::update(milliseconds_t t)
 
     milliseconds_t frameEnd = millis();
 
-    if (frameEnd - frameStart < MIN_FRAME_DURATION_MS)
+    // On models with no explicit cap (MIN_FRAME_DURATION_MS == 0 - Andromeda Mk1, L70, the
+    // test rig) the loop previously had no unconditional yield at all: whether the idle task
+    // (and with it WiFi/lwIP background work, and the CPU0 idle-task watchdog check) ever
+    // got scheduled depended entirely on FASTLED_SHOW() blocking via a real task delay -
+    // which isn't guaranteed for every LED driver. Floor the pacing target at 1ms so every
+    // model yields at least one tick per frame regardless of its cap.
+    milliseconds_t minFrameDuration = MIN_FRAME_DURATION_MS > 0 ? MIN_FRAME_DURATION_MS : 1;
+    if (frameEnd - frameStart < minFrameDuration)
     {
-        milliseconds_t delayTime = MIN_FRAME_DURATION_MS - (frameEnd - frameStart);
+        milliseconds_t delayTime = minFrameDuration - (frameEnd - frameStart);
         vTaskDelay(pdMS_TO_TICKS(delayTime));
     }
 }

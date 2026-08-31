@@ -5,6 +5,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
+#include <atomic>
 #include <cstring>
 
 #include "animations.h"
@@ -210,13 +211,12 @@ class MissionControl
 
     // Consumes (reads and clears) the flag set whenever broadcast-worthy state
     // changes, so Comms can poll it from its own task to know when to push a
-    // fresh state message over the WebSocket.
-    inline bool consumeStateDirty()
-    {
-        bool d = stateDirty;
-        stateDirty = false;
-        return d;
-    }
+    // fresh state message over the WebSocket. An atomic exchange rather than a
+    // plain read-then-clear: stateDirty is set from the render task and consumed from the web
+    // server task, and a set landing between the old read and clear (both non-atomic on a
+    // plain `volatile bool`) was silently lost - the client that missed the corresponding
+    // broadcast then stayed stale until some unrelated change happened to set the flag again.
+    inline bool consumeStateDirty() { return stateDirty.exchange(false); }
 
     CRGB staticColor = CRGB::White;
 
@@ -301,11 +301,9 @@ class MissionControl
     // which is also used for the fade in/out ramps.
     uint8_t maxBrightness = 255;
 
-    // Set whenever broadcast-worthy state changes; cleared by consumeStateDirty().
-    // volatile because it's written from the render task and read/cleared from
-    // Comms' web server task - mirrors the existing Comms::scanInProgress/
-    // scanComplete cross-task flag pattern.
-    volatile bool stateDirty = false;
+    // Set whenever broadcast-worthy state changes; consumed (read-and-cleared, atomically -
+    // see consumeStateDirty()) from Comms' web server task. Written from the render task.
+    std::atomic<bool> stateDirty{false};
 
     // These parameters control how long an effect lasts and how quickly it fades in and out.
     // The fades are deliberately sub-second: FastLED's output is very coarse at the bottom of
