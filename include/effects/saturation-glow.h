@@ -2,13 +2,13 @@
 
 #include <vector>
 
-#include "effects-base.h"
+#include "effects/per-strip-color-effect.h"
 #include "utils.h"
 
 using std::vector;
 
 // Whole mirror moodlight pulsating around a central saturation
-class SaturationGlow : public AbstractEffect
+class SaturationGlow : public PerStripColorEffect
 {
    public:
     virtual const char* GetName() { return "Saturation Glow"; }
@@ -23,13 +23,11 @@ class SaturationGlow : public AbstractEffect
     // Each strip has a random cycle time
     vector<RandParam<milliseconds_t, (1 MINUTES), (4 MINUTES)>> cycleTime;
 
-    uint8_t hue;         // current hue (same for all strips)
-    vector<CRGB> color;  // specific color per strip
+    uint8_t hue;  // current hue (same for all strips)
 
     SaturationGlow()
-        : cycleTime(GEOMETRY.getNumStrips()),  // this SHOULD call the default constructor of
-                                               // RandParam, picking 7 random values. I think.
-          color(GEOMETRY.getNumStrips())
+        : cycleTime(GEOMETRY.getNumStrips())  // this SHOULD call the default constructor of
+                                              // RandParam, picking 7 random values. I think.
     {
         saturationAmplitude = min(static_cast<uint8_t>(saturationCenter),
                                   static_cast<uint8_t>(255 - saturationCenter));
@@ -44,12 +42,7 @@ class SaturationGlow : public AbstractEffect
             long scaledWave =
                 scaledCubicWave8(t, cycleTime[iStrip], -saturationAmplitude, saturationAmplitude);
             uint8_t sat = constrain(saturationCenter + scaledWave, 0, 255);
-            color[iStrip] = CHSV(hue, sat, 255);
+            colors[iStrip] = CHSV(hue, sat, 255);
         }
-    }
-
-    CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
-    {
-        return color[strip->idx];
     }
 };
