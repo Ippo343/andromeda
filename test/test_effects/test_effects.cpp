@@ -516,17 +516,22 @@ void test_palette_wave_sets_rotate_space_hint()
 // the two calls), should land on different palette phases.
 void test_palette_wave_color_varies_with_position()
 {
-    PaletteWave fx;
+    // Mutate the real geometry LEDs at two distinct indices (not local
+    // copies) before the first precompute() call: PaletteWave now caches
+    // its per-LED position term lazily from GEOMETRY on that call (see
+    // ensurePerLedCache() in palette-wave.h), so evaluate() only reflects
+    // coordinates that were live in GEOMETRY at that point.
     LedStrip& strip = GEOMETRY.getStrip(0);
-    Led ledA = strip.leds[0];
-    ledA.cartesian.x = 0;
-    ledA.cartesian.y = 0;
-    Led ledB = strip.leds[0];
-    ledB.cartesian.x = 1000;
-    ledB.cartesian.y = 1000;
+    strip.leds[0].cartesian.x = 0;
+    strip.leds[0].cartesian.y = 0;
+    strip.leds[1].cartesian.x = 1000;
+    strip.leds[1].cartesian.y = 1000;
 
-    CRGB a = fx.evaluate(&strip, &ledA, 0, 0);
-    CRGB b = fx.evaluate(&strip, &ledB, 0, 0);
+    PaletteWave fx;
+    fx.precompute(0);
+
+    CRGB a = fx.evaluate(&strip, &strip.leds[0], 0, 0);
+    CRGB b = fx.evaluate(&strip, &strip.leds[1], 1, 0);
     TEST_ASSERT_FALSE(a == b);
 }
 
@@ -542,31 +547,34 @@ void test_angular_palette_rotation_evaluates()
 
 void test_angular_palette_rotation_color_varies_with_angle()
 {
+    // Mutate the real geometry LEDs (not local copies) before the first
+    // precompute() call: AngularPaletteRotation now caches its per-LED angle
+    // term lazily from GEOMETRY on that call, so evaluate() only reflects
+    // coordinates that were live in GEOMETRY at that point (see
+    // ensurePerLedCache() in angular-palette-rotation.h).
     randomSeed(4);
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    strip.leds[0].polar.cdegrees = 0;
+    strip.leds[1].polar.cdegrees = 12000;  // 120 degrees round
+
     AngularPaletteRotation fx;
     fx.precompute(0);
-    LedStrip& strip = GEOMETRY.getStrip(0);
 
-    Led a = strip.leds[0];
-    a.polar.cdegrees = 0;
-    Led b = strip.leds[0];
-    b.polar.cdegrees = 12000;  // 120 degrees round
-
-    TEST_ASSERT_FALSE(fx.evaluate(&strip, &a, 0, 0) == fx.evaluate(&strip, &b, 0, 0));
+    TEST_ASSERT_FALSE(fx.evaluate(&strip, &strip.leds[0], 0, 0) ==
+                      fx.evaluate(&strip, &strip.leds[1], 1, 0));
 }
 
 void test_angular_palette_rotation_sweeps_over_time()
 {
     randomSeed(4);
-    AngularPaletteRotation fx;
     LedStrip& strip = GEOMETRY.getStrip(0);
-    Led led = strip.leds[0];
-    led.polar.cdegrees = 0;  // colour index here is exactly the rotation offset
+    strip.leds[0].polar.cdegrees = 0;  // colour index here is exactly the rotation offset
 
+    AngularPaletteRotation fx;
     fx.precompute(0);
-    CRGB early = fx.evaluate(&strip, &led, 0, 0);
+    CRGB early = fx.evaluate(&strip, &strip.leds[0], 0, 0);
     fx.precompute(20000);
-    CRGB later = fx.evaluate(&strip, &led, 0, 20000);
+    CRGB later = fx.evaluate(&strip, &strip.leds[0], 0, 20000);
     TEST_ASSERT_FALSE(early == later);
 }
 
@@ -611,20 +619,25 @@ void test_ninja_star_pow16_lut_fixed_points_and_shrinks_midrange()
 }
 
 // evaluate() blends innerColor (radius 0) to outerColor (max radius) - confirms that
-// blend actually runs in the near-to-far direction, not reversed. Bypasses precompute()
-// (whose inner/outer MoodLights are driven by real millis(), not t) and instead sets
-// innerColor/outerColor/offset directly; theta only depends on the LED's own angle
-// (cdegrees=0 here), so scanning offset finds a phase with nonzero brightness (v) that
-// applies identically to both radii, isolating the radial blend from the beam pattern.
+// blend actually runs in the near-to-far direction, not reversed. Bypasses the full
+// precompute() (whose inner/outer MoodLights are driven by real millis(), not t) and
+// instead sets innerColor/outerColor/offset directly, calling only ensurePerLedCache()
+// to build the per-LED theta/radius cache off two real geometry LEDs (mutated in place
+// to isolate radius from angle: same cdegrees=0, different radius) - see
+// ensurePerLedCache() in ninja-star.h for why evaluate() no longer reflects whatever Led*
+// is passed at call time, only what was live in GEOMETRY at the point the cache was built.
 void test_ninja_star_evaluate_blends_from_inner_to_outer_by_radius()
 {
+    LedStrip& strip = GEOMETRY.getStrip(0);
+    strip.leds[0].polar.cdegrees = 0;  // theta = 0 regardless of offset
+    strip.leds[0].polar.radius = 0;
+    strip.leds[1].polar.cdegrees = 0;
+    strip.leds[1].polar.radius = GEOMETRY.getScreenRadius();
+
     NinjaStar fx;
     fx.innerColor = CRGB(200, 0, 0);
     fx.outerColor = CRGB(0, 0, 200);
-
-    LedStrip& strip = GEOMETRY.getStrip(0);
-    Led led = strip.leds[0];
-    led.polar.cdegrees = 0;  // theta = 0 regardless of offset
+    fx.ensurePerLedCache();
 
     uint8_t v = 0;
     for (int offset = 0; offset < 256 && v == 0; offset += 16)
@@ -634,13 +647,8 @@ void test_ninja_star_evaluate_blends_from_inner_to_outer_by_radius()
     }
     TEST_ASSERT_TRUE(v > 0);
 
-    Led nearLed = led;
-    nearLed.polar.radius = 0;
-    Led farLed = led;
-    farLed.polar.radius = GEOMETRY.getScreenRadius();
-
-    CRGB near = fx.evaluate(&strip, &nearLed, 0, 0);
-    CRGB far = fx.evaluate(&strip, &farLed, 0, 0);
+    CRGB near = fx.evaluate(&strip, &strip.leds[0], 0, 0);
+    CRGB far = fx.evaluate(&strip, &strip.leds[1], 1, 0);
 
     TEST_ASSERT_TRUE(near == (fx.innerColor % v));
     TEST_ASSERT_TRUE(far == (fx.outerColor % v));
