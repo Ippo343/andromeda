@@ -5,6 +5,18 @@
     box-sizing: border-box;
 }
 
+/* iOS Safari's rubber-band overscroll drags the whole document past its own
+   content and reveals whatever sits behind it - without an explicit
+   background here, that's the browser's default white, showing as a
+   persistent band above/below the page during (and briefly after) a bounce.
+   Giving html the same background as body removes that seam; the
+   overscroll-behavior below stops the bounce itself on browsers that honor
+   it (iOS Safari does not yet, hence needing the background fix too). */
+html {
+    background: linear-gradient(135deg, #0c0c0c 0%, #1a1a1a 50%, #0c0c0c 100%);
+    overscroll-behavior: none;
+}
+
 body {
     background: linear-gradient(135deg, #0c0c0c 0%, #1a1a1a 50%, #0c0c0c 100%);
     font-family: 'Arial', sans-serif;
@@ -13,6 +25,7 @@ body {
     user-select: none;
     -webkit-user-select: none;
     -ms-user-select: none;
+    overscroll-behavior: none;
 }
 
 /* Container Styles */
