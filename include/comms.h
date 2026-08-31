@@ -28,6 +28,14 @@ class Comms
     bool setup();
     void printWifiStatus();
 
+    // Hot-switches an already-running station-mode device into the setup AP, without
+    // restarting the web server (AsyncTCP listens on 0.0.0.0, so it keeps serving once the AP
+    // interface is up - only the WiFi mode and the DNS captive-portal server need to change).
+    // Called by the WiFi-recovery monitor (wifi-esp-adapters.cpp) once a disconnect has gone
+    // unresolved past its dead time, so a router outage doesn't strand the device
+    // unreachable forever. A no-op if already in AP mode.
+    void enterAPFallbackMode();
+
    private:
     Comms();
 
@@ -58,7 +66,12 @@ class Comms
 
     volatile bool scanInProgress;
     volatile bool scanComplete;
+    // Written from the WiFi event task (onWiFiScanComplete()), read from the async_tcp task
+    // (scanWiFiNetworks()) - a plain String isn't safe to share across that without a lock (a
+    // concurrent read during reassignment could see a freed/partial buffer), so every access
+    // to scanResults itself goes through scanResultsMux.
     String scanResults;
+    portMUX_TYPE scanResultsMux = portMUX_INITIALIZER_UNLOCKED;
     unsigned long lastScanTime;
     static constexpr unsigned long SCAN_CACHE_MS = 30000;
 
@@ -71,12 +84,23 @@ class Comms
     unsigned long lastBroadcastMs;
     static constexpr unsigned long MIN_BROADCAST_INTERVAL_MS = 100;
 
+    // A change-triggered broadcast can be silently dropped for any one client whose send
+    // queue is already full (AsyncWebSocket just drops it - see textAll()'s ignored return),
+    // which is exactly the congested/weak-link case bad weather produces. Since broadcasts
+    // otherwise only fire on change, that client would stay stale until some unrelated state
+    // change happened to trigger the next one - possibly never. Force a full resync at this
+    // interval regardless of the dirty flag; see broadcastStateIfDirty().
+    static constexpr unsigned long STATE_KEEPALIVE_INTERVAL_MS = 5000;
+
     // Monotonic millisecond clock used by the broadcast throttle. The
     // indirection exists only so the native comms integration test can advance
     // time deterministically - the FastLED stub millis() it links against is
     // frozen at 0. nullptr (the only production value) means "use millis()".
     unsigned long (*nowMsFn)() = nullptr;
     inline unsigned long nowMs() const { return nowMsFn ? nowMsFn() : millis(); }
+
+    // Shared radio/DNS setup for startAPMode() and enterAPFallbackMode() - see comms.cpp.
+    void beginAPBroadcast();
 
     bool startAPMode();
     bool startStationMode();

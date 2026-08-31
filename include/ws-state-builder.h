@@ -46,9 +46,13 @@ struct DeviceState
 // StaticJsonDocument capacity for the schema below plus the full model and
 // effect registries. Fixed, zero-heap - bump this if fields/models/effects
 // are added. NOTE: buf[JSON_CAPACITY] plus a StaticJsonDocument<JSON_CAPACITY>
-// both land on the "WebServer" task stack (16384 bytes, see Comms::
-// createWebServerTask) via broadcastStateIfDirty(); keep 2*JSON_CAPACITY well
-// under that or the task stack-overflows at runtime.
+// both land on the caller's stack - there are two: Comms::broadcastStateIfDirty()
+// on the "WebServer" task (16384 bytes, see Comms::createWebServerTask), and the
+// WS_EVT_CONNECT handler on AsyncTCP's own "async_tcp" task, which - checked
+// against the pinned ESP32Async/AsyncTCP@3.5.0 - is sized identically (also
+// 16384 bytes; see xTaskCreateUniversal(..., 8192 * 2, ...) in AsyncTCP.cpp).
+// Keep 2*JSON_CAPACITY well under 16384 or either task stack-overflows at
+// runtime.
 constexpr size_t JSON_CAPACITY = 4096;
 
 // Serializes `state` plus the full MODEL_REGISTRY into `outBuffer` (of size
