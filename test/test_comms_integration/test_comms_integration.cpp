@@ -118,7 +118,12 @@ class CommsTestAccess
     static void broadcastStateIfDirty(Comms& c) { c.broadcastStateIfDirty(); }
     static void resetBroadcastThrottle(Comms& c) { c.lastBroadcastMs = 0; }
     static unsigned long minBroadcastIntervalMs() { return Comms::MIN_BROADCAST_INTERVAL_MS; }
+    static unsigned long stateKeepaliveIntervalMs() { return Comms::STATE_KEEPALIVE_INTERVAL_MS; }
     static void setNowFn(Comms& c, unsigned long (*fn)()) { c.nowMsFn = fn; }
+    static void onWiFiScanComplete(Comms& c, int n) { c.onWiFiScanComplete(n); }
+    static bool scanInProgress(Comms& c) { return c.scanInProgress; }
+    static void setScanInProgress(Comms& c, bool v) { c.scanInProgress = v; }
+    static void setScanComplete(Comms& c, bool v) { c.scanComplete = v; }
 };
 
 // Deterministic clock for the broadcast-throttle test - the stub millis() this
@@ -217,6 +222,36 @@ void test_save_empty_ssid_returns_400_and_does_not_persist()
     TEST_ASSERT_FALSE(fakeStore().hasCredentials);
 }
 
+// An over-long SSID/password from anything other than the WiFi setup page itself (nothing
+// else validates it) previously got persisted and then could simply never join - WiFi.begin()
+// silently truncates/rejects it, stranding the device in AP mode with credentials that look
+// "saved" but can never work.
+void test_save_over_long_ssid_returns_400_and_does_not_persist()
+{
+    AsyncWebServerRequest req;
+    req.setArg("ssid", std::string(WifiManager::MAX_SSID_LENGTH + 1, 'a'));
+    req.setArg("password", "");
+
+    auto* handler = CommsTestAccess::server(Comms::Instance()).findHandler("/save", HTTP_POST);
+    (*handler)(&req);
+
+    TEST_ASSERT_EQUAL_INT(400, req.responseCode);
+    TEST_ASSERT_FALSE(fakeStore().hasCredentials);
+}
+
+void test_save_over_long_password_returns_400_and_does_not_persist()
+{
+    AsyncWebServerRequest req;
+    req.setArg("ssid", "MyNetwork");
+    req.setArg("password", std::string(WifiManager::MAX_PASSWORD_LENGTH + 1, 'a'));
+
+    auto* handler = CommsTestAccess::server(Comms::Instance()).findHandler("/save", HTTP_POST);
+    (*handler)(&req);
+
+    TEST_ASSERT_EQUAL_INT(400, req.responseCode);
+    TEST_ASSERT_FALSE(fakeStore().hasCredentials);
+}
+
 // ---------------------------------------------------------------------------
 // /reset
 // ---------------------------------------------------------------------------
@@ -289,6 +324,53 @@ void test_scan_route_returns_scanning_placeholder_on_cache_miss()
     TEST_ASSERT_EQUAL_INT(200, req.responseCode);
 }
 
+// A double-quote or backslash in an SSID (both legal in a WiFi SSID per 802.11) previously
+// produced unparseable JSON out of onWiFiScanComplete() - jsonEscape() now escapes them, and
+// this also confirms the encryption field (added alongside) actually shows up.
+void test_scan_complete_escapes_ssid_and_reports_encryption()
+{
+    WiFi.scriptedScanSSIDs = {String("Weird\"SSID\\here"), String("Plain")};
+    WiFi.scriptedScanRSSIs = {-50, -60};
+    WiFi.scriptedScanEncryption = {WIFI_AUTH_OPEN, WIFI_AUTH_WPA2_PSK};
+
+    CommsTestAccess::onWiFiScanComplete(Comms::Instance(), 2);
+
+    String json = CommsTestAccess::scanWiFiNetworks(Comms::Instance());
+    StaticJsonDocument<1024> doc;
+    TEST_ASSERT_FALSE(deserializeJson(doc, json.c_str()));
+
+    TEST_ASSERT_EQUAL_STRING("Weird\"SSID\\here", doc["networks"][0]["ssid"].as<const char*>());
+    TEST_ASSERT_EQUAL_STRING("none", doc["networks"][0]["encryption"].as<const char*>());
+    TEST_ASSERT_EQUAL_STRING("secured", doc["networks"][1]["encryption"].as<const char*>());
+}
+
+// A negative scanComplete() result (e.g. WIFI_SCAN_FAILED) previously had no branch at all in
+// the WiFi.onEvent(SCAN_DONE) handler - onWiFiScanComplete() (the only thing that clears
+// scanInProgress) was simply never called, so scanInProgress stayed stuck true and /scan
+// returned "scanning" forever with no way to retry short of a reboot.
+void test_scan_failure_clears_scan_in_progress()
+{
+    // Ensure the SCAN_DONE handler has actually been registered (startAsyncScan() only
+    // registers it once per process - see comms.cpp's `static bool handlerRegistered`) by
+    // going through the same route a real cache-miss /scan request would. scanComplete must
+    // be forced false too - a previous test's completed scan otherwise satisfies
+    // isScanCacheValid() (native millis() is frozen at 0, so a cache never "expires" within a
+    // test run) and scanWiFiNetworks() returns the cached result without ever reaching
+    // startAsyncScan().
+    CommsTestAccess::setScanInProgress(Comms::Instance(), false);
+    CommsTestAccess::setScanComplete(Comms::Instance(), false);
+    CommsTestAccess::scanWiFiNetworks(Comms::Instance());
+    TEST_ASSERT_TRUE(CommsTestAccess::scanInProgress(Comms::Instance()));
+    TEST_ASSERT_TRUE((bool)WiFi.lastEventCallback);
+
+    WiFi.scriptedScanCompleteResult = -1;  // simulates WIFI_SCAN_FAILED
+    WiFi.lastEventCallback(ARDUINO_EVENT_WIFI_SCAN_DONE, WiFiEventInfo_t{});
+
+    TEST_ASSERT_FALSE(CommsTestAccess::scanInProgress(Comms::Instance()));
+
+    WiFi.scriptedScanCompleteResult.reset();  // don't leak into later tests/scans
+}
+
 // ---------------------------------------------------------------------------
 // WebSocket handler wiring
 // ---------------------------------------------------------------------------
@@ -328,6 +410,11 @@ void test_ws_connect_pushes_initial_state()
     ws->simulateConnect(&client);
 
     TEST_ASSERT_FALSE(client.lastSentText.empty());
+
+    // Auto-ping keeps the connection itself alive so the library notices a dead peer even
+    // when the OS/router doesn't produce a clean TCP FIN - see comms.cpp's WS_EVT_CONNECT
+    // handler.
+    TEST_ASSERT_EQUAL_UINT16(30, client.lastKeepAlivePeriodSeconds);
 
     // Zero-copy parse (mutable buffer) - mirrors how comms.cpp/native-runtime
     // handle inbound JSON and keeps the doc within JSON_CAPACITY. Parsing the
@@ -459,6 +546,38 @@ void test_state_broadcasts_are_throttled_within_the_interval()
     TEST_ASSERT_TRUE(ws->lastBroadcastText.empty());
 }
 
+// A change-triggered broadcast can be silently dropped for a client whose send queue is
+// already full (AsyncWebSocket just drops it - see textAll()'s ignored return), which
+// broadcastStateIfDirty() otherwise has no way to detect: it only fires again on the next
+// *change*, so a client that missed one could stay stale forever. STATE_KEEPALIVE_INTERVAL_MS
+// forces a full resync periodically regardless of the dirty flag.
+void test_state_broadcast_forces_periodic_resync_even_when_not_dirty()
+{
+    AsyncWebSocket* ws = CommsTestAccess::server(Comms::Instance()).webSocket;
+    MissionControl& mc = MissionControl::Instance();
+
+    g_fakeNowMs = 1000;
+    CommsTestAccess::setNowFn(Comms::Instance(), &fakeNowMs);
+
+    // Establish lastBroadcastMs with a real change, then fully consume the dirty flag.
+    ws->lastBroadcastText.clear();
+    mc.setMaxBrightness(10);
+    CommsTestAccess::broadcastStateIfDirty(Comms::Instance());
+    TEST_ASSERT_FALSE(ws->lastBroadcastText.empty());
+
+    // Nothing changed, and the keepalive interval hasn't elapsed yet: no broadcast.
+    ws->lastBroadcastText.clear();
+    g_fakeNowMs = 1000 + CommsTestAccess::stateKeepaliveIntervalMs() - 1;
+    CommsTestAccess::broadcastStateIfDirty(Comms::Instance());
+    TEST_ASSERT_TRUE(ws->lastBroadcastText.empty());
+
+    // The keepalive interval has now elapsed since the last broadcast, still with nothing
+    // dirty - a full resync goes out anyway.
+    g_fakeNowMs = 1000 + CommsTestAccess::stateKeepaliveIntervalMs();
+    CommsTestAccess::broadcastStateIfDirty(Comms::Instance());
+    TEST_ASSERT_FALSE(ws->lastBroadcastText.empty());
+}
+
 // ---------------------------------------------------------------------------
 // Captive portal
 // ---------------------------------------------------------------------------
@@ -498,6 +617,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_save_success_persists_and_returns_200);
     RUN_TEST(test_save_does_not_block_on_a_connection_attempt);
     RUN_TEST(test_save_empty_ssid_returns_400_and_does_not_persist);
+    RUN_TEST(test_save_over_long_ssid_returns_400_and_does_not_persist);
+    RUN_TEST(test_save_over_long_password_returns_400_and_does_not_persist);
 
     RUN_TEST(test_reset_clears_stored_credentials);
 
@@ -506,6 +627,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_setup_falls_back_to_ap_mode_when_stored_credentials_fail_to_connect);
 
     RUN_TEST(test_scan_route_returns_scanning_placeholder_on_cache_miss);
+    RUN_TEST(test_scan_complete_escapes_ssid_and_reports_encryption);
+    RUN_TEST(test_scan_failure_clears_scan_in_progress);
 
     RUN_TEST(test_ws_valid_text_frame_queues_command);
 
@@ -514,6 +637,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_rapid_brightness_commands_bypass_queue_and_dont_drop);
     RUN_TEST(test_state_broadcast_skipped_when_not_dirty);
     RUN_TEST(test_state_broadcasts_are_throttled_within_the_interval);
+    RUN_TEST(test_state_broadcast_forces_periodic_resync_even_when_not_dirty);
 
     RUN_TEST(test_not_found_redirects_in_ap_mode);
     RUN_TEST(test_not_found_returns_404_in_station_mode);
