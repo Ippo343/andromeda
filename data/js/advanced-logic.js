@@ -107,6 +107,49 @@ function firmwareLabel(m) {
     return (m && m.version) || '-';
 }
 
+// --- OTA (#63) ------------------------------------------------------------
+
+// Monotonic version-code compare. Non-numeric / missing -> not newer, so a
+// bad payload never nags for an update.
+function isNewer(localCode, remoteCode) {
+    const a = Number(localCode);
+    const b = Number(remoteCode);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+    return b > a;
+}
+
+// Badge text for the Firmware section from /metrics. "" when nothing's
+// available (the caller hides the badge), otherwise "<tag> available".
+function otaBadgeText(m) {
+    if (!m || !m.updateAvailable) return '';
+    const tag = (m.latestTag || '').trim();
+    return tag ? `${tag} available` : 'update available';
+}
+
+// /ota-status payload -> a short line for the progress area. Returns "" for
+// states with nothing to show (idle / a completed check), so the caller can
+// blank and hide the element.
+function otaProgressLabel(s) {
+    if (!s || typeof s !== 'object') return '';
+    const pct = Number.isFinite(Number(s.progress)) ? Number(s.progress) : 0;
+    switch (s.state) {
+        case 'checking': return 'Checking for updates…';
+        case 'downloading': return `Downloading… ${pct}%`;
+        case 'writing-fw': return `Writing firmware… ${pct}%`;
+        case 'writing-fs': return `Writing filesystem… ${pct}%`;
+        case 'rebooting': return 'Rebooting into the new firmware…';
+        case 'failed': return `Update failed: ${s.error || 'unknown error'}`;
+        default: return '';  // idle / uptodate / available
+    }
+}
+
+// States where the poll loop should stop (nothing more will change without a
+// new user action, or the device is about to reboot out from under us).
+function isOtaTerminalState(state) {
+    return state === 'idle' || state === 'uptodate' || state === 'available' ||
+        state === 'failed' || state === 'rebooting';
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         parseLogLine,
@@ -117,5 +160,9 @@ if (typeof module !== 'undefined' && module.exports) {
         formatTemp,
         metricTiles,
         firmwareLabel,
+        isNewer,
+        otaBadgeText,
+        otaProgressLabel,
+        isOtaTerminalState,
     };
 }

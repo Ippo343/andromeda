@@ -35,6 +35,15 @@
 
         <span class="section-label">Firmware</span>
         <div class="firmware-box" id="firmwareVersion">—</div>
+        <div class="ota-badge" id="fwUpdateBadge" hidden></div>
+        <div class="ota-row">
+            <button id="otaCheckBtn" class="btn scan-btn">Check for update</button>
+            <button id="otaUpdateBtn" class="btn primary" hidden>Update now</button>
+        </div>
+        <div class="ota-progress" id="otaProgress" hidden></div>
+        <label class="ota-channel">
+            <input type="checkbox" id="otaDevChannel"> Receive dev / beta updates
+        </label>
     </div>
 
     <!-- External JavaScript -->

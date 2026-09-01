@@ -9,6 +9,10 @@ const {
     formatTemp,
     metricTiles,
     firmwareLabel,
+    isNewer,
+    otaBadgeText,
+    otaProgressLabel,
+    isOtaTerminalState,
 } = require('../../data/js/advanced-logic.js');
 
 describe('parseLogLine', () => {
@@ -157,5 +161,73 @@ describe('firmwareLabel', () => {
         assert.equal(firmwareLabel({ version: '' }), '-');
         assert.equal(firmwareLabel(null), '-');
         assert.equal(firmwareLabel(undefined), '-');
+    });
+});
+
+describe('isNewer', () => {
+    test('true only when remote code strictly exceeds local', () => {
+        assert.equal(isNewer(457, 458), true);
+        assert.equal(isNewer(457, 457), false);
+        assert.equal(isNewer(458, 457), false);
+    });
+    test('non-numeric / missing -> false', () => {
+        assert.equal(isNewer(457, undefined), false);
+        assert.equal(isNewer(undefined, 458), false);
+        assert.equal(isNewer('x', 'y'), false);
+    });
+});
+
+describe('otaBadgeText', () => {
+    test('names the tag when an update is available', () => {
+        assert.equal(otaBadgeText({ updateAvailable: true, latestTag: 'v0.9-nova' }),
+            'v0.9-nova available');
+    });
+    test('falls back when the tag is blank', () => {
+        assert.equal(otaBadgeText({ updateAvailable: true, latestTag: '' }), 'update available');
+    });
+    test('empty string when nothing is available or payload is missing', () => {
+        assert.equal(otaBadgeText({ updateAvailable: false, latestTag: 'v0.9' }), '');
+        assert.equal(otaBadgeText({}), '');
+        assert.equal(otaBadgeText(null), '');
+    });
+});
+
+describe('otaProgressLabel', () => {
+    test('per-phase text with percentage', () => {
+        assert.equal(otaProgressLabel({ state: 'downloading', progress: 45 }), 'Downloading… 45%');
+        assert.equal(otaProgressLabel({ state: 'writing-fw', progress: 80 }),
+            'Writing firmware… 80%');
+        assert.equal(otaProgressLabel({ state: 'writing-fs', progress: 12 }),
+            'Writing filesystem… 12%');
+        assert.equal(otaProgressLabel({ state: 'checking' }), 'Checking for updates…');
+        assert.equal(otaProgressLabel({ state: 'rebooting' }),
+            'Rebooting into the new firmware…');
+    });
+    test('failed surfaces the error, with a fallback', () => {
+        assert.equal(otaProgressLabel({ state: 'failed', error: 'MD5 mismatch' }),
+            'Update failed: MD5 mismatch');
+        assert.equal(otaProgressLabel({ state: 'failed' }), 'Update failed: unknown error');
+    });
+    test('nothing to show for idle / completed-check states', () => {
+        assert.equal(otaProgressLabel({ state: 'idle' }), '');
+        assert.equal(otaProgressLabel({ state: 'uptodate' }), '');
+        assert.equal(otaProgressLabel({ state: 'available' }), '');
+        assert.equal(otaProgressLabel(null), '');
+    });
+    test('missing progress defaults to 0%', () => {
+        assert.equal(otaProgressLabel({ state: 'downloading' }), 'Downloading… 0%');
+    });
+});
+
+describe('isOtaTerminalState', () => {
+    test('stops on resting / reboot states', () => {
+        for (const s of ['idle', 'uptodate', 'available', 'failed', 'rebooting']) {
+            assert.equal(isOtaTerminalState(s), true, s);
+        }
+    });
+    test('keeps polling while work is in flight', () => {
+        for (const s of ['checking', 'downloading', 'writing-fw', 'writing-fs']) {
+            assert.equal(isOtaTerminalState(s), false, s);
+        }
     });
 });
