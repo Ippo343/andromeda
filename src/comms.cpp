@@ -4,6 +4,8 @@
 #include <esp_system.h>
 #include <sys/stat.h>
 
+#include <cstring>
+
 #include "version.h"
 #include "ws-command-parser.h"
 
@@ -68,20 +70,44 @@ bool Comms::setup()
 // DNS server. Does not touch the web server task - see enterAPFallbackMode()'s comment.
 void Comms::beginAPBroadcast()
 {
-    isAPMode = true;
-    runningDeviceName = DeviceIdentity::getDeviceName();
+    // Computed/allocated/started before the lock is taken - see apStateMux's comment in
+    // comms.h for why nothing that can allocate or block runs while holding it.
+    String newName = DeviceIdentity::getDeviceName();
     wifiConnector.enterAPMode();
 
     IPAddress apIP = WiFi.softAPIP();
     Log.noticeln("AP Mode started. IP: %s", apIP.toString().c_str());
 
-    if (dnsServer)
-    {
-        delete dnsServer;
-        dnsServer = nullptr;
-    }
-    dnsServer = new DNSServer();
-    dnsServer->start(DNS_PORT, "*", apIP);
+    DNSServer* newDns = new DNSServer();
+    newDns->start(DNS_PORT, "*", apIP);
+
+    portENTER_CRITICAL(&apStateMux);
+    DNSServer* oldDns = dnsServer;
+    dnsServer = newDns;
+    isAPMode = true;
+    strncpy(runningDeviceName, newName.c_str(), sizeof(runningDeviceName) - 1);
+    runningDeviceName[sizeof(runningDeviceName) - 1] = '\0';
+    portEXIT_CRITICAL(&apStateMux);
+
+    // beginAPBroadcast() only ever runs once per boot in practice (isAPMode has no path
+    // back to false without a reboot, and enterAPFallbackMode() early-returns once already
+    // in AP mode), so oldDns is always nullptr here - deleted defensively anyway, and
+    // outside the lock, in case that invariant ever changes.
+    delete oldDns;
+
+    // Covers both ways the device ends up here: a failed boot-time join
+    // (Comms::setup() -> startAPMode()) and a mid-run outage that outlasted
+    // enterAPFallbackMode()'s dead time - either way, this is what stops it being a
+    // one-way door into the setup AP.
+    startApRejoinMonitor();
+}
+
+bool Comms::isInAPMode() const
+{
+    portENTER_CRITICAL(&apStateMux);
+    bool result = isAPMode;
+    portEXIT_CRITICAL(&apStateMux);
+    return result;
 }
 
 bool Comms::startAPMode()
@@ -125,8 +151,13 @@ void Comms::enterAPFallbackMode()
 
 bool Comms::startStationMode()
 {
+    // No lock needed here: this only ever runs at boot, before the web server task (the
+    // only concurrent reader of these fields) exists - unlike beginAPBroadcast(), which
+    // is also reachable at runtime from the WifiRecovery monitor task.
     isAPMode = false;
-    runningDeviceName = DeviceIdentity::getDeviceName();
+    String newName = DeviceIdentity::getDeviceName();
+    strncpy(runningDeviceName, newName.c_str(), sizeof(runningDeviceName) - 1);
+    runningDeviceName[sizeof(runningDeviceName) - 1] = '\0';
 
     // mDNS is the primary way to reach the device now that station mode uses DHCP instead of
     // a fixed IP (see EspWiFiConnector::connect()) - worth a couple of retries rather than
@@ -160,7 +191,16 @@ void Comms::webServerTask(void* parameter)
 
     while (true)
     {
-        if (comms->isAPMode && comms->dnsServer) { comms->dnsServer->processNextRequest(); }
+        // Snapshot both fields under the lock, then act on the snapshot outside it - see
+        // apStateMux's comment in comms.h. dnsServer is never deleted with a reader
+        // possibly still using it in practice (beginAPBroadcast() only runs once per
+        // boot), so holding a raw pointer past the lock here is safe.
+        portENTER_CRITICAL(&comms->apStateMux);
+        bool apMode = comms->isAPMode;
+        DNSServer* dns = comms->dnsServer;
+        portEXIT_CRITICAL(&comms->apStateMux);
+        if (apMode && dns) { dns->processNextRequest(); }
+
         comms->broadcastStateIfDirty();
         // Bounds the connected-client list to DEFAULT_MAX_WS_CLIENTS - previously never
         // called anywhere, so nothing pruned stale/excess clients and each one holds its own
@@ -379,7 +419,7 @@ void Comms::setupRoutes()
     server.onNotFound(
         [this](AsyncWebServerRequest* request)
         {
-            if (isAPMode && request->host() != WiFi.softAPIP().toString())
+            if (isInAPMode() && request->host() != WiFi.softAPIP().toString())
             {
                 request->redirect("http://" + WiFi.softAPIP().toString() + "/");
             }
@@ -554,6 +594,14 @@ size_t Comms::buildCurrentStateJson(char* outBuffer, size_t outBufferSize)
     const ModelConfig* configuredConfig = getModelConfig(configuredId);
     String configuredDeviceName = DeviceIdentity::getDeviceName();
 
+    // Snapshot under the lock rather than reading runningDeviceName directly - it can be
+    // rewritten mid-copy by beginAPBroadcast() on another core (see apStateMux's comment
+    // in comms.h).
+    char runningNameSnapshot[sizeof(runningDeviceName)];
+    portENTER_CRITICAL(&apStateMux);
+    strncpy(runningNameSnapshot, runningDeviceName, sizeof(runningNameSnapshot));
+    portEXIT_CRITICAL(&apStateMux);
+
     WsStateBuilder::DeviceState state{
         .power = mc.isOn(),
         .holding = mc.isHolding() || mc.isHoldPending(),
@@ -568,7 +616,7 @@ size_t Comms::buildCurrentStateJson(char* outBuffer, size_t outBufferSize)
                             configuredConfig ? configuredConfig->name : "Unknown"},
         .fps = PerformanceMonitor::Instance().fps(),
         .deviceUid = DeviceIdentity::getUid(),
-        .runningDeviceName = runningDeviceName.c_str(),
+        .runningDeviceName = runningNameSnapshot,
         .configuredDeviceName = configuredDeviceName.c_str(),
     };
     return WsStateBuilder::buildStateJson(state, outBuffer, outBufferSize);

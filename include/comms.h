@@ -36,6 +36,11 @@ class Comms
     // unreachable forever. A no-op if already in AP mode.
     void enterAPFallbackMode();
 
+    // Thread-safe snapshot of isAPMode, guarded the same way as the field itself (see
+    // apStateMux). Used by the background AP-rejoin monitor (wifi-esp-adapters.cpp) to
+    // decide whether a periodic stored-credentials retry is worth attempting.
+    bool isInAPMode() const;
+
    private:
     Comms();
 
@@ -43,6 +48,16 @@ class Comms
     AsyncWebSocket ws;
 
     TaskHandle_t webServerTaskHandle;
+
+    // dnsServer/isAPMode/runningDeviceName are written from beginAPBroadcast()
+    // (WifiRecovery monitor task or boot) and startStationMode() (boot only), and read
+    // every ~10ms from webServerTask's captive-portal loop and from buildCurrentStateJson()
+    // on the async_tcp task - both possibly on a different core. All three are only ever
+    // written together, so one spinlock covers all three; runningDeviceName is a fixed
+    // buffer rather than a String specifically so neither the write nor the read has to
+    // allocate while holding it (the /scan critical section got this wrong for scanResults -
+    // see the malloc-under-spinlock fix there - this doesn't repeat it).
+    mutable portMUX_TYPE apStateMux = portMUX_INITIALIZER_UNLOCKED;
     DNSServer* dnsServer;
     bool isAPMode;
 
@@ -51,7 +66,7 @@ class Comms
     // state broadcast can flag "rename pending reboot" the same way MODEL
     // does (see buildCurrentStateJson()), even if DeviceIdentity::
     // getDeviceName() has since changed via a live rename.
-    String runningDeviceName;
+    char runningDeviceName[DeviceUid::MAX_NAME_LENGTH + 1] = "";
 
     EspWiFiConnector wifiConnector;
     EspPreferencesStore preferencesStore;
