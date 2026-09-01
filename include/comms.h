@@ -26,7 +26,18 @@ class Comms
     }
     Comms(const Comms&) = delete;
     Comms& operator=(const Comms&) = delete;
-    bool setup();
+
+    // What setup() actually did, so main.cpp can tell a genuine connection failure
+    // (stored credentials exist but didn't work - something's actually wrong) apart from
+    // a brand-new device's expected first-boot state (never configured at all - landing
+    // in AP mode is normal there, not an error).
+    enum class SetupOutcome
+    {
+        Connected,
+        NeverConfigured,
+        ConnectFailed
+    };
+    SetupOutcome setup();
     void printWifiStatus();
 
     // Hot-switches an already-running station-mode device into the setup AP, without
