@@ -150,6 +150,17 @@ function isOtaTerminalState(state) {
         state === 'failed' || state === 'rebooting';
 }
 
+// When the /ota-status poll loop should stop. `duringUpdate` is true for the
+// loop started by "Update now": right after the POST the device still reports
+// its pre-trigger state ('available', or a stale 'idle') for a few ms until
+// the worker task flips it, and treating those as terminal there killed the
+// loop before the first progress frame ever rendered. During an update only a
+// real end state counts ('rebooting' is handled by the caller before this).
+function isOtaPollDone(state, duringUpdate) {
+    if (duringUpdate) return state === 'uptodate' || state === 'failed';
+    return isOtaTerminalState(state);
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         parseLogLine,
@@ -164,5 +175,6 @@ if (typeof module !== 'undefined' && module.exports) {
         otaBadgeText,
         otaProgressLabel,
         isOtaTerminalState,
+        isOtaPollDone,
     };
 }
