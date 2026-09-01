@@ -148,6 +148,7 @@ void emitStateIfDirty()
         .runningModel = {static_cast<uint16_t>(runningConfig->id), runningConfig->name},
         .configuredModel = {static_cast<uint16_t>(configuredId),
                             configuredConfig ? configuredConfig->name : "Unknown"},
+        .factoryConfigured = FactoryConfig::isConfigured(),
         .fps = PerformanceMonitor::Instance().fps(),
         .deviceUid = DeviceIdentity::getUid(),
         .runningDeviceName = deviceName.c_str(),
