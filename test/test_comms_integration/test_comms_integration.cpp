@@ -49,6 +49,25 @@ void EspPreferencesStore::clearCredentials() {}
 // itself - only that beginAPBroadcast() reaches this call at all.
 void startApRejoinMonitor() {}
 
+// OtaUpdater's real body (src/ota-updater.cpp) is WiFi/HTTPClient/Update-bound
+// and excluded from native, like the Esp* connectors above. comms.cpp's OTA
+// routes only kick tasks and read status(); stub that surface, with counters
+// so the route tests can assert the handler actually reached it. OtaConfig is
+// real here (src/ota-config.cpp is in the native build).
+namespace OtaUpdaterStub
+{
+int startUpdateCalls = 0;
+int startCheckCalls = 0;
+}  // namespace OtaUpdaterStub
+namespace OtaUpdater
+{
+void begin() {}
+void startCheck() { ++OtaUpdaterStub::startCheckCalls; }
+void startUpdate() { ++OtaUpdaterStub::startUpdateCalls; }
+Status status() { return Status{State::Idle, 0, 0, "", ""}; }
+bool updateAvailable() { return false; }
+}  // namespace OtaUpdater
+
 // ---------------------------------------------------------------------------
 // Fakes
 // ---------------------------------------------------------------------------
@@ -769,6 +788,101 @@ void test_not_found_returns_404_in_station_mode()
     TEST_ASSERT_EQUAL_INT(404, req.responseCode);
 }
 
+// ---------------------------------------------------------------------------
+// OTA routes (#63)
+// ---------------------------------------------------------------------------
+
+void test_ota_and_ota_check_return_202_and_kick_the_updater()
+{
+    OtaUpdaterStub::startUpdateCalls = 0;
+    OtaUpdaterStub::startCheckCalls = 0;
+
+    AsyncWebServerRequest up;
+    auto* upHandler = CommsTestAccess::server(Comms::Instance()).findHandler("/ota", HTTP_POST);
+    TEST_ASSERT_NOT_NULL(upHandler);
+    (*upHandler)(&up);
+    TEST_ASSERT_EQUAL_INT(202, up.responseCode);
+    TEST_ASSERT_EQUAL_INT(1, OtaUpdaterStub::startUpdateCalls);
+
+    AsyncWebServerRequest check;
+    auto* checkHandler =
+        CommsTestAccess::server(Comms::Instance()).findHandler("/ota-check", HTTP_POST);
+    TEST_ASSERT_NOT_NULL(checkHandler);
+    (*checkHandler)(&check);
+    TEST_ASSERT_EQUAL_INT(202, check.responseCode);
+    TEST_ASSERT_EQUAL_INT(1, OtaUpdaterStub::startCheckCalls);
+}
+
+void test_ota_rejects_cross_origin_post()
+{
+    OtaUpdaterStub::startUpdateCalls = 0;
+
+    AsyncWebServerRequest req;
+    req.setHost("andromeda-a1b2.local");
+    req.setHeader("Origin", "http://evil.example.com");
+
+    auto* handler = CommsTestAccess::server(Comms::Instance()).findHandler("/ota", HTTP_POST);
+    (*handler)(&req);
+
+    TEST_ASSERT_EQUAL_INT(403, req.responseCode);
+    TEST_ASSERT_EQUAL_INT(0, OtaUpdaterStub::startUpdateCalls);
+}
+
+void test_ota_channel_persists_choice_and_rechecks()
+{
+    OtaConfig::persistDevChannel(false);
+    OtaUpdaterStub::startCheckCalls = 0;
+
+    auto* handler =
+        CommsTestAccess::server(Comms::Instance()).findHandler("/ota-channel", HTTP_POST);
+    TEST_ASSERT_NOT_NULL(handler);
+
+    AsyncWebServerRequest on;
+    on.setArg("dev", "true");
+    (*handler)(&on);
+    TEST_ASSERT_EQUAL_INT(200, on.responseCode);
+    TEST_ASSERT_TRUE(OtaConfig::devChannel());
+    TEST_ASSERT_EQUAL_INT(1, OtaUpdaterStub::startCheckCalls);
+
+    AsyncWebServerRequest off;
+    off.setArg("dev", "false");
+    (*handler)(&off);
+    TEST_ASSERT_FALSE(OtaConfig::devChannel());
+}
+
+void test_ota_channel_rejects_cross_origin_post()
+{
+    OtaConfig::persistDevChannel(false);
+
+    AsyncWebServerRequest req;
+    req.setHost("andromeda-a1b2.local");
+    req.setHeader("Origin", "http://evil.example.com");
+    req.setArg("dev", "true");
+
+    auto* handler =
+        CommsTestAccess::server(Comms::Instance()).findHandler("/ota-channel", HTTP_POST);
+    (*handler)(&req);
+
+    TEST_ASSERT_EQUAL_INT(403, req.responseCode);
+    TEST_ASSERT_FALSE(OtaConfig::devChannel());
+}
+
+void test_ota_status_returns_parseable_json()
+{
+    AsyncWebServerRequest req;
+    auto* handler = CommsTestAccess::server(Comms::Instance()).findHandler("/ota-status", HTTP_GET);
+    TEST_ASSERT_NOT_NULL(handler);
+    (*handler)(&req);
+
+    TEST_ASSERT_EQUAL_INT(200, req.responseCode);
+
+    StaticJsonDocument<256> doc;
+    TEST_ASSERT_TRUE(deserializeJson(doc, req.responseBody.c_str()) == DeserializationError::Ok);
+    TEST_ASSERT_TRUE(doc.containsKey("state"));
+    TEST_ASSERT_TRUE(doc.containsKey("progress"));
+    TEST_ASSERT_TRUE(doc.containsKey("channel"));
+}
+
 int main(int argc, char** argv)
 {
     UNITY_BEGIN();
@@ -785,6 +899,12 @@ int main(int argc, char** argv)
 
     RUN_TEST(test_reset_clears_stored_credentials);
     RUN_TEST(test_reset_rejects_cross_origin_post);
+
+    RUN_TEST(test_ota_and_ota_check_return_202_and_kick_the_updater);
+    RUN_TEST(test_ota_rejects_cross_origin_post);
+    RUN_TEST(test_ota_channel_persists_choice_and_rechecks);
+    RUN_TEST(test_ota_channel_rejects_cross_origin_post);
+    RUN_TEST(test_ota_status_returns_parseable_json);
 
     RUN_TEST(test_setup_connects_with_stored_credentials_and_skips_ap_mode);
     RUN_TEST(test_setup_falls_back_to_ap_mode_when_no_stored_credentials);
