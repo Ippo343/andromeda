@@ -483,8 +483,12 @@
 }
 
 /* All commands go over the WebSocket now - make it visible when it's down
-   instead of leaving controls clickable but silently inert. */
-.ws-disconnected .btn,
+   instead of leaving controls clickable but silently inert. :not(.nav-btn)
+   exempts the Settings drawer's plain page-navigation buttons (index.html) -
+   they're exactly what's needed to reach WiFi Setup or Advanced while the
+   socket is down, so disabling them along with the WS commands would take
+   away the one path to recovery at the moment it's needed most. */
+.ws-disconnected .btn:not(.nav-btn),
 .ws-disconnected input,
 .ws-disconnected select {
     pointer-events: none;
