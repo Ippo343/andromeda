@@ -31,6 +31,36 @@ void persist(uint8_t value);
 uint8_t load(uint8_t fallback);
 }  // namespace BrightnessConfig
 
+// Persists what the device should be showing on the next boot (NVS), so a lamp switched
+// off - or explicitly set to hold a specific effect or a static color - comes back
+// exactly as left, instead of always restarting in random rotation. Same NVS-wear
+// reasoning as BrightnessConfig: writes only happen on discrete, low-frequency events
+// (a power toggle, an EFFECT/NEXT/RESUME command, and a color drag's release "commit" -
+// never mid-drag). Deliberately scoped to just these two "I configured my lamp"
+// gestures - holding whatever the random rotation happened to land on (bare HOLD) isn't
+// persisted, since that reads more as "pause for a second" than a deliberate choice.
+namespace StartupStateConfig
+{
+enum class Mode : uint8_t
+{
+    RandomRotation = 0,
+    HoldingEffect = 1,
+    HoldingColor = 2,
+};
+
+struct StartupState
+{
+    bool poweredOn = true;
+    Mode mode = Mode::RandomRotation;
+    uint8_t effectId = 0;                              // valid when mode == HoldingEffect
+    uint8_t colorR = 255, colorG = 255, colorB = 255;  // valid when mode == HoldingColor
+};
+
+void persistPower(bool poweredOn);
+void persistMode(Mode mode, uint8_t effectId, uint8_t r, uint8_t g, uint8_t b);
+StartupState load();
+}  // namespace StartupStateConfig
+
 // Web command types, dispatched by MissionControl::processWebCommands().
 // BRIGHTNESS has no entry here: it never touches this queue (see comms.cpp's
 // WS handler) since it's applied directly via setMaxBrightness() - the
@@ -87,6 +117,7 @@ struct Command
 {
     CommandType type;
     uint8_t r = 0, g = 0, b = 0;                            // COLOR
+    bool colorCommit = false;                               // COLOR - see StartupStateConfig
     uint16_t modelId = 0;                                   // MODEL
     uint8_t effectId = 0;                                   // EFFECT
     char deviceName[DeviceUid::MAX_NAME_LENGTH + 1] = {0};  // DEVICE_NAME
@@ -97,12 +128,16 @@ struct Command
     static Command PowerOff() { return {CommandType::POWER_OFF}; }
     static Command PowerOn() { return {CommandType::POWER_ON}; }
     static Command Reboot() { return {CommandType::REBOOT}; }
-    static Command Color(uint8_t r, uint8_t g, uint8_t b)
+    // commit mirrors BRIGHTNESS's "commit" flag: true only for the one message sent when
+    // a color drag ends (see controls.js's ColorWheel.stopDrag()) - the signal to persist
+    // this color as the startup state, rather than doing so on every drag-speed update.
+    static Command Color(uint8_t r, uint8_t g, uint8_t b, bool commit = false)
     {
         Command c{CommandType::COLOR};
         c.r = r;
         c.g = g;
         c.b = b;
+        c.colorCommit = commit;
         return c;
     }
     static Command Model(uint16_t id)
@@ -175,6 +210,14 @@ class MissionControl
 
     // Queue a web command from the comms
     bool queueWebCommand(Command command);
+
+    // Applies StartupStateConfig::load() so the device comes back exactly as it was left
+    // (powered off, or holding a specific effect/color) instead of always starting in
+    // random rotation. Called once from main.cpp's setup(), before the render loop's
+    // first update() tick - safe to call that early since it only sets in-memory state
+    // (effect/mode/power) via the same handleTransition()/holdEffect()/powerOff() paths a
+    // live command would use, none of which depend on a prior update() having run.
+    void restoreStartupState();
 
     inline uint8_t getMaxBrightness() const { return maxBrightness; }
     inline void setMaxBrightness(uint8_t b)

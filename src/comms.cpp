@@ -283,7 +283,19 @@ void Comms::setupRoutes()
                     else if (WsCommandParser::parse(json, command))
                     {
                         if (command.type == CommandType::COLOR && mc.isColorActive())
+                        {
                             mc.setLiveColor(command.r, command.g, command.b);
+                            // Same commit-gating as BRIGHTNESS above - only the drag-release
+                            // message persists. This is the common case for a color commit:
+                            // by the time a drag ends, color mode is already active, so the
+                            // message never touches the queue path below (which handles the
+                            // same flag for the rarer case of a commit landing on the very
+                            // message that first switches into color mode).
+                            if (command.colorCommit)
+                                StartupStateConfig::persistMode(
+                                    StartupStateConfig::Mode::HoldingColor, 0, command.r, command.g,
+                                    command.b);
+                        }
                         else
                             mc.queueWebCommand(command);
                     }
