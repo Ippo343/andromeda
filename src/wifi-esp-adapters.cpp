@@ -51,7 +51,77 @@ void wifiRecoveryMonitorTask(void*)
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
+
+// How often to retry the stored credentials while parked in AP mode, and how long each
+// probe gets. Deliberately not as fast as wifiRecoveryMonitorTask's 1s poll - this
+// probe, unlike that one, briefly interrupts the setup AP for anyone connected to it (see
+// below), so it shouldn't be so eager that provisioning a device is ever visibly disrupted
+// by an unrelated retry.
+constexpr uint32_t AP_REJOIN_RETRY_INTERVAL_MS = 60000;
+constexpr uint32_t AP_REJOIN_PROBE_TIMEOUT_MS = 8000;
+
+// Runs for the process lifetime once started (see startApRejoinMonitor()). Periodically
+// retries whatever credentials are currently stored, so a router coming back - or the
+// user's home network simply taking a while to boot alongside this device after a power
+// outage - lets the device silently rejoin instead of requiring a manual reconnect via
+// the setup AP.
+//
+// Uses WIFI_AP_STA (not testConnection()'s WIFI_STA-only probe) specifically so the setup
+// AP keeps serving throughout: testConnection() is a deliberate, user-initiated /save
+// probe where a brief AP drop is expected and shown in the UI; this one runs unattended
+// in the background and must not disrupt someone who happens to be using the setup page
+// at the same moment.
+void apRejoinMonitorTask(void*)
+{
+    EspPreferencesStore store;
+
+    while (true)
+    {
+        vTaskDelay(pdMS_TO_TICKS(AP_REJOIN_RETRY_INTERVAL_MS + random(0, 2000)));
+
+        if (!Comms::Instance().isInAPMode()) continue;
+
+        String ssid, password;
+        if (!store.loadCredentials(ssid, password))
+            continue;  // never configured - nothing to retry
+
+        WiFi.mode(WIFI_AP_STA);
+        WiFi.begin(ssid.c_str(), password.c_str());
+
+        unsigned long startTime = millis();
+        while (WiFi.status() != WL_CONNECTED && millis() - startTime < AP_REJOIN_PROBE_TIMEOUT_MS)
+        {
+            delay(100);
+        }
+
+        if (WiFi.status() == WL_CONNECTED)
+        {
+            // Simplest correct way to actually commit to station mode: reboot, exactly
+            // like Comms::saveWorkerTask does on a successful /save probe.
+            // Comms::setup() -> connectUsingStoredCredentials() re-joins with these same
+            // (already-persisted) credentials on the way back up.
+            Log.noticeln("Rejoined stored WiFi network from AP mode - rebooting to connect");
+            delay(500);
+            ESP.restart();
+        }
+        else
+        {
+            // Revert cleanly to AP-only. A failed STA join inside WIFI_AP_STA can leave
+            // the radio in a half-joined state on some cores if left as-is.
+            WiFi.disconnect();
+            WiFi.mode(WIFI_AP);
+        }
+    }
+}
 }  // namespace
+
+void startApRejoinMonitor()
+{
+    static bool started = false;
+    if (started) return;
+    started = true;
+    xTaskCreate(apRejoinMonitorTask, "APRejoin", 3072, nullptr, 1, nullptr);
+}
 
 bool EspWiFiConnector::connect(const char* ssid, const char* password)
 {

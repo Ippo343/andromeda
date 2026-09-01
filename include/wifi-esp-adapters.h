@@ -24,3 +24,14 @@ class EspPreferencesStore : public IPreferencesStore
     bool loadCredentials(String& ssid, String& password) override;
     void clearCredentials() override;
 };
+
+// Starts the background task that periodically retries the stored WiFi credentials while
+// the device is sitting in AP mode - whether it got there because the very first boot-time
+// join failed, or because a mid-run outage ran past enterAPFallbackMode()'s dead time.
+// Without this, either case previously stranded the device on its own open setup AP until
+// someone physically power-cycled it, even after the router/network came back.
+//
+// Idempotent (safe to call every time the device enters AP mode - see
+// Comms::beginAPBroadcast()); the task itself starts exactly once per boot and then just
+// watches Comms::isInAPMode().
+void startApRejoinMonitor();

@@ -43,6 +43,12 @@ void EspPreferencesStore::saveCredentials(const String&, const String&) {}
 bool EspPreferencesStore::loadCredentials(String&, String&) { return false; }
 void EspPreferencesStore::clearCredentials() {}
 
+// Same reasoning: the real body (an xTaskCreate loop) lives in
+// wifi-esp-adapters.cpp; Comms::beginAPBroadcast() calls it unconditionally, so it
+// needs a link-time stub here too. Nothing under test drives the AP-rejoin retry loop
+// itself - only that beginAPBroadcast() reaches this call at all.
+void startApRejoinMonitor() {}
+
 // ---------------------------------------------------------------------------
 // Fakes
 // ---------------------------------------------------------------------------
