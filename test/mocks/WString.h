@@ -23,6 +23,14 @@ class String
 
     size_t length() const { return value.length(); }
     const char* c_str() const { return value.c_str(); }
+    // comms.cpp's isCrossOriginPost() uses this to substring-match an Origin header
+    // against the request's own host. -1 (not std::string::npos) matches Arduino's
+    // String::indexOf() return convention for "not found".
+    int indexOf(const String& other) const
+    {
+        auto pos = value.find(other.value);
+        return pos == std::string::npos ? -1 : static_cast<int>(pos);
+    }
 
     String& operator+=(const String& other)
     {

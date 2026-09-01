@@ -37,6 +37,22 @@ static void serveTextFileOrEmpty(AsyncWebServerRequest* r, const char* path)
         r->send(200, "text/plain", "");
 }
 
+// Narrow stopgap against the classic drive-by CSRF one-click case: a foreign page's
+// <form> auto-submitted from a browser on the same LAN, targeting POST /save or /reset.
+// Neither route requires a CORS preflight (simple form POSTs never trigger one), so
+// nothing else here would ever see or block it. A cross-origin browser POST always
+// carries an Origin header that won't match this device's own host; a request with none
+// at all (curl, a script, same-origin fetch from this device's own pages) is let
+// through unchanged. There's no other auth on this device at all (#85, tracked
+// separately) - this only closes the "just visiting an unrelated web page" case, not a
+// deliberate attacker who already knows the device's address.
+static bool isCrossOriginPost(AsyncWebServerRequest* request)
+{
+    if (!request->hasHeader("Origin")) return false;
+    const AsyncWebHeader* origin = request->getHeader("Origin");
+    return origin->value().indexOf(request->host()) == -1;
+}
+
 #define STATIC_FILE_ROUTE(path, contentType) \
     server.on(path, HTTP_GET,                \
               [](AsyncWebServerRequest* request) { request->send(LittleFS, path, contentType); })
@@ -391,8 +407,16 @@ void Comms::setupRoutes()
     // WiFi functionality
     server.on("/scan", HTTP_GET, [this](AsyncWebServerRequest* r)
               { r->send(200, "application/json", scanWiFiNetworks()); });
-    server.on("/save", HTTP_POST, [this](AsyncWebServerRequest* r)
-              { processWiFiCredentials(r, r->arg("ssid"), r->arg("password")); });
+    server.on("/save", HTTP_POST,
+              [this](AsyncWebServerRequest* r)
+              {
+                  if (isCrossOriginPost(r))
+                  {
+                      r->send(403, "text/plain", "Cross-origin request rejected");
+                      return;
+                  }
+                  processWiFiCredentials(r, r->arg("ssid"), r->arg("password"));
+              });
     // Polled by the setup page after a 202 from /save, until it reads a terminal verdict.
     // "pending" covers Idle too (the page only polls once a probe is in flight).
     server.on("/save-status", HTTP_GET,
@@ -408,6 +432,11 @@ void Comms::setupRoutes()
     server.on("/reset", HTTP_POST,
               [this](AsyncWebServerRequest* r)
               {
+                  if (isCrossOriginPost(r))
+                  {
+                      r->send(403, "text/plain", "Cross-origin request rejected");
+                      return;
+                  }
                   wifiManager->clearStoredCredentials();
                   r->send(200, "text/plain", "Credentials cleared. Restarting...");
                   xTaskCreate(

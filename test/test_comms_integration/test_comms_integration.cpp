@@ -276,6 +276,58 @@ void test_save_status_route_reports_probe_outcome()
     TEST_ASSERT_TRUE(failedReq.responseBody == String("failed"));
 }
 
+// A foreign page's <form> auto-submitted from a browser on the same LAN carries an
+// Origin header that won't match this device's own host - the drive-by CSRF case
+// isCrossOriginPost() exists to close. Neither /save nor /reset needs a CORS preflight
+// (simple form POSTs never trigger one), so this check is the only thing that catches it.
+void test_save_rejects_cross_origin_post()
+{
+    AsyncWebServerRequest req;
+    req.setHost("andromeda-a1b2.local");
+    req.setHeader("Origin", "http://evil.example.com");
+    req.setArg("ssid", "MyNetwork");
+    req.setArg("password", "hunter2");
+
+    auto* handler = CommsTestAccess::server(Comms::Instance()).findHandler("/save", HTTP_POST);
+    (*handler)(&req);
+
+    TEST_ASSERT_EQUAL_INT(403, req.responseCode);
+    TEST_ASSERT_FALSE(fakeStore().hasCredentials);
+    TEST_ASSERT_EQUAL_INT(0, fakeConnector().connectCalls);
+}
+
+// Same-origin (or no Origin header at all - curl, a script, the setup page's own
+// same-origin fetch) must still work; only a mismatched Origin is rejected.
+void test_save_allows_same_origin_post()
+{
+    AsyncWebServerRequest req;
+    req.setHost("andromeda-a1b2.local");
+    req.setHeader("Origin", "http://andromeda-a1b2.local");
+    req.setArg("ssid", "MyNetwork");
+    req.setArg("password", "hunter2");
+
+    auto* handler = CommsTestAccess::server(Comms::Instance()).findHandler("/save", HTTP_POST);
+    (*handler)(&req);
+
+    TEST_ASSERT_EQUAL_INT(202, req.responseCode);
+}
+
+void test_reset_rejects_cross_origin_post()
+{
+    fakeStore().hasCredentials = true;
+
+    AsyncWebServerRequest req;
+    req.setHost("andromeda-a1b2.local");
+    req.setHeader("Origin", "http://evil.example.com");
+
+    auto* handler = CommsTestAccess::server(Comms::Instance()).findHandler("/reset", HTTP_POST);
+    (*handler)(&req);
+
+    TEST_ASSERT_EQUAL_INT(403, req.responseCode);
+    TEST_ASSERT_TRUE(fakeStore().hasCredentials);
+    TEST_ASSERT_EQUAL_INT(0, fakeStore().clearCalls);
+}
+
 void test_save_empty_ssid_returns_400_and_does_not_persist()
 {
     AsyncWebServerRequest req;
@@ -694,8 +746,11 @@ int main(int argc, char** argv)
     RUN_TEST(test_test_and_persist_persists_on_successful_probe);
     RUN_TEST(test_test_and_persist_does_not_persist_on_failed_probe);
     RUN_TEST(test_save_status_route_reports_probe_outcome);
+    RUN_TEST(test_save_rejects_cross_origin_post);
+    RUN_TEST(test_save_allows_same_origin_post);
 
     RUN_TEST(test_reset_clears_stored_credentials);
+    RUN_TEST(test_reset_rejects_cross_origin_post);
 
     RUN_TEST(test_setup_connects_with_stored_credentials_and_skips_ap_mode);
     RUN_TEST(test_setup_falls_back_to_ap_mode_when_no_stored_credentials);
