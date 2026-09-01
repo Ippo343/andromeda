@@ -41,6 +41,13 @@ class StaticColor : public AbstractEffect
         return currentColor;
     }
 
-    StaticColor(CRGB c) : targetColor(c) {}
+    // currentColor starts at black (CRGB's default constructor doesn't zero-init), not
+    // whatever was left on the stack/heap from a previous effect's memory - without
+    // this, the first precompute() blended from garbage toward targetColor over
+    // SETTLE_SECONDS, a visible random-colour flash every time the user picked a colour
+    // from the wheel. Starting black also matches the black-cut fade transitions already
+    // use elsewhere (MissionControl::updateTransition()), rather than introducing a new
+    // starting state.
+    StaticColor(CRGB c) : targetColor(c), currentColor(CRGB::Black) {}
     StaticColor() : StaticColor(CRGB(255, 255, 170)) {}
 };
