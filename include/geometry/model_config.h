@@ -62,5 +62,16 @@ struct ModelConfig
     // Minimum frame duration in milliseconds (for fps capping)
     uint8_t min_frame_duration_ms = 0;
 
+    // 5V rail budget in milliamps, fed to FastLED.setMaxPowerInVoltsAndMilliamps() at
+    // boot (main.cpp). FastLED estimates the actual per-frame draw from the rendered
+    // colors and globally dims to stay under this, on top of (not instead of) the
+    // user-facing brightness slider - the safety net for a customer sliding to 255 and
+    // picking white on a PSU that can't deliver it.
+    //
+    // TODO(#<placeholder-issue>): this is a conservative placeholder, not a measured
+    // PSU rating - same budget for every model regardless of LED count. Replace with
+    // the real number for each model's actual shipped PSU before shipping units.
+    uint16_t max_milliamps = 2000;
+
     bool isInFamily(FamilyID family) const { return ((uint16_t)id >> 8) == ((uint16_t)family); }
 };
