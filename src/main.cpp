@@ -127,6 +127,12 @@ void setup()
     MissionControl::Instance().setMaxBrightness(maxBrightness);
     FastLED.setBrightness(dim8_raw(maxBrightness));
 
+    // Restores power state and, if the user explicitly picked one, the held effect/color -
+    // so the device comes back exactly as it was left instead of always starting in random
+    // rotation. Safe here, before the render loop's first update() tick: it only sets
+    // MissionControl's in-memory state via the same paths a live command would use.
+    MissionControl::Instance().restoreStartupState();
+
 #ifndef NATIVE_RUNTIME
     WiFiConnectingAnimation connecting;
     connecting.run();

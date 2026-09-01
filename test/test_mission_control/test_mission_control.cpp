@@ -1060,6 +1060,191 @@ void test_brightness_config_persists_and_reloads_value()
 }
 
 // ---------------------------------------------------------------------------
+// StartupStateConfig - persists what to show/whether to be on across reboots (NVS)
+// ---------------------------------------------------------------------------
+
+void test_startup_state_config_persists_and_reloads_power()
+{
+    StartupStateConfig::persistPower(false);
+    TEST_ASSERT_FALSE(StartupStateConfig::load().poweredOn);
+
+    StartupStateConfig::persistPower(true);
+    TEST_ASSERT_TRUE(StartupStateConfig::load().poweredOn);
+}
+
+void test_startup_state_config_persists_and_reloads_holding_effect()
+{
+    StartupStateConfig::persistMode(StartupStateConfig::Mode::HoldingEffect,
+                                    static_cast<uint8_t>(EffectId::CartesianMoodlight), 0, 0, 0);
+
+    StartupStateConfig::StartupState state = StartupStateConfig::load();
+    TEST_ASSERT_TRUE(StartupStateConfig::Mode::HoldingEffect == state.mode);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(EffectId::CartesianMoodlight), state.effectId);
+}
+
+void test_startup_state_config_persists_and_reloads_holding_color()
+{
+    StartupStateConfig::persistMode(StartupStateConfig::Mode::HoldingColor, 0, 200, 100, 50);
+
+    StartupStateConfig::StartupState state = StartupStateConfig::load();
+    TEST_ASSERT_TRUE(StartupStateConfig::Mode::HoldingColor == state.mode);
+    TEST_ASSERT_EQUAL_UINT8(200, state.colorR);
+    TEST_ASSERT_EQUAL_UINT8(100, state.colorG);
+    TEST_ASSERT_EQUAL_UINT8(50, state.colorB);
+}
+
+void test_restore_startup_state_applies_holding_color()
+{
+    StartupStateConfig::persistPower(true);
+    StartupStateConfig::persistMode(StartupStateConfig::Mode::HoldingColor, 0, 10, 20, 30);
+
+    MissionControl& mc = MissionControl::Instance();
+    mc.restoreStartupState();
+
+    TEST_ASSERT_EQUAL(RenderMode::HOLDING, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_TRUE(mc.isColorActive());
+    TEST_ASSERT_TRUE(mc.staticColor == CRGB(10, 20, 30));
+}
+
+void test_restore_startup_state_applies_holding_effect()
+{
+    StartupStateConfig::persistPower(true);
+    StartupStateConfig::persistMode(StartupStateConfig::Mode::HoldingEffect,
+                                    static_cast<uint8_t>(EffectId::CartesianMoodlight), 0, 0, 0);
+
+    MissionControl& mc = MissionControl::Instance();
+    mc.restoreStartupState();
+
+    TEST_ASSERT_EQUAL(RenderMode::HOLDING, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_EQUAL_STRING("Cartesian Moodlight", mc.getEffectName());
+}
+
+// The power-off case is the one that previously risked losing the restored effect
+// entirely (see restoreStartupState()'s comment on why HoldingEffect installs
+// immediately rather than animated) - this is the regression test for that.
+void test_restore_startup_state_applies_power_off_after_holding_effect()
+{
+    StartupStateConfig::persistPower(false);
+    StartupStateConfig::persistMode(StartupStateConfig::Mode::HoldingEffect,
+                                    static_cast<uint8_t>(EffectId::CartesianMoodlight), 0, 0, 0);
+
+    MissionControl& mc = MissionControl::Instance();
+    mc.restoreStartupState();
+
+    TEST_ASSERT_EQUAL(RenderMode::OFF, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_EQUAL(RenderMode::HOLDING, MissionControlTestAccess::getModeBeforeOff(mc));
+    TEST_ASSERT_EQUAL_STRING("Cartesian Moodlight", mc.getEffectName());
+
+    // Powering back on must resume the restored effect, not random rotation.
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::PowerOn()));
+    mc.update(0);
+    TEST_ASSERT_EQUAL(RenderMode::HOLDING, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_EQUAL_STRING("Cartesian Moodlight", mc.getEffectName());
+}
+
+void test_restore_startup_state_random_rotation_is_a_no_op()
+{
+    StartupStateConfig::persistPower(true);
+    StartupStateConfig::persistMode(StartupStateConfig::Mode::RandomRotation, 0, 0, 0, 0);
+
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setMode(mc, RenderMode::FX_LOOP);
+    AbstractEffect* before = MissionControlTestAccess::getEffect(mc);
+
+    mc.restoreStartupState();
+
+    TEST_ASSERT_EQUAL(RenderMode::FX_LOOP, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_TRUE(before == MissionControlTestAccess::getEffect(mc));
+}
+
+// POWER_OFF/POWER_ON, EFFECT, and RESUME all persist as a side effect of the command
+// handler (see processWebCommands()) - covered end to end here via the same
+// queueWebCommand()/update() path a real WS message takes, rather than calling
+// StartupStateConfig directly.
+void test_effect_command_persists_holding_effect_mode()
+{
+    MissionControl& mc = MissionControl::Instance();
+    TEST_ASSERT_TRUE(
+        mc.queueWebCommand(Command::Effect(static_cast<uint8_t>(EffectId::CartesianMoodlight))));
+    mc.update(0);
+
+    StartupStateConfig::StartupState state = StartupStateConfig::load();
+    TEST_ASSERT_TRUE(StartupStateConfig::Mode::HoldingEffect == state.mode);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(EffectId::CartesianMoodlight), state.effectId);
+}
+
+void test_resume_command_persists_random_rotation_mode()
+{
+    StartupStateConfig::persistMode(StartupStateConfig::Mode::HoldingEffect, 5, 0, 0, 0);
+
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setNextTransition(mc);
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Resume()));
+    mc.update(0);
+
+    TEST_ASSERT_TRUE(StartupStateConfig::Mode::RandomRotation == StartupStateConfig::load().mode);
+}
+
+void test_power_commands_persist_power_state()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setNextTransition(mc);
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::PowerOff()));
+    mc.update(0);
+    TEST_ASSERT_FALSE(StartupStateConfig::load().poweredOn);
+
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::PowerOn()));
+    mc.update(0);
+    TEST_ASSERT_TRUE(StartupStateConfig::load().poweredOn);
+}
+
+// A bare HOLD is deliberately not persisted (see StartupStateConfig's header comment) -
+// holding whatever the random rotation landed on shouldn't survive a reboot as if it
+// were a deliberate choice.
+void test_hold_command_does_not_change_persisted_mode()
+{
+    StartupStateConfig::persistMode(StartupStateConfig::Mode::RandomRotation, 0, 0, 0, 0);
+
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setNextTransition(mc);
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Hold()));
+    mc.update(0);
+
+    TEST_ASSERT_TRUE(StartupStateConfig::Mode::RandomRotation == StartupStateConfig::load().mode);
+}
+
+// Only the drag-release "commit" message persists a color - not every drag-speed
+// update (see Command::Color()'s comment). Covers both dispatch paths: the queue
+// (first message that switches into color mode) and the direct setLiveColor() fast
+// path (every message after that, while color mode is already active).
+void test_color_command_without_commit_does_not_persist()
+{
+    StartupStateConfig::persistMode(StartupStateConfig::Mode::RandomRotation, 0, 0, 0, 0);
+
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setNextTransition(mc);
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Color(1, 2, 3)));  // commit defaults to false
+    mc.update(0);
+
+    TEST_ASSERT_TRUE(StartupStateConfig::Mode::RandomRotation == StartupStateConfig::load().mode);
+}
+
+void test_color_command_with_commit_persists_holding_color()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setNextTransition(mc);
+    TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Color(10, 20, 30, /*commit=*/true)));
+    mc.update(0);
+
+    StartupStateConfig::StartupState state = StartupStateConfig::load();
+    TEST_ASSERT_TRUE(StartupStateConfig::Mode::HoldingColor == state.mode);
+    TEST_ASSERT_EQUAL_UINT8(10, state.colorR);
+    TEST_ASSERT_EQUAL_UINT8(20, state.colorG);
+    TEST_ASSERT_EQUAL_UINT8(30, state.colorB);
+}
+
+// ---------------------------------------------------------------------------
 // WsCommandParser -> queueWebCommand -> update() - the full WS message path
 // ---------------------------------------------------------------------------
 
@@ -1112,6 +1297,20 @@ int main(int argc, char** argv)
     RUN_TEST(test_power_off_while_already_off_preserves_mode_before_off);
     RUN_TEST(test_update_throttles_frames_faster_than_the_minimum_duration);
     RUN_TEST(test_brightness_config_persists_and_reloads_value);
+
+    RUN_TEST(test_startup_state_config_persists_and_reloads_power);
+    RUN_TEST(test_startup_state_config_persists_and_reloads_holding_effect);
+    RUN_TEST(test_startup_state_config_persists_and_reloads_holding_color);
+    RUN_TEST(test_restore_startup_state_applies_holding_color);
+    RUN_TEST(test_restore_startup_state_applies_holding_effect);
+    RUN_TEST(test_restore_startup_state_applies_power_off_after_holding_effect);
+    RUN_TEST(test_restore_startup_state_random_rotation_is_a_no_op);
+    RUN_TEST(test_effect_command_persists_holding_effect_mode);
+    RUN_TEST(test_resume_command_persists_random_rotation_mode);
+    RUN_TEST(test_power_commands_persist_power_state);
+    RUN_TEST(test_hold_command_does_not_change_persisted_mode);
+    RUN_TEST(test_color_command_without_commit_does_not_persist);
+    RUN_TEST(test_color_command_with_commit_persists_holding_color);
 
     RUN_TEST(test_next_command_starts_transitioning_without_blocking_later_commands);
     RUN_TEST(test_next_command_mid_update_does_not_flash_stale_t_into_high_brightness);

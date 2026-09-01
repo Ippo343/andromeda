@@ -108,8 +108,10 @@ inline bool parse(const char* json, Command& out)
             !findField(json, "\"b\":", b))
             return false;
         if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255) return false;
+        // Mirrors BRIGHTNESS's "commit" flag - see Command::Color()'s comment.
+        bool commit = strstr(json, "\"commit\":true") != nullptr;
         out = Command::Color(static_cast<uint8_t>(r), static_cast<uint8_t>(g),
-                             static_cast<uint8_t>(b));
+                             static_cast<uint8_t>(b), commit);
         return true;
     }
 

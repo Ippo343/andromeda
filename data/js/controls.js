@@ -184,6 +184,12 @@ class ColorWheel {
     }
 
     stopDrag() {
+        // Only commit if a drag was actually in progress - stopDrag() also fires from
+        // mouseleave, which can arrive with nothing having been dragged at all (e.g. the
+        // pointer merely passing over the canvas).
+        if (this.isDragging && this.lastColor) {
+            this.sendColor(this.lastColor.r, this.lastColor.g, this.lastColor.b, true);
+        }
         this.isDragging = false;
     }
 
@@ -251,6 +257,13 @@ class ColorWheel {
     // logo shine. Never sends anything over the socket - that's sendColor()'s
     // job, called only from updateColor()'s own drag path.
     renderSelector(x, y, r, g, b) {
+        // Tracked so stopDrag() can send a one-time "commit" with the color the drag
+        // actually ended on, without needing its own hue/saturation math - mirrors the
+        // brightness slider's separate commit message on drag release (see
+        // commitSliderValue below), the signal that tells the device to persist this as
+        // the startup state rather than on every drag-speed update.
+        this.lastColor = { r, g, b };
+
         this.selector.style.left = `${x}px`;
         this.selector.style.top = `${y}px`;
 
@@ -282,9 +295,11 @@ class ColorWheel {
         this.renderSelector(x, y, r, g, b);
     }
 
-    sendColor(r, g, b) {
+    sendColor(r, g, b, commit = false) {
         if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({type: 'color', r, g, b}));
+            const msg = {type: 'color', r, g, b};
+            if (commit) msg.commit = true;
+            ws.send(JSON.stringify(msg));
         }
     }
 }

@@ -55,6 +55,83 @@ uint8_t load(uint8_t fallback)
 }
 }  // namespace BrightnessConfig
 
+namespace StartupStateConfig
+{
+static const char* PREFS_NAMESPACE = "device";
+static const char* POWER_KEY = "pwr_on";
+static const char* MODE_KEY = "fx_mode";
+static const char* EFFECT_KEY = "fx_id";
+static const char* COLOR_R_KEY = "fx_r";
+static const char* COLOR_G_KEY = "fx_g";
+static const char* COLOR_B_KEY = "fx_b";
+
+void persistPower(bool poweredOn)
+{
+    // Same NVS-wear reasoning as BrightnessConfig::persist(): power toggling is already a
+    // deliberate, low-frequency user click, but the dedupe costs nothing and keeps this
+    // symmetric with the rest of the file.
+    static int lastPersisted = -1;
+    int value = poweredOn ? 1 : 0;
+    if (lastPersisted == value) return;
+
+    Preferences prefs;
+    if (!beginPreferencesOrWarn(prefs, PREFS_NAMESPACE, false)) return;
+    putUShortOrWarn(prefs, POWER_KEY, static_cast<uint16_t>(value));
+    prefs.end();
+
+    lastPersisted = value;
+    Log.noticeln("Persisted power state: %s", poweredOn ? "on" : "off");
+}
+
+void persistMode(Mode mode, uint8_t effectId, uint8_t r, uint8_t g, uint8_t b)
+{
+    Preferences prefs;
+    if (!beginPreferencesOrWarn(prefs, PREFS_NAMESPACE, false)) return;
+    putUShortOrWarn(prefs, MODE_KEY, static_cast<uint16_t>(mode));
+    putUShortOrWarn(prefs, EFFECT_KEY, effectId);
+    putUShortOrWarn(prefs, COLOR_R_KEY, r);
+    putUShortOrWarn(prefs, COLOR_G_KEY, g);
+    putUShortOrWarn(prefs, COLOR_B_KEY, b);
+    prefs.end();
+
+    Log.noticeln("Persisted startup mode: %d", static_cast<int>(mode));
+}
+
+StartupState load()
+{
+    StartupState state;
+
+    Preferences prefs;
+    if (!beginPreferencesOrWarn(prefs, PREFS_NAMESPACE, true)) return state;
+
+    state.poweredOn = prefs.getUShort(POWER_KEY, 1) != 0;
+
+    // Each field defensively falls back to its StartupState default on an out-of-range
+    // stored value (corrupt/stale NVS), the same reasoning as BrightnessConfig::load()'s
+    // range check - rather than let a garbage mode/effect id reach restoreStartupState().
+    uint16_t modeValue = prefs.getUShort(MODE_KEY, static_cast<uint16_t>(state.mode));
+    if (modeValue <= static_cast<uint16_t>(Mode::HoldingColor))
+        state.mode = static_cast<Mode>(modeValue);
+    else
+        Log.errorln("Stored startup mode %d out of range, using RandomRotation", modeValue);
+
+    uint16_t effectIdValue = prefs.getUShort(EFFECT_KEY, state.effectId);
+    if (effectIdValue <= 255) state.effectId = static_cast<uint8_t>(effectIdValue);
+
+    auto loadColorChannel = [&](const char* key, uint8_t fallback) -> uint8_t
+    {
+        uint16_t v = prefs.getUShort(key, fallback);
+        return (v <= 255) ? static_cast<uint8_t>(v) : fallback;
+    };
+    state.colorR = loadColorChannel(COLOR_R_KEY, state.colorR);
+    state.colorG = loadColorChannel(COLOR_G_KEY, state.colorG);
+    state.colorB = loadColorChannel(COLOR_B_KEY, state.colorB);
+
+    prefs.end();
+    return state;
+}
+}  // namespace StartupStateConfig
+
 // Initialize the web command queue
 void MissionControl::initWebQueue()
 {
@@ -80,23 +157,42 @@ void MissionControl::processWebCommands()
         {
             case CommandType::NEXT:
                 handleTransition();
+                // NEXT always means "back to random, show me something else" - persist
+                // RandomRotation even if a HOLD was pending (holdPending), matching the
+                // fact that a fresh NEXT/COLOR always wins over whatever was already
+                // happening (see handleTransition()'s own comment).
+                StartupStateConfig::persistMode(StartupStateConfig::Mode::RandomRotation, 0, 0, 0,
+                                                0);
                 break;
             case CommandType::HOLD:
+                // Deliberately not persisted - see StartupStateConfig's header comment.
+                // Holding whatever the random rotation happened to land on reads as "pause
+                // for a second," not "I configured my lamp to look like this."
                 holdEffect();
                 break;
             case CommandType::RESUME:
                 resumeEffect();
+                StartupStateConfig::persistMode(StartupStateConfig::Mode::RandomRotation, 0, 0, 0,
+                                                0);
                 break;
             case CommandType::POWER_OFF:
                 powerOff();
+                StartupStateConfig::persistPower(false);
                 break;
             case CommandType::POWER_ON:
                 powerOn();
+                StartupStateConfig::persistPower(true);
                 break;
             case CommandType::COLOR:
                 staticColor = CRGB(command.r, command.g, command.b);
                 if (!isColorActive()) transitionToStaticColor();
                 stateDirty = true;
+                // Only on the drag-release "commit" message (see Command::Color()'s
+                // comment) - never on every drag-speed update, same NVS-wear reasoning as
+                // BrightnessConfig.
+                if (command.colorCommit)
+                    StartupStateConfig::persistMode(StartupStateConfig::Mode::HoldingColor, 0,
+                                                    command.r, command.g, command.b);
                 break;
             case CommandType::MODEL:
                 // Reject any id that doesn't resolve to a real registry entry (e.g. a
@@ -119,6 +215,8 @@ void MissionControl::processWebCommands()
                 {
                     handleTransition(createEffect(static_cast<EffectId>(command.effectId)));
                     holdEffect();
+                    StartupStateConfig::persistMode(StartupStateConfig::Mode::HoldingEffect,
+                                                    command.effectId, 0, 0, 0);
                 }
                 break;
             case CommandType::DEVICE_NAME:
@@ -485,4 +583,53 @@ void MissionControl::transitionToStaticColor()
 {
     handleTransition(new StaticColor(staticColor), false);
     holdEffect();
+}
+
+// See mission-control.h's declaration. Applies the same effect/mode changes a live
+// EFFECT/COLOR/POWER_OFF command would (handleTransition()/holdEffect()/
+// transitionToStaticColor()/powerOff() - none of them read `t` or depend on update()
+// having run yet), just driven from what was persisted instead of a queued Command.
+// Never re-persists what it just loaded - only a live command that changes state again
+// after boot should write NVS.
+void MissionControl::restoreStartupState()
+{
+    StartupStateConfig::StartupState saved = StartupStateConfig::load();
+
+    switch (saved.mode)
+    {
+        case StartupStateConfig::Mode::HoldingEffect:
+            if (saved.effectId < NUM_EFFECTS)
+            {
+                // false (no animation): unlike the live EFFECT command, this runs before
+                // the render loop's first update() tick, so nothing is on screen yet for
+                // an animated transition to play against - install immediately, the same
+                // way transitionToStaticColor() does for the color case below. Also
+                // sidesteps a real bug the animated path would hit here: it leaves
+                // `effect` nullptr until a later update() tick lands the transition, and
+                // a HoldingEffect+poweredOn=false restore would cancel that pending
+                // transition in powerOff() before it ever could, losing the restored
+                // effect entirely.
+                handleTransition(createEffect(static_cast<EffectId>(saved.effectId)), false);
+                holdEffect();
+            }
+            else
+            {
+                Log.warningln("Stored startup effect id %d out of range, starting random",
+                              saved.effectId);
+            }
+            break;
+        case StartupStateConfig::Mode::HoldingColor:
+            staticColor = CRGB(saved.colorR, saved.colorG, saved.colorB);
+            transitionToStaticColor();
+            break;
+        case StartupStateConfig::Mode::RandomRotation:
+            // Nothing to restore - FX_LOOP with a random effect is the default startup
+            // behavior handleTransition() already falls into on its own.
+            break;
+    }
+
+    // Applied last, after the mode above: powerOff() captures whatever mode was just
+    // established into modeBeforeOff, so a device that was switched off while holding a
+    // color/effect resumes that same mode on the next power-on, not random rotation.
+    if (!saved.poweredOn) powerOff();
 }

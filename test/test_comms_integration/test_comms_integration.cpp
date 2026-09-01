@@ -522,6 +522,40 @@ void test_ws_valid_text_frame_queues_command()
     MissionControl::Instance().update(0);
 }
 
+// A commit:true color message that arrives while color mode is already active takes the
+// direct setLiveColor() fast path (comms.cpp), not the command queue - a separate
+// persistence call site from the queue path test_mission_control.cpp already covers, so
+// this is its regression test.
+void test_ws_color_commit_on_fast_path_persists_holding_color()
+{
+    AsyncWebSocket* ws = CommsTestAccess::server(Comms::Instance()).webSocket;
+    AwsFrameInfo info;
+    info.final = true;
+    info.index = 0;
+    info.opcode = WS_TEXT;
+
+    // First message switches into color mode via the queue (no commit - a live drag
+    // update); draining it is what makes isColorActive() true for the second message.
+    char first[] = "{\"type\":\"color\",\"r\":1,\"g\":2,\"b\":3}";
+    info.len = strlen(first);
+    std::vector<uint8_t> buf1(first, first + strlen(first) + 1);
+    ws->simulateDataFrame(info, buf1.data(), strlen(first));
+    MissionControl::Instance().update(0);
+    TEST_ASSERT_TRUE(MissionControl::Instance().isColorActive());
+
+    // Second message: commit:true, now on the fast path.
+    char second[] = "{\"type\":\"color\",\"r\":40,\"g\":50,\"b\":60,\"commit\":true}";
+    info.len = strlen(second);
+    std::vector<uint8_t> buf2(second, second + strlen(second) + 1);
+    ws->simulateDataFrame(info, buf2.data(), strlen(second));
+
+    StartupStateConfig::StartupState state = StartupStateConfig::load();
+    TEST_ASSERT_TRUE(StartupStateConfig::Mode::HoldingColor == state.mode);
+    TEST_ASSERT_EQUAL_UINT8(40, state.colorR);
+    TEST_ASSERT_EQUAL_UINT8(50, state.colorG);
+    TEST_ASSERT_EQUAL_UINT8(60, state.colorB);
+}
+
 // ---------------------------------------------------------------------------
 // State broadcast (WS_EVT_CONNECT push + dirty-flag broadcast)
 // ---------------------------------------------------------------------------
@@ -761,6 +795,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_scan_failure_clears_scan_in_progress);
 
     RUN_TEST(test_ws_valid_text_frame_queues_command);
+    RUN_TEST(test_ws_color_commit_on_fast_path_persists_holding_color);
 
     RUN_TEST(test_ws_connect_pushes_initial_state);
     RUN_TEST(test_state_broadcast_after_brightness_command);

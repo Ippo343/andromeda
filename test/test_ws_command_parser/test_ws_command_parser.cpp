@@ -58,6 +58,17 @@ void test_parses_color()
     TEST_ASSERT_EQUAL(10, out.r);
     TEST_ASSERT_EQUAL(20, out.g);
     TEST_ASSERT_EQUAL(30, out.b);
+    // commit defaults to false when absent - only the drag-release message sets it (see
+    // Command::Color()'s comment), mirroring BRIGHTNESS's "commit" flag.
+    TEST_ASSERT_FALSE(out.colorCommit);
+}
+
+void test_parses_color_with_commit_true()
+{
+    Command out;
+    TEST_ASSERT_TRUE(WsCommandParser::parse(
+        "{\"type\":\"color\",\"r\":10,\"g\":20,\"b\":30,\"commit\":true}", out));
+    TEST_ASSERT_TRUE(out.colorCommit);
 }
 
 void test_rejects_color_with_missing_field()
@@ -300,6 +311,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_parses_power_on);
     RUN_TEST(test_parses_reboot);
     RUN_TEST(test_parses_color);
+    RUN_TEST(test_parses_color_with_commit_true);
     RUN_TEST(test_rejects_color_with_missing_field);
     RUN_TEST(test_rejects_color_with_out_of_range_field);
     RUN_TEST(test_parses_brightness);
