@@ -40,7 +40,7 @@ function scanNetworks() {
                 }
 
                 if (data.error) {
-                    status.innerHTML = '<div class="status error">Scan failed: ' + data.error + '</div>';
+                    status.innerHTML = '<div class="status error">Scan failed: ' + escapeHtml(data.error) + '</div>';
                     scanBtn.disabled = false;
                     scanBtn.innerHTML = 'Scan for Networks';
                     appendManualEntryOption(networks);
@@ -80,7 +80,7 @@ function scanNetworks() {
             })
             .catch(error => {
                 console.error('Scan error:', error);
-                status.innerHTML = '<div class="status error">Scan failed: ' + error.message + '</div>';
+                status.innerHTML = '<div class="status error">Scan failed: ' + escapeHtml(error.message) + '</div>';
                 scanBtn.disabled = false;
                 scanBtn.innerHTML = 'Scan for Networks';
                 appendManualEntryOption(networks);
@@ -224,7 +224,11 @@ function submitCredentials(event) {
 
     setFormBusy(true);
     document.getElementById('connectBtn').innerHTML = '<span class="spinner"></span>Connecting...';
-    showStatus('Testing connection to "' + ssid + '"...', 'loading');
+    // ssid is attacker-controlled (a scanned SSID can be anything a nearby radio
+    // broadcasts, e.g. "<img src=x onerror=...>") and every showStatus() call below
+    // builds its message via innerHTML, so it must be escaped at every interpolation
+    // site here, not just this first one.
+    showStatus('Testing connection to "' + escapeHtml(ssid) + '"...', 'loading');
 
     fetch('/save', {
         method: 'POST',
@@ -238,12 +242,12 @@ function submitCredentials(event) {
             }
             // 400 (validation) / 500 - surface the server's own message.
             return response.text().then(text => {
-                showStatus(text || ('Save failed (' + response.status + ')'), 'error');
+                showStatus(escapeHtml(text) || ('Save failed (' + response.status + ')'), 'error');
                 resetConnectButton();
             });
         })
         .catch(error => {
-            showStatus('Save failed: ' + error.message, 'error');
+            showStatus('Save failed: ' + escapeHtml(error.message), 'error');
             resetConnectButton();
         });
 
@@ -270,14 +274,14 @@ function pollSaveStatus(ssid) {
                 const s = (state || '').trim();
 
                 if (s === 'connected') {
-                    showStatus('Connected to "' + ssid + '"! The device is restarting to join '
+                    showStatus('Connected to "' + escapeHtml(ssid) + '"! The device is restarting to join '
                         + 'that network - reconnect your phone or laptop to your normal WiFi to '
                         + 'reach it again.', 'success');
                     return;
                 }
 
                 if (s === 'failed') {
-                    showStatus('Could not connect to "' + ssid + '". Double-check the password '
+                    showStatus('Could not connect to "' + escapeHtml(ssid) + '". Double-check the password '
                         + 'and try again.', 'error');
                     resetConnectButton();
                     return;
@@ -287,7 +291,7 @@ function pollSaveStatus(ssid) {
                 if (++attempts < maxAttempts) {
                     setTimeout(poll, 1000);
                 } else {
-                    showStatus('Still trying to reach "' + ssid + '". If the device dropped the '
+                    showStatus('Still trying to reach "' + escapeHtml(ssid) + '". If the device dropped the '
                         + 'setup network, wait a moment for it to reappear and reload this page.',
                         'error');
                     resetConnectButton();
@@ -322,7 +326,7 @@ function resetCredentials() {
                 }
             })
             .catch(error => {
-                showStatus('Reset failed: ' + error.message, 'error');
+                showStatus('Reset failed: ' + escapeHtml(error.message), 'error');
             });
     }
 }
