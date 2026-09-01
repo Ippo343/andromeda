@@ -123,14 +123,18 @@
                     <!-- Nav only: the device model / device name controls live on
                          their own pages now (a wrong model pick soft-bricks the
                          device until reboot, and the name field was the text
-                         input iOS's captive portal kept autofocusing). -->
-                    <button class="btn" onclick="goToAdvanced()" style="width: 100%;">
+                         input iOS's captive portal kept autofocusing). nav-btn
+                         exempts these from .ws-disconnected's pointer-events:none
+                         (controls.css) - they're plain page navigations, not WS
+                         commands, and are exactly what's needed to reach WiFi
+                         Setup or Advanced while the socket is down. -->
+                    <button class="btn nav-btn" onclick="goToAdvanced()" style="width: 100%;">
                         Advanced
                     </button>
-                    <button class="btn" onclick="goToDeviceName()" style="width: 100%;">
+                    <button class="btn nav-btn" onclick="goToDeviceName()" style="width: 100%;">
                         Device Name
                     </button>
-                    <button class="btn" onclick="goToWifiSetup()" style="width: 100%;">
+                    <button class="btn nav-btn" onclick="goToWifiSetup()" style="width: 100%;">
                         WiFi Setup
                     </button>
                 </div>
