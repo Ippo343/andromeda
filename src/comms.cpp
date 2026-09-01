@@ -6,6 +6,8 @@
 
 #include <cstring>
 
+#include "ota-config.h"
+#include "ota-updater.h"
 #include "version.h"
 #include "ws-command-parser.h"
 
@@ -24,6 +26,35 @@ static bool fileExistsQuiet(const char* littleFsPath)
     snprintf(full, sizeof(full), "/littlefs%s", littleFsPath);
     struct stat st;
     return stat(full, &st) == 0;
+}
+
+// OtaUpdater::State -> the lowercase token the Advanced page's poll loop
+// switches on. Kept here (not in ota-updater.h) so the enum stays an
+// implementation detail of the updater.
+static const char* otaStateToken(OtaUpdater::State s)
+{
+    switch (s)
+    {
+        case OtaUpdater::State::Idle:
+            return "idle";
+        case OtaUpdater::State::Checking:
+            return "checking";
+        case OtaUpdater::State::UpToDate:
+            return "uptodate";
+        case OtaUpdater::State::UpdateAvailable:
+            return "available";
+        case OtaUpdater::State::Downloading:
+            return "downloading";
+        case OtaUpdater::State::WritingFw:
+            return "writing-fw";
+        case OtaUpdater::State::WritingFs:
+            return "writing-fs";
+        case OtaUpdater::State::Rebooting:
+            return "rebooting";
+        case OtaUpdater::State::Failed:
+            return "failed";
+    }
+    return "idle";
 }
 
 // Serves a LittleFS text file if present, else an empty 200 - callers are
@@ -396,16 +427,24 @@ void Comms::setupRoutes()
             // safe unescaped inside a JSON string (word chars, '.', '-', ' ', '(', ')'
             // and '/' from a branch name) - no quote or backslash is reachable - so it
             // is interpolated directly.
-            char json[512];
+            // latestTag, like VERSION, is a git tag name from our own releases
+            // (v0.9-word-word[-dev]) - no quote/backslash reachable - so it's
+            // interpolated directly too.
+            OtaUpdater::Status ota = OtaUpdater::status();
+
+            char json[640];
             snprintf(json, sizeof(json),
                      "{\"uptimeMs\":%lu,\"heapFree\":%u,\"heapMin\":%u,\"heapTotal\":%u,"
                      "\"tempC\":%s,\"fps\":%s,\"rssi\":%d,\"cpuMhz\":%u,"
-                     "\"chip\":\"%s\",\"resetReason\":%d,\"version\":\"%s\"}",
+                     "\"chip\":\"%s\",\"resetReason\":%d,\"version\":\"%s\","
+                     "\"updateAvailable\":%s,\"latestTag\":\"%s\",\"otaChannel\":\"%s\"}",
                      static_cast<unsigned long>(millis()), static_cast<unsigned>(ESP.getFreeHeap()),
                      static_cast<unsigned>(ESP.getMinFreeHeap()),
                      static_cast<unsigned>(ESP.getHeapSize()), tempBuf, fpsBuf,
                      static_cast<int>(WiFi.RSSI()), static_cast<unsigned>(ESP.getCpuFreqMHz()),
-                     ESP.getChipModel(), static_cast<int>(esp_reset_reason()), VERSION);
+                     ESP.getChipModel(), static_cast<int>(esp_reset_reason()), VERSION,
+                     OtaUpdater::updateAvailable() ? "true" : "false", ota.latestTag,
+                     OtaConfig::devChannel() ? "dev" : "stable");
             r->send(200, "application/json", json);
         });
 
@@ -458,6 +497,60 @@ void Comms::setupRoutes()
                           ESP.restart();
                       },
                       "Restart", 2048, NULL, 1, NULL);
+              });
+
+    // OTA (#63). One-shot triggers return 202 like /save; the Advanced page
+    // polls GET /ota-status. All three POSTs get the same drive-by-CSRF guard
+    // as /save and /reset.
+    server.on("/ota", HTTP_POST,
+              [](AsyncWebServerRequest* r)
+              {
+                  if (isCrossOriginPost(r))
+                  {
+                      r->send(403, "text/plain", "Cross-origin request rejected");
+                      return;
+                  }
+                  OtaUpdater::startUpdate();
+                  r->send(202, "text/plain", "OTA update started");
+              });
+    server.on("/ota-check", HTTP_POST,
+              [](AsyncWebServerRequest* r)
+              {
+                  if (isCrossOriginPost(r))
+                  {
+                      r->send(403, "text/plain", "Cross-origin request rejected");
+                      return;
+                  }
+                  OtaUpdater::startCheck();
+                  r->send(202, "text/plain", "OTA check started");
+              });
+    server.on("/ota-channel", HTTP_POST,
+              [](AsyncWebServerRequest* r)
+              {
+                  if (isCrossOriginPost(r))
+                  {
+                      r->send(403, "text/plain", "Cross-origin request rejected");
+                      return;
+                  }
+                  bool dev = r->arg("dev") == "true" || r->arg("dev") == "1";
+                  OtaConfig::persistDevChannel(dev);
+                  OtaUpdater::startCheck();  // re-evaluate against the new channel
+                  r->send(200, "text/plain", dev ? "dev" : "stable");
+              });
+    server.on("/ota-status", HTTP_GET,
+              [](AsyncWebServerRequest* r)
+              {
+                  OtaUpdater::Status s = OtaUpdater::status();
+                  // Worst case is ~250 B (error[96] + latestTag[48] both full);
+                  // 320 keeps a rare long Update error string from truncating the JSON.
+                  char json[320];
+                  snprintf(json, sizeof(json),
+                           "{\"state\":\"%s\",\"progress\":%u,\"latestCode\":%u,"
+                           "\"latestTag\":\"%s\",\"channel\":\"%s\",\"error\":\"%s\"}",
+                           otaStateToken(s.state), static_cast<unsigned>(s.progressPct),
+                           static_cast<unsigned>(s.latestVersionCode), s.latestTag,
+                           OtaConfig::devChannel() ? "dev" : "stable", s.error);
+                  r->send(200, "application/json", json);
               });
 
     // Captive Portal Detection
