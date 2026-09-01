@@ -1,14 +1,19 @@
 # Andromeda custom 4 MB partition table (esp32_wroom, esp32_c3_zero, esp32_s3_zero).
 #
-# Same layout as Arduino-esp32's default.csv - dual-OTA kept, we will need it -
-# but the filesystem partition is cut from 1.375 MiB to 1.0 MiB (data/ is well
-# under 100 KiB) and the freed 384 KiB is split evenly between the two app
-# slots: 1.25 MiB -> 1.4375 MiB each.
+# Based on Arduino-esp32's default.csv (dual-OTA), retuned for OTA updates (#63):
+# once units ship with OTA, this table is frozen - it lives at 0x8000, outside
+# every OTA-writable partition, so changing it later is a USB-reflash-everything
+# event. So the app slots are sized generously now: the TLS client stack alone
+# (WiFiClientSecure + HTTPClient, first linked by OTA) is ~135 KiB, which put a
+# 1.4375 MiB slot at 73% before any OTA feature code. Slots are 1.625 MiB each;
+# the filesystem is 640 KiB (data/ is ~112 KiB, ~5.7x headroom) and coredump is
+# unchanged. Offsets are 64 KiB-aligned for the app partitions and sum to exactly
+# 4 MiB. test/test_partition_layout guards these values against PARTITION_LAYOUT_VERSION.
 #
 # Name,   Type, SubType, Offset,   Size,     Flags
 nvs,      data, nvs,     0x9000,   0x5000,
 otadata,  data, ota,     0xe000,   0x2000,
-app0,     app,  ota_0,   0x10000,  0x170000,
-app1,     app,  ota_1,   0x180000, 0x170000,
-spiffs,   data, spiffs,  0x2F0000, 0x100000,
+app0,     app,  ota_0,   0x10000,  0x1A0000,
+app1,     app,  ota_1,   0x1B0000, 0x1A0000,
+spiffs,   data, spiffs,  0x350000, 0xA0000,
 coredump, data, coredump,0x3F0000, 0x10000,
