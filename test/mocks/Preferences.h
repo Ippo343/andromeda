@@ -34,6 +34,17 @@ class Preferences
         return it != ushortStore().end() ? it->second : defaultValue;
     }
 
+    size_t putUInt(const char* key, uint32_t value)
+    {
+        uintStore()[ns + "/" + key] = value;
+        return sizeof(uint32_t);
+    }
+    uint32_t getUInt(const char* key, uint32_t defaultValue = 0)
+    {
+        auto it = uintStore().find(ns + "/" + key);
+        return it != uintStore().end() ? it->second : defaultValue;
+    }
+
     size_t putString(const char* key, const String& value)
     {
         stringStore()[ns + "/" + key] = value.c_str();
@@ -52,6 +63,10 @@ class Preferences
         {
             it = (it->first.rfind(prefix, 0) == 0) ? ushortStore().erase(it) : std::next(it);
         }
+        for (auto it = uintStore().begin(); it != uintStore().end();)
+        {
+            it = (it->first.rfind(prefix, 0) == 0) ? uintStore().erase(it) : std::next(it);
+        }
         for (auto it = stringStore().begin(); it != stringStore().end();)
         {
             it = (it->first.rfind(prefix, 0) == 0) ? stringStore().erase(it) : std::next(it);
@@ -63,6 +78,7 @@ class Preferences
         const std::string fullKey = ns + "/" + key;
         bool removed = false;
         removed |= ushortStore().erase(fullKey) > 0;
+        removed |= uintStore().erase(fullKey) > 0;
         removed |= stringStore().erase(fullKey) > 0;
         return removed;
     }
@@ -75,6 +91,11 @@ class Preferences
     static std::map<std::string, uint16_t>& ushortStore()
     {
         static std::map<std::string, uint16_t> s;
+        return s;
+    }
+    static std::map<std::string, uint32_t>& uintStore()
+    {
+        static std::map<std::string, uint32_t> s;
         return s;
     }
     static std::map<std::string, std::string>& stringStore()
