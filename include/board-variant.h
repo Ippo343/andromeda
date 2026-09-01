@@ -24,3 +24,10 @@
 // the CSV's offsets and sizes against this number so an accidental edit can't
 // slip through CI.
 #define PARTITION_LAYOUT_VERSION 1
+
+// sha256 of the canonical CSV layout + the version above. build-scripts/
+// check_partition_layout_lock.py (a pre: gate on every hardware build) fails
+// the build unless this matches - so the CSV and PARTITION_LAYOUT_VERSION can
+// never drift apart. Regenerate deliberately:
+//   python build-scripts/check_partition_layout_lock.py --update
+#define PARTITION_LAYOUT_DIGEST "a5042f8b20d70b630ca8d4308d8e07bce1e8fe7b886963fd0b68aa48ae0900d3"
