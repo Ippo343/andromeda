@@ -104,15 +104,24 @@ class WifiManager
         return true;
     }
 
-    // Attempts to connect using whatever credentials are currently stored.
-    // Returns true if connected; false means no credentials were stored, or
-    // the stored credentials failed to connect - either way the caller
-    // should fall back to AP mode.
-    bool connectUsingStoredCredentials()
+    // Attempts to connect using whatever credentials are currently stored. The caller
+    // should fall back to AP mode on anything but Connected - NeverConfigured vs
+    // ConnectFailed exists so the caller can tell a brand-new device's expected
+    // first-boot state (nothing stored yet) apart from a genuine failure (stored
+    // credentials that didn't work - the router's password changed, it's out of range,
+    // etc.), rather than treating both as the same generic "not connected".
+    enum class ConnectResult
+    {
+        Connected,
+        NeverConfigured,
+        ConnectFailed
+    };
+    ConnectResult connectUsingStoredCredentials()
     {
         String ssid, password;
-        if (!store.loadCredentials(ssid, password)) return false;
-        return connector.connect(ssid.c_str(), password.c_str());
+        if (!store.loadCredentials(ssid, password)) return ConnectResult::NeverConfigured;
+        return connector.connect(ssid.c_str(), password.c_str()) ? ConnectResult::Connected
+                                                                 : ConnectResult::ConnectFailed;
     }
 
     void clearStoredCredentials() { store.clearCredentials(); }

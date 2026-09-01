@@ -131,15 +131,27 @@ void setup()
     WiFiConnectingAnimation connecting;
     connecting.run();
 
-    if (Comms::Instance().setup())
+    switch (Comms::Instance().setup())
     {
-        WiFiSuccessAnimation success;
-        success.run();
-    }
-    else
-    {
-        ErrorAnimation error;
-        error.run();
+        case Comms::SetupOutcome::Connected:
+        {
+            WiFiSuccessAnimation success;
+            success.run();
+            break;
+        }
+        case Comms::SetupOutcome::ConnectFailed:
+        {
+            // Stored credentials exist but didn't work (router password changed, out of
+            // range, ...) - genuinely something to flag, unlike NeverConfigured below.
+            ErrorAnimation error;
+            error.run();
+            break;
+        }
+        case Comms::SetupOutcome::NeverConfigured:
+            // A brand-new device's expected first-boot state - landing in AP mode here is
+            // normal, not an error, so no alarming indicator for what is otherwise a
+            // completely ordinary out-of-box power-on.
+            break;
     }
 #endif
 

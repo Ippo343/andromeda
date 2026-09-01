@@ -347,18 +347,23 @@ void test_setup_connects_with_stored_credentials_and_skips_ap_mode()
     fakeStore().storedPassword = "secret";
     fakeConnector().connectResult = true;
 
-    Comms::Instance().setup();
+    Comms::SetupOutcome outcome = Comms::Instance().setup();
 
     TEST_ASSERT_FALSE(CommsTestAccess::isAPMode(Comms::Instance()));
+    TEST_ASSERT_TRUE(outcome == Comms::SetupOutcome::Connected);
 }
 
+// Distinguishing NeverConfigured from ConnectFailed (below) is what lets main.cpp skip
+// the alarming ErrorAnimation on a brand-new device's ordinary first boot while still
+// showing it for a genuine failure - see main.cpp's switch on this same enum.
 void test_setup_falls_back_to_ap_mode_when_no_stored_credentials()
 {
     fakeStore().hasCredentials = false;
 
-    Comms::Instance().setup();
+    Comms::SetupOutcome outcome = Comms::Instance().setup();
 
     TEST_ASSERT_TRUE(CommsTestAccess::isAPMode(Comms::Instance()));
+    TEST_ASSERT_TRUE(outcome == Comms::SetupOutcome::NeverConfigured);
 }
 
 void test_setup_falls_back_to_ap_mode_when_stored_credentials_fail_to_connect()
@@ -368,9 +373,10 @@ void test_setup_falls_back_to_ap_mode_when_stored_credentials_fail_to_connect()
     fakeStore().storedPassword = "secret";
     fakeConnector().connectResult = false;
 
-    Comms::Instance().setup();
+    Comms::SetupOutcome outcome = Comms::Instance().setup();
 
     TEST_ASSERT_TRUE(CommsTestAccess::isAPMode(Comms::Instance()));
+    TEST_ASSERT_TRUE(outcome == Comms::SetupOutcome::ConnectFailed);
 }
 
 // ---------------------------------------------------------------------------

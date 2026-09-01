@@ -58,12 +58,19 @@ Comms::Comms()
 {
 }
 
-bool Comms::setup()
+Comms::SetupOutcome Comms::setup()
 {
-    if (wifiManager->connectUsingStoredCredentials()) { return startStationMode(); }
+    WifiManager::ConnectResult result = wifiManager->connectUsingStoredCredentials();
+    if (result == WifiManager::ConnectResult::Connected)
+    {
+        startStationMode();
+        return SetupOutcome::Connected;
+    }
 
     Log.noticeln("Starting AP mode for WiFi configuration");
-    return startAPMode();
+    startAPMode();
+    return result == WifiManager::ConnectResult::NeverConfigured ? SetupOutcome::NeverConfigured
+                                                                 : SetupOutcome::ConnectFailed;
 }
 
 // Shared by startAPMode() (boot-time fallback) and enterAPFallbackMode() (runtime fallback
