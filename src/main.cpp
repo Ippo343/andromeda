@@ -1,4 +1,5 @@
 #include <LittleFS.h>
+#include <esp_system.h>  // esp_reset_reason()
 
 #include "animations.h"
 #include "comms.h"
@@ -22,6 +23,10 @@
 #ifdef NATIVE_RUNTIME
 #include "native-runtime.h"
 #endif
+
+// Brightness clamped to on a brownout-reset boot - low enough to plausibly fit under any
+// PSU this device could ship with, breaking a brightness-induced brownout boot loop.
+constexpr uint8_t BROWNOUT_SAFE_BRIGHTNESS = 32;
 
 void setup()
 {
@@ -84,6 +89,14 @@ void setup()
     Log.noticeln("Device: %s", config->name);
 
     FastLED.setCorrection(TypicalLEDStrip);
+
+    // Global safety net on top of (not instead of) the user-facing brightness slider:
+    // FastLED estimates the actual per-frame current draw from the rendered colors and
+    // dims globally to stay under this budget, so a customer sliding to 255 and picking
+    // white can't pull more current than the rail is rated for. See ModelConfig's
+    // max_milliamps for why this is a placeholder value pending real PSU specs.
+    FastLED.setMaxPowerInVoltsAndMilliamps(5, config->max_milliamps);
+
     seedRNGs();
 
     // Restore the last brightness configured via the web UI before running
@@ -96,6 +109,21 @@ void setup()
     // value. 64 is the fallback for a never-configured device, to avoid
     // burning my eyes while working at the Social Hub's desk.
     uint8_t maxBrightness = BrightnessConfig::load(64);
+
+    // A PSU that sags and browns out at high brightness resets the chip and, without
+    // this, comes right back up at the exact same brightness - a hard boot loop with no
+    // escape and no on-device diagnosis. Clamp to a safe low value for this one boot
+    // instead of trusting the stored value; nothing is lost from NVS, so the next
+    // deliberate brightness change (or a clean boot) restores normal behavior.
+    if (esp_reset_reason() == ESP_RST_BROWNOUT)
+    {
+        Log.warningln(
+            "Booted after a brownout reset - clamping brightness to %d to break "
+            "a possible boot loop",
+            BROWNOUT_SAFE_BRIGHTNESS);
+        if (maxBrightness > BROWNOUT_SAFE_BRIGHTNESS) maxBrightness = BROWNOUT_SAFE_BRIGHTNESS;
+    }
+
     MissionControl::Instance().setMaxBrightness(maxBrightness);
     FastLED.setBrightness(dim8_raw(maxBrightness));
 
