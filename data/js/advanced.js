@@ -113,6 +113,77 @@ function renderFirmware(metrics) {
     if (el) el.textContent = firmwareLabel(metrics);
 }
 
+// True while an OTA action is running, so the 2s /metrics refresh doesn't
+// yank the checkbox back or hide the progress line under an in-flight update.
+let otaBusy = false;
+
+// Driven by the /metrics poll: the "update available" badge, the "Update now"
+// button, and the dev-channel checkbox (unless the user is mid-interaction).
+function renderOta(metrics) {
+    const badge = document.getElementById('fwUpdateBadge');
+    const updateBtn = document.getElementById('otaUpdateBtn');
+    const text = otaBadgeText(metrics);
+    if (badge) {
+        badge.textContent = text;
+        badge.hidden = !text;
+    }
+    if (updateBtn && !otaBusy) updateBtn.hidden = !text;
+
+    const devBox = document.getElementById('otaDevChannel');
+    if (devBox && !otaBusy) devBox.checked = metrics && metrics.otaChannel === 'dev';
+}
+
+// Polls /ota-status ~1x/s and reflects it into #otaProgress, mirroring
+// wifi.js's pollSaveStatus. Stops on a terminal state; on "rebooting" it
+// counts down and reloads, like the reboot button.
+function pollOtaStatus() {
+    const progress = document.getElementById('otaProgress');
+    let rebootCountdown = 90;
+
+    function poll() {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+
+        fetch('/ota-status', { signal: controller.signal })
+            .finally(() => clearTimeout(timeout))
+            .then((r) => (r.ok ? r.json() : Promise.reject(new Error('status ' + r.status))))
+            .then((s) => {
+                const label = otaProgressLabel(s);
+                if (progress) {
+                    progress.textContent = label;
+                    progress.hidden = !label;
+                }
+
+                if (s.state === 'rebooting') {
+                    const tick = () => {
+                        if (progress) {
+                            progress.textContent =
+                                `Rebooting into the new firmware… reloading in ${rebootCountdown}s`;
+                        }
+                        if (rebootCountdown-- <= 0) { location.reload(); return; }
+                        setTimeout(tick, 1000);
+                    };
+                    tick();
+                    return;
+                }
+
+                if (isOtaTerminalState(s.state)) {
+                    otaBusy = false;
+                    refresh();  // repaint badge / button / checkbox from fresh /metrics
+                    return;
+                }
+                setTimeout(poll, 1000);
+            })
+            .catch(() => {
+                // A dropped poll during the flash is expected (radio busy). Keep
+                // trying - the device either comes back or reboots under us.
+                setTimeout(poll, 1500);
+            });
+    }
+
+    poll();
+}
+
 function renderLogs(text) {
     const box = document.getElementById('logbox');
     const atBottom =
@@ -162,6 +233,7 @@ function refresh() {
             .then((m) => {
                 renderMetrics(m);
                 renderFirmware(m);
+                renderOta(m);
             })
             .catch(() => {
                 const el = document.getElementById('metrics');
@@ -209,6 +281,34 @@ document.addEventListener('DOMContentLoaded', () => {
             ws.send(JSON.stringify({ type: 'reboot' }));
         }
         setTimeout(() => location.reload(), 4000);
+    });
+
+    document.getElementById('otaCheckBtn').addEventListener('click', () => {
+        otaBusy = true;
+        const progress = document.getElementById('otaProgress');
+        if (progress) { progress.textContent = 'Checking for updates…'; progress.hidden = false; }
+        fetch('/ota-check', { method: 'POST' }).catch(() => {});
+        pollOtaStatus();
+    });
+
+    document.getElementById('otaUpdateBtn').addEventListener('click', () => {
+        if (!confirm('Download and install the new firmware now? The device will reboot.')) return;
+        otaBusy = true;
+        document.getElementById('otaUpdateBtn').disabled = true;
+        document.getElementById('otaCheckBtn').disabled = true;
+        fetch('/ota', { method: 'POST' }).catch(() => {});
+        pollOtaStatus();
+    });
+
+    document.getElementById('otaDevChannel').addEventListener('change', function () {
+        otaBusy = true;
+        fetch('/ota-channel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'dev=' + (this.checked ? 'true' : 'false'),
+        })
+            .catch(() => {})
+            .finally(() => { otaBusy = false; refresh(); });
     });
 
     connectWebSocket();

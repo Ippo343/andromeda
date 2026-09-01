@@ -196,6 +196,45 @@
     opacity: 0.5;
 }
 
+/* OTA update controls (#63), below the firmware-box. */
+.ota-badge {
+    margin-top: 0.5rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 6px;
+    background: rgba(120, 200, 120, 0.15);
+    border: 1px solid rgba(120, 200, 120, 0.35);
+    color: rgba(220, 255, 220, 0.95);
+    font-size: 0.85rem;
+    text-align: left;
+}
+
+.ota-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+}
+
+.ota-row .btn { flex: 1; }
+
+.ota-progress {
+    margin-top: 0.5rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.85);
+    text-align: left;
+}
+
+.ota-channel {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.7rem;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.ota-channel input { width: auto; margin: 0; }
+
 @media (max-width: 480px) {
     .metrics-grid { grid-template-columns: 1fr 1fr; }
     .logbox { max-height: 55vh; }
