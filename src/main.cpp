@@ -17,6 +17,7 @@
 #include "version.h"
 
 #ifndef NATIVE_RUNTIME
+#include "ota-updater.h"
 #include "status-led.h"
 #endif
 
@@ -170,6 +171,23 @@ void setup()
     MissionControl::Instance().setFrameDurationCap(config->min_frame_duration_ms);
 
 #ifndef NATIVE_RUNTIME
+    // Background OTA (#63). A detached task, not part of setup(), so it adds
+    // no boot delay: it waits ~10 s for WiFi/services to settle, checks
+    // GitHub once, then re-checks daily. Nothing is ever applied without an
+    // explicit request from the web UI.
+    OtaUpdater::begin();
+    xTaskCreate(
+        [](void*)
+        {
+            vTaskDelay(pdMS_TO_TICKS(10000));
+            for (;;)
+            {
+                OtaUpdater::startCheck();
+                vTaskDelay(pdMS_TO_TICKS(24UL * 60 * 60 * 1000));
+            }
+        },
+        "OtaAutoCheck", 3072, nullptr, 1, nullptr);
+
     // Nothing previously recovered from a hang inside an effect, FASTLED_SHOW(), or
     // MissionControl::update() - the device would just sit frozen forever. The framework's
     // loopTask() already resets the TWDT for us once we're subscribed (esp32-hal-misc.c),

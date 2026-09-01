@@ -5,6 +5,16 @@
 
 #include "utils.h"
 
+// Set true by OtaUpdater right before it overwrites the LittleFS partition raw
+// (#63's filesystem update) and never cleared - a reboot always follows. Once
+// set, SimpleFileLog stops touching LittleFS entirely: a log line racing that
+// raw write corrupts the freshly-written image, because it goes through the
+// *old* mount's cached filesystem state onto flash the OTA write just changed
+// out from under it. Reproduced on hardware as "Corrupted dir pair" / a failed
+// mount on the very next boot before this guard existed.
+inline volatile bool g_fileLoggingSuspended = false;
+inline void suspendFileLogging() { g_fileLoggingSuspended = true; }
+
 // Logger extension that logs everything to a file in LittleFS
 // with simple log rotation
 class SimpleFileLog : public Print
@@ -35,7 +45,7 @@ class SimpleFileLog : public Print
 
     size_t write(uint8_t c) override
     {
-        if (!_logFile) return 0;
+        if (g_fileLoggingSuspended || !_logFile) return 0;
 
         size_t result = _logFile.write(c);
 
@@ -78,7 +88,11 @@ class TeeLog : public Print
 
 // Set up logging to both Serial and File,
 // and also configure log format with timestamp and log level
-void setupLoggers()
+//
+// inline: this header used to be #included from exactly one .cpp (main.cpp),
+// but ota-updater.cpp now also includes it for suspendFileLogging() - inline
+// keeps that legal instead of a multiple-definition link error.
+inline void setupLoggers()
 {
     static SimpleFileLog fileLogger(32768);
     static TeeLog teeLogger(&Serial, &fileLogger);
