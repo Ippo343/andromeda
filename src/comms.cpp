@@ -52,6 +52,7 @@ Comms::Comms()
       scanInProgress(false),
       scanComplete(false),
       scanResults(""),
+      scanResultsMutex(xSemaphoreCreateMutex()),
       lastScanTime(0),
       lastBroadcastMs(0)
 {
@@ -442,9 +443,9 @@ void Comms::onWiFiScanComplete(int networksFound)
     }
     json += "]}";
 
-    portENTER_CRITICAL(&scanResultsMux);
+    xSemaphoreTake(scanResultsMutex, portMAX_DELAY);
     scanResults = json;
-    portEXIT_CRITICAL(&scanResultsMux);
+    xSemaphoreGive(scanResultsMutex);
 
     scanComplete = true;
     scanInProgress = false;
@@ -492,17 +493,17 @@ String Comms::scanWiFiNetworks()
 {
     if (isScanCacheValid(scanComplete, lastScanTime, millis(), SCAN_CACHE_MS))
     {
-        portENTER_CRITICAL(&scanResultsMux);
+        xSemaphoreTake(scanResultsMutex, portMAX_DELAY);
         String result = scanResults;
-        portEXIT_CRITICAL(&scanResultsMux);
+        xSemaphoreGive(scanResultsMutex);
         return result;
     }
     if (!scanInProgress) startAsyncScan();
     if (scanInProgress) return "{\"networks\":[],\"status\":\"scanning\"}";
 
-    portENTER_CRITICAL(&scanResultsMux);
+    xSemaphoreTake(scanResultsMutex, portMAX_DELAY);
     String result = scanResults;
-    portEXIT_CRITICAL(&scanResultsMux);
+    xSemaphoreGive(scanResultsMutex);
     return result;
 }
 

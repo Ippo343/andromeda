@@ -4,6 +4,7 @@
 #include <ESPAsyncWebServer.h>
 #include <ESPmDNS.h>
 #include <LittleFS.h>
+#include <freertos/semphr.h>
 
 #include "WiFi.h"
 #include "comms-utils.h"
@@ -106,9 +107,12 @@ class Comms
     // Written from the WiFi event task (onWiFiScanComplete()), read from the async_tcp task
     // (scanWiFiNetworks()) - a plain String isn't safe to share across that without a lock (a
     // concurrent read during reassignment could see a freed/partial buffer), so every access
-    // to scanResults itself goes through scanResultsMux.
+    // to scanResults itself goes through scanResultsMutex. A real FreeRTOS mutex, not a
+    // spinlock (contrast apStateMux above): the guarded operation is a String copy, which
+    // allocates, and holding a spinlock (disables interrupts) across an allocation risks a
+    // deadlock/abort against the heap allocator's own lock.
     String scanResults;
-    portMUX_TYPE scanResultsMux = portMUX_INITIALIZER_UNLOCKED;
+    SemaphoreHandle_t scanResultsMutex;
     unsigned long lastScanTime;
     static constexpr unsigned long SCAN_CACHE_MS = 30000;
 
