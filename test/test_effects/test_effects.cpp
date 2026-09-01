@@ -66,7 +66,7 @@ void test_static_color_default_constructor()
 void test_static_color_blend_scales_with_dt_not_call_count()
 {
     StaticColor fastTicksFx(CRGB(200, 100, 50));
-    fastTicksFx.currentColor = CRGB(0, 0, 0);  // CRGB's default ctor leaves this uninitialized
+    fastTicksFx.currentColor = CRGB(0, 0, 0);  // explicit for clarity - the ctor already does this
     milliseconds_t t = 0;
     for (int i = 0; i < 5; i++)
     {
