@@ -13,6 +13,7 @@ const {
     otaBadgeText,
     otaProgressLabel,
     isOtaTerminalState,
+    isOtaPollDone,
 } = require('../../data/js/advanced-logic.js');
 
 describe('parseLogLine', () => {
@@ -229,5 +230,29 @@ describe('isOtaTerminalState', () => {
         for (const s of ['checking', 'downloading', 'writing-fw', 'writing-fs']) {
             assert.equal(isOtaTerminalState(s), false, s);
         }
+    });
+});
+
+describe('isOtaPollDone', () => {
+    test('check flow (duringUpdate=false) matches isOtaTerminalState', () => {
+        for (const s of ['idle', 'uptodate', 'available', 'failed', 'rebooting',
+            'checking', 'downloading', 'writing-fw', 'writing-fs']) {
+            assert.equal(isOtaPollDone(s, false), isOtaTerminalState(s), s);
+        }
+    });
+    test('update flow keeps polling through a stale pre-trigger state', () => {
+        // The bug this guards: a first poll racing the worker task sees
+        // 'available' / 'idle' and must NOT end the loop mid-update.
+        assert.equal(isOtaPollDone('available', true), false);
+        assert.equal(isOtaPollDone('idle', true), false);
+        assert.equal(isOtaPollDone('checking', true), false);
+        assert.equal(isOtaPollDone('downloading', true), false);
+        assert.equal(isOtaPollDone('writing-fw', true), false);
+        assert.equal(isOtaPollDone('writing-fs', true), false);
+        assert.equal(isOtaPollDone('rebooting', true), false);
+    });
+    test('update flow still ends on a real terminal result', () => {
+        assert.equal(isOtaPollDone('uptodate', true), true);
+        assert.equal(isOtaPollDone('failed', true), true);
     });
 });
