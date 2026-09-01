@@ -118,8 +118,15 @@ class ColorWheel {
         this.drawWheel();
         this.attachEvents();
 
-        // Set initial position to center (white)
-        this.updateColor(this.centerX, this.centerY);
+        // Set initial position to center (white) - via renderSelector(), not
+        // updateColor(), specifically so constructing a ColorWheel never sends
+        // anything. updateColor()'s tail is sendColor(), so simply switching to the
+        // Color tab to look at the current color previously overwrote it with white
+        // the instant the wheel was built, before the real color (pendingBroadcastColor/
+        // setFromBroadcast) had a chance to apply. At the exact center, distance is 0,
+        // so updateColor's hue/saturation math resolves to white regardless of hue
+        // anyway - (255, 255, 255) is that same result, just without the send.
+        this.renderSelector(this.centerX, this.centerY, 255, 255, 255);
     }
 
     drawWheel() {
