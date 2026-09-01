@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <map>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -19,12 +20,28 @@ using WebRequestMethod = int;
 constexpr WebRequestMethod HTTP_GET = 1;
 constexpr WebRequestMethod HTTP_POST = 2;
 
+// Minimal stand-in for the real library's AsyncWebHeader - just enough to match
+// AsyncWebServerRequest::getHeader()'s return shape (a pointer with ->value()).
+class AsyncWebHeader
+{
+   public:
+    explicit AsyncWebHeader(const String& value) : value_(value) {}
+    const String& value() const { return value_; }
+
+   private:
+    String value_;
+};
+
 class AsyncWebServerRequest
 {
    public:
     // --- Test setup ---
     void setArg(const char* name, const String& value) { args[name] = value; }
     void setHost(const String& h) { hostValue = h; }
+    void setHeader(const char* name, const String& value)
+    {
+        headers[name] = std::unique_ptr<AsyncWebHeader>(new AsyncWebHeader(value));
+    }
 
     // --- Production API (called by route handlers) ---
     String arg(const char* name) const
@@ -33,6 +50,14 @@ class AsyncWebServerRequest
         return it != args.end() ? it->second : String("");
     }
     String host() const { return hostValue; }
+    bool hasHeader(const char* name) const { return headers.find(name) != headers.end(); }
+    // Real signature returns const AsyncWebHeader* (nullptr if absent) - callers must
+    // check hasHeader() first, same as the real library's own header comment.
+    const AsyncWebHeader* getHeader(const char* name) const
+    {
+        auto it = headers.find(name);
+        return it != headers.end() ? it->second.get() : nullptr;
+    }
 
     void send(int code, const String& contentType, const String& content = String())
     {
@@ -62,6 +87,7 @@ class AsyncWebServerRequest
 
    private:
     std::map<std::string, String> args;
+    std::map<std::string, std::unique_ptr<AsyncWebHeader>> headers;
     String hostValue;
 };
 
