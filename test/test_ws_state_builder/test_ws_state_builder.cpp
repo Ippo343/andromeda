@@ -24,6 +24,7 @@ DeviceState makeState()
     state.effectName = "Aurora";
     state.runningModel = ModelInfo{768, "L70"};
     state.configuredModel = ModelInfo{768, "L70"};
+    state.factoryConfigured = true;
     state.fps = 42.5f;
     state.deviceUid = "A1B2";
     state.runningDeviceName = "Andromeda-A1B2";
@@ -141,6 +142,30 @@ void test_reboot_required_true_when_models_differ()
     TEST_ASSERT_EQUAL_STRING("L10", doc["model"]["configured"]["name"]);
 }
 
+void test_factory_configured_true_round_trips()
+{
+    DeviceState state = makeState();
+    state.factoryConfigured = true;
+    char buf[WsStateBuilder::JSON_CAPACITY];
+    size_t len = WsStateBuilder::buildStateJson(state, buf, sizeof(buf));
+
+    StaticJsonDocument<WsStateBuilder::JSON_CAPACITY> doc;
+    deserializeJson(doc, buf, len);
+    TEST_ASSERT_TRUE(doc["model"]["factoryConfigured"].as<bool>());
+}
+
+void test_factory_configured_false_round_trips()
+{
+    DeviceState state = makeState();
+    state.factoryConfigured = false;
+    char buf[WsStateBuilder::JSON_CAPACITY];
+    size_t len = WsStateBuilder::buildStateJson(state, buf, sizeof(buf));
+
+    StaticJsonDocument<WsStateBuilder::JSON_CAPACITY> doc;
+    deserializeJson(doc, buf, len);
+    TEST_ASSERT_FALSE(doc["model"]["factoryConfigured"].as<bool>());
+}
+
 void test_models_array_matches_full_registry()
 {
     DeviceState state = makeState();
@@ -237,6 +262,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_effect_name_embedded_verbatim);
     RUN_TEST(test_reboot_required_false_when_models_match);
     RUN_TEST(test_reboot_required_true_when_models_differ);
+    RUN_TEST(test_factory_configured_true_round_trips);
+    RUN_TEST(test_factory_configured_false_round_trips);
     RUN_TEST(test_models_array_matches_full_registry);
     RUN_TEST(test_effects_array_matches_full_registry);
     RUN_TEST(test_device_fields_round_trip);

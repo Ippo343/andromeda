@@ -37,6 +37,13 @@ struct DeviceState
     const char* effectName;
     ModelInfo runningModel;
     ModelInfo configuredModel;
+    // False when the device has never been factory-configured (FactoryConfig::
+    // isConfigured() == false) - it's running whatever fallback model geometry.cpp
+    // picked (currently SINGLE_STRIP_TEST_DEVICE), which renders as a plausible-looking
+    // "correctly configured" device with no other signal that it isn't. See #105/#134's
+    // sibling: a factory-flashed unit should never actually reach this state, but a
+    // customer's own device should still be told clearly if it somehow does.
+    bool factoryConfigured;
     float fps;
     const char* deviceUid;
     const char* runningDeviceName;
@@ -84,6 +91,7 @@ inline size_t buildStateJson(const DeviceState& state, char* outBuffer, size_t o
     configured["id"] = state.configuredModel.id;
     configured["name"] = state.configuredModel.name;
     model["rebootRequired"] = (state.runningModel.id != state.configuredModel.id);
+    model["factoryConfigured"] = state.factoryConfigured;
 
     JsonArray models = doc.createNestedArray("models");
     for (size_t i = 0; i < NUM_MODELS; i++)
