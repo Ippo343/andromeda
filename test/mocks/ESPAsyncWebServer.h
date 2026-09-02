@@ -125,6 +125,11 @@ class AsyncWebSocketClient
     // Test helper: captures the auto-ping period the production code configured.
     uint16_t lastKeepAlivePeriodSeconds = 0;
     void keepAlivePeriod(uint16_t seconds) { lastKeepAlivePeriodSeconds = seconds; }
+
+    // Test helper: records whether the production code closed this client
+    // (e.g. rejecting a cross-origin WebSocket handshake).
+    bool wasClosed = false;
+    void close() { wasClosed = true; }
 };
 
 using AwsEventHandler = std::function<void(class AsyncWebSocket*, AsyncWebSocketClient*,
@@ -143,10 +148,16 @@ class AsyncWebSocket
         if (eventHandler) eventHandler(this, nullptr, WS_EVT_DATA, &info, data, len);
     }
 
-    // Test helper: simulate a new client connecting.
+    // Test helper: simulate a new client connecting. The real library passes
+    // the HTTP upgrade request as the event `arg` for WS_EVT_CONNECT, so the
+    // overload taking a request lets tests exercise the origin check.
     void simulateConnect(AsyncWebSocketClient* client)
     {
         if (eventHandler) eventHandler(this, client, WS_EVT_CONNECT, nullptr, nullptr, 0);
+    }
+    void simulateConnect(AsyncWebSocketClient* client, AsyncWebServerRequest* request)
+    {
+        if (eventHandler) eventHandler(this, client, WS_EVT_CONNECT, request, nullptr, 0);
     }
 
     // Test helper: captures what the production code broadcast via textAll(...).
