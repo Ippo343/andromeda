@@ -143,6 +143,74 @@ void test_jitter_is_added_to_backoff()
                      WifiRecovery::Action::Reconnect);
 }
 
+// --- postEvent() queue: the WiFi-task -> monitor-task handoff --------------
+
+// Good weather: an outage posted through the queue drives exactly the same
+// reconnect schedule as a direct onDisconnected() call.
+void test_queued_disconnect_drives_the_reconnect_schedule()
+{
+    WifiRecovery r;
+    r.postEvent(WifiRecovery::Event::Disconnected, 1000);
+
+    // tick() drains the event first, then decides - first tick reconnects
+    // immediately, next attempt is scheduled +INITIAL_BACKOFF_MS.
+    TEST_ASSERT_TRUE(r.tick(1000) == WifiRecovery::Action::Reconnect);
+    TEST_ASSERT_TRUE(r.tick(1000 + WifiRecovery::INITIAL_BACKOFF_MS - 1) ==
+                     WifiRecovery::Action::None);
+    TEST_ASSERT_TRUE(r.tick(1000 + WifiRecovery::INITIAL_BACKOFF_MS) ==
+                     WifiRecovery::Action::Reconnect);
+}
+
+// Bad weather: the interleaving the direct-call version raced on - tick()
+// evaluates mid-outage while the WiFi task lands a Connected. Through the
+// queue, tick() drains BOTH events before deciding, so a link that has come
+// back is never told to reconnect.
+void test_connect_landing_before_a_tick_cancels_the_pending_reconnect()
+{
+    WifiRecovery r;
+    r.postEvent(WifiRecovery::Event::Disconnected, 1000);
+    r.tick(1000);  // reconnect once, backoff now scheduled at +INITIAL_BACKOFF_MS
+
+    // The link comes back before the backoff window is due.
+    r.postEvent(WifiRecovery::Event::Connected, 1200);
+
+    // The next tick, even well past when a reconnect would have been due, must
+    // NOT fire one - the queue applied Connected first.
+    TEST_ASSERT_TRUE(r.tick(1000 + WifiRecovery::MAX_BACKOFF_MS) == WifiRecovery::Action::None);
+}
+
+// Bad weather: a fresh 1-second glitch must start its own dead-time clock, not
+// inherit the previous (recovered) outage's - otherwise it jumps straight to
+// AP fallback.
+void test_a_new_outage_after_recovery_does_not_inherit_the_old_dead_time()
+{
+    WifiRecovery r;
+    r.postEvent(WifiRecovery::Event::Disconnected, 1000);
+    r.tick(1000);
+    r.postEvent(WifiRecovery::Event::Connected, 1100);
+    r.tick(1100);
+
+    // New outage 4 minutes later; tick 10s in - well under the 5-minute dead
+    // time measured from THIS outage's start.
+    const milliseconds_t newOutage = 1100 + 4UL * 60 * 1000;
+    r.postEvent(WifiRecovery::Event::Disconnected, newOutage);
+    TEST_ASSERT_TRUE(r.tick(newOutage + 10000) != WifiRecovery::Action::EnterAPMode);
+}
+
+// Events are applied in the order posted - a Disconnected then Connected in
+// the same drain leaves the machine connected (last wins), and vice versa.
+void test_queue_applies_events_in_order()
+{
+    WifiRecovery r;
+    r.postEvent(WifiRecovery::Event::Disconnected, 1000);
+    r.postEvent(WifiRecovery::Event::Connected, 1001);
+    TEST_ASSERT_TRUE(r.tick(5000) == WifiRecovery::Action::None);  // ends connected
+
+    r.postEvent(WifiRecovery::Event::Connected, 6000);
+    r.postEvent(WifiRecovery::Event::Disconnected, 6001);
+    TEST_ASSERT_TRUE(r.tick(6001) == WifiRecovery::Action::Reconnect);  // ends disconnected
+}
+
 int main(int argc, char** argv)
 {
     UNITY_BEGIN();
@@ -158,6 +226,11 @@ int main(int argc, char** argv)
     RUN_TEST(test_onDisconnected_is_idempotent_mid_outage);
     RUN_TEST(test_millis_rollover_does_not_break_scheduling);
     RUN_TEST(test_jitter_is_added_to_backoff);
+
+    RUN_TEST(test_queued_disconnect_drives_the_reconnect_schedule);
+    RUN_TEST(test_connect_landing_before_a_tick_cancels_the_pending_reconnect);
+    RUN_TEST(test_a_new_outage_after_recovery_does_not_inherit_the_old_dead_time);
+    RUN_TEST(test_queue_applies_events_in_order);
 
     return UNITY_END();
 }
