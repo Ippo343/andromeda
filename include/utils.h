@@ -12,6 +12,17 @@
 #define SECONDS *1000
 #define MINUTES *60 SECONDS
 
+// FreeRTOS's pdMS_TO_TICKS(x) expands to ((x) * configTICK_RATE_HZ) / 1000
+// evaluated in 32-bit TickType_t, so the intermediate product overflows for
+// large delays even when the resulting tick count fits: pdMS_TO_TICKS(24h)
+// computes 86_400_000 * 1000 mod 2^32 / 1000 = ~500654 ticks (~8m21s) instead
+// of 86_400_000. Use this for any vTaskDelay where ms * configTICK_RATE_HZ can
+// exceed 2^32 (ms above ~4.29e6). The firmware runs a 1 kHz FreeRTOS tick
+// (CONFIG_FREERTOS_HZ=1000, static_assert'd at the call site), so one tick is
+// one millisecond - the whole job here is doing it at a width that doesn't
+// wrap.
+constexpr uint32_t ticksFromMs(uint64_t ms) { return static_cast<uint32_t>(ms); }
+
 // This is a helper to allow negative indexing in vectors, like in Python.
 template <typename T>
 inline auto& py_get(T& container, int index)

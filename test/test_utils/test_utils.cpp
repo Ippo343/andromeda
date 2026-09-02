@@ -208,6 +208,36 @@ void test_seed_rngs_runs_and_random_still_works()
 }
 
 // ---------------------------------------------------------------------------
+// ticksFromMs
+// ---------------------------------------------------------------------------
+
+void test_ticks_from_ms_matches_pdms_to_ticks_for_delays_in_use()
+{
+    // Good weather: for every delay the firmware actually passes today, the
+    // 64-bit helper must produce the same tick count the 1 kHz FreeRTOS tick
+    // would - a tick is a millisecond, so it is an identity.
+    TEST_ASSERT_EQUAL_UINT32(0u, ticksFromMs(0));
+    TEST_ASSERT_EQUAL_UINT32(1u, ticksFromMs(1));
+    TEST_ASSERT_EQUAL_UINT32(10000u, ticksFromMs(10000));  // OtaAutoCheck settle delay
+    TEST_ASSERT_EQUAL_UINT32(60000u, ticksFromMs(60000));  // AP-rejoin retry interval
+}
+
+void test_ticks_from_ms_does_not_overflow_past_the_32bit_intermediate()
+{
+    // Bad weather: pdMS_TO_TICKS(x) is (x * configTICK_RATE_HZ) / 1000 in
+    // 32-bit TickType_t, so the *intermediate* product wraps once x*1000
+    // exceeds 2^32 - even though the final tick count fits in 32 bits fine.
+    // 4294968 is the first millisecond value whose *1000 crosses 2^32
+    // (4294968000 > 4294967296); the buggy macro returns 704 for it.
+    TEST_ASSERT_EQUAL_UINT32(4294968u, ticksFromMs(4294968ull));
+
+    // The real regression: the OTA auto-check's 24-hour re-check delay. The
+    // macro turns this into ~500654 ticks (~8m21s), hammering GitHub ~172x a
+    // day instead of once.
+    TEST_ASSERT_EQUAL_UINT32(86400000u, ticksFromMs(24ull * 60 * 60 * 1000));
+}
+
+// ---------------------------------------------------------------------------
 // rateToThreshold
 // ---------------------------------------------------------------------------
 
@@ -338,6 +368,9 @@ int main(int argc, char** argv)
     RUN_TEST(test_rand_sign_randomize_never_zero);
 
     RUN_TEST(test_seed_rngs_runs_and_random_still_works);
+
+    RUN_TEST(test_ticks_from_ms_matches_pdms_to_ticks_for_delays_in_use);
+    RUN_TEST(test_ticks_from_ms_does_not_overflow_past_the_32bit_intermediate);
 
     RUN_TEST(test_rate_to_threshold_zero_dt_is_zero);
     RUN_TEST(test_rate_to_threshold_scales_linearly_with_dt);
