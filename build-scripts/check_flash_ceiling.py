@@ -45,6 +45,12 @@ def check_flash_ceiling(source, target, env):
         return
 
     pct = used / partition * 100.0
+    # Print the denominator explicitly. This gate is only meaningful if
+    # upload.maximum_size reflects the app slot in board_build.partitions
+    # (1.625 MB per partitions/andromeda_4mb.csv) rather than the stock
+    # esp32dev table (1.25 MB) - if the platform ever stops updating it, the
+    # ceiling silently measures against the wrong number and the percentage
+    # below is wrong in the permissive direction.
     summary = "%d / %d bytes = %.1f%% of app partition (ceiling %.1f%%)" % (
         used, partition, pct, ceiling)
 

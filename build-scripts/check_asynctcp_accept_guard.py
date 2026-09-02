@@ -16,10 +16,18 @@ layer still green. This runs after each hardware link, where the library is
 resolved under .pio/libdeps/<env>/, and fails the build if the accept
 trampoline is present but unguarded.
 
-Not wired for native/native_runtime: they don't pull AsyncTCP. If the
-function can't be located at all (a future upstream rename), this warns
-loudly but does not fail - the compile itself is the real signal, and a
-heuristic shouldn't hard-block a hardware build on its own.
+Whether an env is expected to have AsyncTCP is read from its lib_deps, not
+inferred from whether the source was found: an env that declares the dependency
+but whose AsyncTCP.cpp can't be located fails the build, because "the library
+moved" and "this env doesn't use the library" must not look the same. Envs that
+genuinely don't pull it (native/native_runtime) print an explicit
+ACCEPT_GUARD_CHECK_SKIPPED line, so a silently-disabled guard is greppable in
+the build log.
+
+If the *function* can't be located inside a source that was found (a future
+upstream rename), this warns loudly but does not fail - the compile itself is
+the real signal, and a heuristic shouldn't hard-block a hardware build on its
+own.
 """
 
 import glob
@@ -100,6 +108,25 @@ def _check_source(path):
     return True
 
 
+def _expects_asynctcp(env):
+    """Does this env actually declare AsyncTCP as a dependency?
+
+    The check used to infer this from whether the glob found anything, which
+    made "the library moved" and "this env doesn't use the library"
+    indistinguishable - so a lib_deps rename, an upstream library.json name
+    change, or a half-populated libdeps dir silently switched the #107 crash
+    gate off with every test layer still green, including on the release build.
+    lib_deps is the declaration of intent; ask it instead.
+    """
+    try:
+        deps = env.GetProjectOption("lib_deps", [])
+    except Exception:
+        return False
+    if isinstance(deps, str):
+        deps = [deps]
+    return any("asynctcp" in str(d).lower() for d in deps)
+
+
 def check_asynctcp_accept_guard(source, target, env):
     libdeps = env.subst("$PROJECT_LIBDEPS_DIR")
     pioenv = env.subst("$PIOENV")
@@ -117,8 +144,22 @@ def check_asynctcp_accept_guard(source, target, env):
                 candidates.append(path)
 
     if not candidates:
-        # Native envs, or libs not resolved - nothing to check.
-        return
+        if not _expects_asynctcp(env):
+            # Native envs and anything else that genuinely doesn't pull
+            # AsyncTCP. Say so out loud - a skip that prints nothing is
+            # indistinguishable from a check that passed.
+            print("ACCEPT_GUARD_CHECK_SKIPPED: %s does not depend on AsyncTCP" % pioenv)
+            return
+
+        print("")
+        print("*** ASYNCTCP ACCEPT-GUARD CHECK COULD NOT RUN (issue #107)")
+        print("*** %s declares AsyncTCP in lib_deps, but no AsyncTCP.cpp was found under" % pioenv)
+        print("*** " + os.path.join(libdeps, pioenv))
+        print("*** so the NULL-pcb guard was never verified. This build could contain the")
+        print("*** crash the library swap exists to prevent. Failing rather than passing")
+        print("*** silently: check the lib_deps spec and that libdeps is fully resolved.")
+        print("")
+        sys.exit(1)
 
     ok = all(_check_source(path) for path in candidates)
     if not ok:
