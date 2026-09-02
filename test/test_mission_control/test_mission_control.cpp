@@ -98,6 +98,9 @@ class MissionControlTestAccess
     static void setFadeOutStartValue(MissionControl& mc, milliseconds_t t) { mc.fadeOutStart = t; }
     static void setTransitionScheduled(MissionControl& mc, bool v) { mc.transitionScheduled = v; }
     static bool transitionScheduled(MissionControl& mc) { return mc.transitionScheduled; }
+    // update() republishes this each tick; tests that set effect/mode directly
+    // (bypassing update()) call it explicitly to refresh the network snapshot.
+    static void publishEffectSnapshot(MissionControl& mc) { mc.publishEffectSnapshot(); }
 
     static RenderMode getMode(MissionControl& mc) { return mc.mode; }
     static void setMode(MissionControl& mc, RenderMode m) { mc.mode = m; }
@@ -172,6 +175,10 @@ void setUp()
     MissionControlTestAccess::setEffect(mc, new StaticColor());
     MissionControlTestAccess::setAnimation(mc, nullptr);
     MissionControlTestAccess::setMode(mc, RenderMode::FX_LOOP);
+    // Keep the network-visible snapshot in step with the reset state, so a
+    // test reading getTargetEffectName()/isColorActive() before its first
+    // update() doesn't see a value left by the previous test.
+    MissionControlTestAccess::publishEffectSnapshot(mc);
 }
 void tearDown() {}
 
@@ -604,6 +611,38 @@ void test_queue_effect_command_transitions_to_selected_effect_and_holds()
     MissionControlTestAccess::cancelTransition(mc);
 }
 
+// Regression for the use-after-free (#audit): getTargetEffectName() /
+// isColorActive() are called from the web-server / async_tcp tasks while the
+// render task deletes `effect` in finishTransition(). They now read a
+// render-task-published snapshot of static-literal effect names, never the
+// live pointer - so a colour-wheel drag landing during a transition can't
+// deref freed memory. Walk a full transition (including the delete) and
+// assert the snapshot is always a valid, expected string.
+void test_effect_snapshot_tracks_a_full_transition_including_the_delete()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setEffect(mc, new ElectricSparks());
+    MissionControlTestAccess::setMode(mc, RenderMode::FX_LOOP);
+    MissionControlTestAccess::publishEffectSnapshot(mc);
+    TEST_ASSERT_EQUAL_STRING("Electric Sparks", mc.getEffectName());
+
+    TEST_ASSERT_TRUE(
+        mc.queueWebCommand(Command::Effect(static_cast<uint8_t>(EffectId::NinjaStar))));
+    mc.update(0);
+    TEST_ASSERT_EQUAL(RenderMode::TRANSITIONING, MissionControlTestAccess::getMode(mc));
+    // Mid-transition the snapshot already names the incoming effect, and a
+    // COLOR write must NOT be routed into the outgoing effect (about to be
+    // freed).
+    TEST_ASSERT_EQUAL_STRING("Ninja Star", mc.getTargetEffectName());
+    TEST_ASSERT_FALSE(mc.isColorActive());
+
+    // Completing the transition frees the outgoing ElectricSparks. The
+    // snapshot must now name the new effect, not dangle.
+    MissionControlTestAccess::finishTransition(mc);
+    TEST_ASSERT_EQUAL_STRING("Ninja Star", mc.getEffectName());
+    TEST_ASSERT_EQUAL_STRING("Ninja Star", mc.getTargetEffectName());
+}
+
 // getTargetEffectName() names the effect the device is committed to: the
 // pending one mid-transition, the current one otherwise. Comms wires this to
 // the "effect" state field so the web dropdown updates the instant a
@@ -614,6 +653,7 @@ void test_target_effect_name_reports_pending_effect_during_transition()
     ElectricSparks* current = new ElectricSparks();
     MissionControlTestAccess::setEffect(mc, current);
     MissionControlTestAccess::setMode(mc, RenderMode::FX_LOOP);
+    MissionControlTestAccess::publishEffectSnapshot(mc);
 
     // Not transitioning: target == current.
     TEST_ASSERT_EQUAL_STRING(current->GetName(), mc.getTargetEffectName());
@@ -1366,6 +1406,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_color_command_mid_transition_cancels_transition_and_applies_color);
     RUN_TEST(test_queue_effect_command_transitions_to_selected_effect_and_holds);
     RUN_TEST(test_target_effect_name_reports_pending_effect_during_transition);
+    RUN_TEST(test_effect_snapshot_tracks_a_full_transition_including_the_delete);
     RUN_TEST(test_queue_effect_command_with_out_of_range_id_is_ignored);
     RUN_TEST(test_queue_model_command_updates_factory_config);
     RUN_TEST(test_queue_device_name_command_persists_via_device_identity);
