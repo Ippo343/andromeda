@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "ota-start-gate.h"
+
 // Over-the-air firmware + filesystem updates (#63). Pulls a release manifest
 // from GitHub, compares it against FIRMWARE_VERSION_CODE, and - on request -
 // downloads and flashes the inactive OTA slot, then reboots.
@@ -42,14 +44,15 @@ struct Status
 // Create the status lock. Call once from setup() before any task is spawned.
 void begin();
 
-// Spawn a background check against GitHub (channel from OtaConfig). No-op if a
-// check/update is already running or WiFi isn't connected in station mode.
-void startCheck();
+// Spawn a background check against GitHub (channel from OtaConfig). Returns
+// why it didn't start (WiFi down, low heap, a task already running) so the
+// caller can answer with a real HTTP status instead of a blanket "started".
+OtaStartGate::Outcome startCheck();
 
-// Spawn the background download + flash. No-op unless idle/checked and WiFi is
-// up. Re-checks GitHub first (download URLs are short-lived), so it's safe to
-// call without a prior startCheck(); reports UpToDate if nothing is newer.
-void startUpdate();
+// Spawn the background download + flash. Re-checks GitHub first (download URLs
+// are short-lived), so it's safe to call without a prior startCheck(); reports
+// UpToDate if nothing is newer. Same Outcome contract as startCheck().
+OtaStartGate::Outcome startUpdate();
 
 // Thread-safe snapshot of the current state.
 Status status();

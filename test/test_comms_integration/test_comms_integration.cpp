@@ -58,12 +58,23 @@ namespace OtaUpdaterStub
 {
 int startUpdateCalls = 0;
 int startCheckCalls = 0;
+// What the stubbed start* calls report back - the route maps this to the HTTP
+// status, so a test can force a non-Started outcome to check that mapping.
+OtaStartGate::Outcome nextOutcome = OtaStartGate::Outcome::Started;
 }  // namespace OtaUpdaterStub
 namespace OtaUpdater
 {
 void begin() {}
-void startCheck() { ++OtaUpdaterStub::startCheckCalls; }
-void startUpdate() { ++OtaUpdaterStub::startUpdateCalls; }
+OtaStartGate::Outcome startCheck()
+{
+    ++OtaUpdaterStub::startCheckCalls;
+    return OtaUpdaterStub::nextOutcome;
+}
+OtaStartGate::Outcome startUpdate()
+{
+    ++OtaUpdaterStub::startUpdateCalls;
+    return OtaUpdaterStub::nextOutcome;
+}
 Status status() { return Status{State::Idle, 0, 0, "", ""}; }
 bool updateAvailable() { return false; }
 }  // namespace OtaUpdater
@@ -813,6 +824,25 @@ void test_ota_and_ota_check_return_202_and_kick_the_updater()
     TEST_ASSERT_EQUAL_INT(1, OtaUpdaterStub::startCheckCalls);
 }
 
+void test_ota_route_maps_a_non_started_outcome_to_its_http_status()
+{
+    OtaUpdaterStub::nextOutcome = OtaStartGate::Outcome::Busy;
+
+    AsyncWebServerRequest busy;
+    auto* handler = CommsTestAccess::server(Comms::Instance()).findHandler("/ota", HTTP_POST);
+    (*handler)(&busy);
+    TEST_ASSERT_EQUAL_INT(409, busy.responseCode);
+
+    OtaUpdaterStub::nextOutcome = OtaStartGate::Outcome::NoWifi;
+    AsyncWebServerRequest down;
+    auto* checkHandler =
+        CommsTestAccess::server(Comms::Instance()).findHandler("/ota-check", HTTP_POST);
+    (*checkHandler)(&down);
+    TEST_ASSERT_EQUAL_INT(503, down.responseCode);
+
+    OtaUpdaterStub::nextOutcome = OtaStartGate::Outcome::Started;  // don't leak to later tests
+}
+
 void test_ota_rejects_cross_origin_post()
 {
     OtaUpdaterStub::startUpdateCalls = 0;
@@ -901,6 +931,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_reset_rejects_cross_origin_post);
 
     RUN_TEST(test_ota_and_ota_check_return_202_and_kick_the_updater);
+    RUN_TEST(test_ota_route_maps_a_non_started_outcome_to_its_http_status);
     RUN_TEST(test_ota_rejects_cross_origin_post);
     RUN_TEST(test_ota_channel_persists_choice_and_rechecks);
     RUN_TEST(test_ota_channel_rejects_cross_origin_post);
