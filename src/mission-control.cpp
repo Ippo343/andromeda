@@ -9,6 +9,24 @@
 #include <esp_system.h>  // esp_restart()
 #endif
 
+namespace
+{
+// True once `now` has reached `deadline`. Rollover-safe: both are millis()-
+// domain stamps at most ~10 minutes apart here, so the unsigned difference is
+// either a small positive number (reached) or - if `now` hasn't got there yet,
+// including the case where `now` has wrapped past 2^32 and `deadline` hasn't -
+// within a hair of the type's maximum. Same idiom as wifi-recovery.h.
+// A raw `now >= deadline` breaks at the millis() rollover: the deadline
+// (computed by addition before the wrap) stays huge while `now` restarts near
+// 0, so every comparison flips and the render loop either transition-storms or
+// freezes at brightness 0 for the next ~49 days.
+constexpr milliseconds_t HALF_RANGE = ~0UL / 2;  // milliseconds_t is unsigned long
+inline bool reached(milliseconds_t now, milliseconds_t deadline)
+{
+    return (now - deadline) < HALF_RANGE;
+}
+}  // namespace
+
 namespace BrightnessConfig
 {
 static const char* PREFS_NAMESPACE = "device";
@@ -261,6 +279,7 @@ void MissionControl::setNextTransition()
     fadeInEnd = effectStart + FADE_IN_DURATION;
     fadeOutStart = fadeInEnd + random(MIN_EFFECT_DURATION, MAX_EFFECT_DURATION);
     nextTransition = fadeOutStart + FADE_OUT_DURATION;
+    transitionScheduled = true;
 
     Log.noticeln("Next transition in %lu ms", nextTransition - effectStart);
 }
@@ -274,23 +293,31 @@ void MissionControl::setNextTransition()
 //
 uint8_t MissionControl::calcBrightness(milliseconds_t t)
 {
+    // A held effect sits at its plateau forever - there is no scheduled fade
+    // out to ramp towards. Handled explicitly rather than via a sentinel
+    // fadeOutStart, which a rollover-safe comparison can't represent.
+    if (mode == RenderMode::HOLDING) return dim8_raw(constrain(maxBrightness, 0, 255));
+
     uint8_t brightness = 0;
 
+    // All four comparisons are rollover-safe (see reached()): a raw t >= /
+    // t < on these absolute stamps flips at the millis() wrap.
+    //
     // Most of the time is spent in the middle so test that first
     // we are all about microseconds in this highly efficient architecture
-    if (t >= fadeInEnd && t <= fadeOutStart) { brightness = this->maxBrightness; }
+    if (reached(t, fadeInEnd) && !reached(t, fadeOutStart)) { brightness = this->maxBrightness; }
     // t can be older than effectStart: update()'s t is captured by the caller before
     // processWebCommands() runs, and a command handled there (e.g. NEXT) can call
     // handleTransition() synchronously, resetting effectStart to a later millis()
     // before this same update() call reaches here. Without this guard, t - effectStart
-    // underflows (both are uint32_t) and produces a large bogus brightness instead of 0.
-    else if (t < effectStart) { brightness = 0; }
-    else if (t < fadeInEnd)
+    // underflows and produces a large bogus brightness instead of 0.
+    else if (!reached(t, effectStart)) { brightness = 0; }
+    else if (!reached(t, fadeInEnd))
     {
         milliseconds_t dt = (t - effectStart);
         brightness = map(dt, 0, FADE_IN_DURATION, 0, this->maxBrightness);
     }
-    else if (t > fadeOutStart)
+    else if (reached(t, fadeOutStart))
     {
         milliseconds_t dt = (t - fadeOutStart);
         brightness = map(dt, 0, FADE_OUT_DURATION, this->maxBrightness, 0);
@@ -332,13 +359,13 @@ void MissionControl::updateTransition(milliseconds_t t)
     // earlier in this same update() tick (e.g. NEXT) can call
     // handleTransition(), which resets transitionWindow.start to a fresh,
     // later millis() before this point is reached.
-    if (t < transitionWindow.start)
+    if (!reached(t, transitionWindow.start))
     {
         FastLED.setBrightness(0);
         return;
     }
 
-    if (t < transitionWindow.preDelayEnd)
+    if (!reached(t, transitionWindow.preDelayEnd))
     {
         FastLED.setBrightness(0);
         return;
@@ -361,7 +388,7 @@ void MissionControl::updateTransition(milliseconds_t t)
         return;
     }
 
-    if (t < transitionWindow.animationFinishedAt + POST_ANIMATION_DELAY)
+    if (!reached(t, transitionWindow.animationFinishedAt + POST_ANIMATION_DELAY))
     {
         FastLED.setBrightness(0);
         return;
@@ -438,12 +465,12 @@ void MissionControl::handleTransition(AbstractEffect* nextEffect, bool playAnima
 
 void MissionControl::holdEffect()
 {
-    // Set nextTransition to the maximum possible value,
-    // so that it's never reached and the current effect is held forever.
-    // You also need to set the timing of the fade out ramp to hold the brightness at max.
-    // Note that using Next from the web UI resets the transition and restarts the cycle.
-    nextTransition = ~0UL;
-    fadeOutStart = ~0UL;
+    // Drop the scheduled transition entirely rather than pushing its deadline
+    // to ~0UL: a rollover-safe "have we reached nextTransition?" can't tell a
+    // sentinel deadline from a real one. calcBrightness() special-cases
+    // HOLDING to keep the plateau brightness. Note that using Next from the
+    // web UI resets the transition and restarts the cycle.
+    transitionScheduled = false;
 
     // Can't flip to HOLDING mid-transition without abandoning the in-flight
     // animation/effect swap - defer it; finishTransition() re-applies the
@@ -476,6 +503,7 @@ void MissionControl::resumeEffect()
 
     fadeOutStart = now + remaining;
     nextTransition = fadeOutStart + FADE_OUT_DURATION;
+    transitionScheduled = true;
 
     holdPending = false;
     if (mode != RenderMode::TRANSITIONING) mode = RenderMode::FX_LOOP;
@@ -548,7 +576,7 @@ void MissionControl::update(milliseconds_t t)
         // (the web server is up before the first update() call) can set nextTransition far
         // enough into the future that "t >= nextTransition" below never catches this - so
         // check for the missing effect explicitly rather than relying on that fallthrough.
-        if (t >= nextTransition || !effect)
+        if ((transitionScheduled && reached(t, nextTransition)) || !effect)
         {
             handleTransition();
             return;
