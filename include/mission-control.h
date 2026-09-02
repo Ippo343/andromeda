@@ -235,21 +235,24 @@ class MissionControl
     // bit so the web UI's Hold button flips the instant the command is
     // accepted, instead of lagging behind for the rest of the transition.
     inline bool isHoldPending() const { return holdPending; }
-    inline const char* getEffectName() const { return effect ? effect->GetName() : "none"; }
 
-    // The effect the device is committed to showing: the incoming (pending)
-    // effect while a transition to a specific effect is in flight, otherwise
-    // the current one. Comms sends this as the wire "effect" name so the web
-    // UI's effect dropdown reflects a just-accepted selection immediately,
-    // instead of lagging behind the outgoing effect for the whole transition
-    // (mirrors how isHoldPending() feeds the wire "holding" bit). Falls back
-    // to the current effect when the transition target is a random effect,
-    // which isn't instantiated yet and has no name to show.
-    inline const char* getTargetEffectName() const
-    {
-        if (mode == RenderMode::TRANSITIONING && pendingEffect) return pendingEffect->GetName();
-        return getEffectName();
-    }
+    // The name of the effect the device is committed to showing: the incoming
+    // (pending) effect while a transition to a specific effect is in flight,
+    // otherwise the current one - so the web UI's effect dropdown reflects a
+    // just-accepted selection immediately instead of lagging the outgoing
+    // effect for the whole transition (mirrors how isHoldPending() feeds the
+    // wire "holding" bit).
+    //
+    // Reads a snapshot the render task republishes at the end of every update()
+    // tick, NOT the live `effect`/`pendingEffect` pointers: those are owned and
+    // delete()d by the render task in finishTransition()/cancelTransition(),
+    // and these accessors are called from the web-server / async_tcp tasks. A
+    // direct `effect->GetName()` there is a virtual call through a pointer the
+    // other core may be freeing - the exact UAF a colour-wheel drag during a
+    // transition triggered. GetName() returns a static string literal, so an
+    // atomic<const char*> is a safe hand-off. At most one frame stale.
+    inline const char* getTargetEffectName() const { return effectNameSnapshot.load(); }
+    inline const char* getEffectName() const { return effectNameSnapshot.load(); }
 
     // Consumes (reads and clears) the flag set whenever broadcast-worthy state
     // changes, so Comms can poll it from its own task to know when to push a
@@ -262,16 +265,19 @@ class MissionControl
 
     CRGB staticColor = CRGB::White;
 
-    // False during TRANSITIONING even if the outgoing effect is a StaticColor:
-    // that effect isn't on screen (the animation is) and is about to be
-    // deleted by finishTransition(), so treating it as "active" here would
-    // route a COLOR command to setLiveColor()/staticColor instead of
-    // transitionToStaticColor() - silently writing into an effect that's
-    // discarded when the transition lands instead of cancelling it.
-    inline bool isColorActive() const
-    {
-        return mode != RenderMode::TRANSITIONING && effect && effect->wantsLiveColorUpdates();
-    }
+    // Whether a live COLOR write goes straight into the current effect. False
+    // during TRANSITIONING even if the outgoing effect is a StaticColor: that
+    // effect isn't on screen (the animation is) and is about to be deleted by
+    // finishTransition(), so treating it as "active" would route a COLOR
+    // command into an effect that's discarded when the transition lands
+    // instead of cancelling it.
+    //
+    // Snapshot-backed for the same reason as getTargetEffectName() - this is
+    // read from the network tasks, which must not touch the render task's
+    // `effect` pointer. The render-task-internal caller
+    // (processWebCommands()'s COLOR case) uses isColorActiveLive() instead, so
+    // its route decision is never a frame stale.
+    inline bool isColorActive() const { return colorActiveSnapshot.load(); }
 
     // Fast path for isColorActive() callers: update() re-reads staticColor
     // every frame and pushes it into the live effect, so a color drag can
@@ -293,6 +299,23 @@ class MissionControl
     }
 
    private:
+    // Live version of isColorActive(), reading the real `effect` pointer.
+    // Only safe on the render task (the pointer's owner) - used by
+    // processWebCommands() so its COLOR routing decision reflects this exact
+    // tick, not the last-published snapshot.
+    inline bool isColorActiveLive() const
+    {
+        return mode != RenderMode::TRANSITIONING && effect && effect->wantsLiveColorUpdates();
+    }
+
+    // Render-task-owned snapshot of getTargetEffectName()/isColorActive(),
+    // republished at the end of every update() tick (and after
+    // restoreStartupState(), since the web server accepts connections before
+    // the first update()). The network tasks read only these, never `effect`.
+    void publishEffectSnapshot();
+    std::atomic<const char*> effectNameSnapshot{"none"};
+    std::atomic<bool> colorActiveSnapshot{false};
+
     // The effect that is currently running
     AbstractEffect* effect = nullptr;
 

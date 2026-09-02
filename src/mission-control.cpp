@@ -203,7 +203,7 @@ void MissionControl::processWebCommands()
                 break;
             case CommandType::COLOR:
                 staticColor = CRGB(command.r, command.g, command.b);
-                if (!isColorActive()) transitionToStaticColor();
+                if (!isColorActiveLive()) transitionToStaticColor();
                 stateDirty = true;
                 // Only on the drag-release "commit" message (see Command::Color()'s
                 // comment) - never on every drag-speed update, same NVS-wear reasoning as
@@ -425,6 +425,11 @@ void MissionControl::finishTransition()
         holdPending = false;
         holdEffect();
     }
+
+    // Republish immediately, not just at end-of-tick: this is the instant the
+    // old `effect` was freed and the new one installed - the exact window the
+    // network tasks must not observe a dangling pointer through.
+    publishEffectSnapshot();
 }
 
 // Starts a transition to a new effect: cancels one already in flight (a
@@ -461,6 +466,11 @@ void MissionControl::handleTransition(AbstractEffect* nextEffect, bool playAnima
 
     mode = RenderMode::TRANSITIONING;
     stateDirty = true;
+
+    // pendingEffect + TRANSITIONING mode are what getTargetEffectName()
+    // reports now - publish before the network tasks can see the half-set
+    // state.
+    publishEffectSnapshot();
 }
 
 void MissionControl::holdEffect()
@@ -552,6 +562,11 @@ void MissionControl::update(milliseconds_t t)
 {
     processWebCommands();
 
+    // Republish the network-visible snapshot after this tick's commands have
+    // been applied and before any early return. The web-server / async_tcp
+    // tasks read only this, never the render task's live effect pointers.
+    publishEffectSnapshot();
+
     if (mode == RenderMode::OFF)
     {
         vTaskDelay(pdMS_TO_TICKS(10));
@@ -613,6 +628,25 @@ void MissionControl::transitionToStaticColor()
     holdEffect();
 }
 
+// Recompute the atomics getTargetEffectName()/isColorActive() hand to the
+// network tasks. Runs only on the render task (from update() and
+// restoreStartupState()), so reading `effect`/`pendingEffect`/`mode` here is
+// safe. GetName() returns a static literal, so publishing the bare pointer is
+// a valid cross-thread hand-off.
+void MissionControl::publishEffectSnapshot()
+{
+    const char* name;
+    if (mode == RenderMode::TRANSITIONING && pendingEffect)
+        name = pendingEffect->GetName();
+    else if (effect)
+        name = effect->GetName();
+    else
+        name = "none";
+
+    effectNameSnapshot.store(name);
+    colorActiveSnapshot.store(isColorActiveLive());
+}
+
 // See mission-control.h's declaration. Applies the same effect/mode changes a live
 // EFFECT/COLOR/POWER_OFF command would (handleTransition()/holdEffect()/
 // transitionToStaticColor()/powerOff() - none of them read `t` or depend on update()
@@ -660,4 +694,9 @@ void MissionControl::restoreStartupState()
     // established into modeBeforeOff, so a device that was switched off while holding a
     // color/effect resumes that same mode on the next power-on, not random rotation.
     if (!saved.poweredOn) powerOff();
+
+    // The web server accepts connections before update() runs for the first
+    // time, so a client can call getTargetEffectName()/isColorActive() before
+    // the render loop has published anything.
+    publishEffectSnapshot();
 }
