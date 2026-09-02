@@ -20,16 +20,14 @@
         <div class="logbox" id="logbox"></div>
 
         <span class="section-label">Device Model</span>
-        <!-- Pre-JS fallback only: overwritten from the server's "models" list
-             in the state message pushed right after the WebSocket connects. -->
+        <!-- Populated entirely from the server's "models" list in the state
+             message pushed right after the WebSocket connects. Deliberately
+             left empty: a hard-coded fallback list happened to have the same
+             length as the firmware's model registry, so the old
+             length-only rebuild guard never fired and the placeholder labels
+             were what the user actually saw. -->
         <div class="model-row" id="modelRow">
-            <select class="model-select" id="modelSelect">
-                <option value="770">L10 MK2</option>
-                <option value="769">L10 MK1</option>
-                <option value="768">L70 MK1</option>
-                <option value="512">Andromeda</option>
-                <option value="256">Test rig</option>
-            </select>
+            <select class="model-select" id="modelSelect"></select>
             <button id="rebootBtn" class="reboot-btn" title="Reboot Device">Reboot</button>
         </div>
 

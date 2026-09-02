@@ -11,6 +11,26 @@ function nextReconnectDelayMs(attempt, randomFn = Math.random) {
     return Math.round(base * (0.5 + randomFn() * 0.5));
 }
 
+// Whether a <select>'s rendered <option>s no longer match the server's list
+// and it needs rebuilding. Compares the full (id, label) content, not just the
+// count. The count-only guard this replaces silently failed on the Advanced
+// page: advanced.html shipped a placeholder list the same length as the
+// firmware's model registry, so the branch never ran - the user saw stale
+// placeholder labels, and a future model swap that kept the count would have
+// left the dropdown offering an id the firmware no longer knew (a soft-brick,
+// exactly what data/index.html warns about).
+//
+// `currentOptions` is the live HTMLOptionsCollection (or any array-like of
+// { value, textContent }); `serverList` is the [{ id, name }] from the state
+// message. Non-array serverList -> false (nothing to rebuild from).
+function shouldRebuildOptions(currentOptions, serverList) {
+    if (!Array.isArray(serverList)) return false;
+    const rendered = Array.from(currentOptions || [])
+        .map((o) => [String(o.value), String(o.textContent)]);
+    const wanted = serverList.map((x) => [String(x.id), String(x.name)]);
+    return JSON.stringify(rendered) !== JSON.stringify(wanted);
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { nextReconnectDelayMs };
+    module.exports = { nextReconnectDelayMs, shouldRebuildOptions };
 }
