@@ -285,23 +285,47 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => location.reload(), 4000);
     });
 
+    // Show a start-request rejection (409/503 from OtaStartGate) in the
+    // progress line and undo the "busy" UI, so a click that spawned no worker
+    // never leaves the buttons stuck disabled behind a poll that never moves.
+    function handleOtaStart(response, buttons, duringUpdate) {
+        const progress = document.getElementById('otaProgress');
+        if (response.ok) { pollOtaStatus(duringUpdate); return; }
+        return response.text().then((body) => {
+            otaBusy = false;
+            buttons.forEach((b) => { if (b) b.disabled = false; });
+            if (progress) {
+                progress.textContent = otaStartRejectionLabel(response.status, body);
+                progress.hidden = false;
+            }
+        });
+    }
+
     document.getElementById('otaCheckBtn').addEventListener('click', () => {
+        const checkBtn = document.getElementById('otaCheckBtn');
         otaBusy = true;
         const progress = document.getElementById('otaProgress');
         if (progress) { progress.textContent = 'Checking for updates…'; progress.hidden = false; }
-        fetch('/ota-check', { method: 'POST' }).catch(() => {});
-        pollOtaStatus(false);
+        fetch('/ota-check', { method: 'POST' })
+            .then((r) => handleOtaStart(r, [checkBtn], false))
+            // Network dropped issuing the POST - the check may still be running.
+            .catch(() => pollOtaStatus(false));
     });
 
     document.getElementById('otaUpdateBtn').addEventListener('click', () => {
         if (!confirm('Download and install the new firmware now? The device will reboot.')) return;
+        const updateBtn = document.getElementById('otaUpdateBtn');
+        const checkBtn = document.getElementById('otaCheckBtn');
         otaBusy = true;
-        document.getElementById('otaUpdateBtn').disabled = true;
-        document.getElementById('otaCheckBtn').disabled = true;
+        updateBtn.disabled = true;
+        checkBtn.disabled = true;
         const progress = document.getElementById('otaProgress');
         if (progress) { progress.textContent = 'Starting update…'; progress.hidden = false; }
-        fetch('/ota', { method: 'POST' }).catch(() => {});
-        pollOtaStatus(true);
+        fetch('/ota', { method: 'POST' })
+            .then((r) => handleOtaStart(r, [updateBtn, checkBtn], true))
+            // Network dropped issuing the POST - the device may still have
+            // started; fall back to polling.
+            .catch(() => pollOtaStatus(true));
     });
 
     document.getElementById('otaDevChannel').addEventListener('change', function () {
