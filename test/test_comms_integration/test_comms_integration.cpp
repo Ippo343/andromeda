@@ -616,6 +616,42 @@ void test_ws_connect_pushes_initial_state()
     TEST_ASSERT_EQUAL(MissionControl::Instance().getMaxBrightness(), doc["brightness"].as<int>());
 }
 
+// The WebSocket handshake is a plain GET with no CORS preflight, so a foreign
+// LAN page could open /ws and send {"type":"reboot"} etc., bypassing every
+// isCrossOriginPost() guard on the HTTP routes. WS_EVT_CONNECT now checks the
+// upgrade request's Origin the same way.
+void test_ws_connect_rejects_a_foreign_origin_handshake()
+{
+    AsyncWebSocket* ws = CommsTestAccess::server(Comms::Instance()).webSocket;
+    TEST_ASSERT_NOT_NULL(ws);
+
+    AsyncWebServerRequest req;
+    req.setHost("andromeda-ab12.local");
+    req.setHeader("Origin", "http://andromeda-ab12.local.evil.example");
+
+    AsyncWebSocketClient client;
+    ws->simulateConnect(&client, &req);
+
+    TEST_ASSERT_TRUE(client.wasClosed);
+    TEST_ASSERT_TRUE(client.lastSentText.empty());  // no state pushed to a rejected client
+}
+
+void test_ws_connect_allows_a_same_origin_handshake()
+{
+    AsyncWebSocket* ws = CommsTestAccess::server(Comms::Instance()).webSocket;
+    TEST_ASSERT_NOT_NULL(ws);
+
+    AsyncWebServerRequest req;
+    req.setHost("andromeda-ab12.local");
+    req.setHeader("Origin", "http://andromeda-ab12.local");
+
+    AsyncWebSocketClient client;
+    ws->simulateConnect(&client, &req);
+
+    TEST_ASSERT_FALSE(client.wasClosed);
+    TEST_ASSERT_FALSE(client.lastSentText.empty());  // normal initial-state push still happens
+}
+
 void test_state_broadcast_after_brightness_command()
 {
     AsyncWebSocket* ws = CommsTestAccess::server(Comms::Instance()).webSocket;
@@ -949,6 +985,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_ws_color_commit_on_fast_path_persists_holding_color);
 
     RUN_TEST(test_ws_connect_pushes_initial_state);
+    RUN_TEST(test_ws_connect_rejects_a_foreign_origin_handshake);
+    RUN_TEST(test_ws_connect_allows_a_same_origin_handshake);
     RUN_TEST(test_state_broadcast_after_brightness_command);
     RUN_TEST(test_rapid_brightness_commands_bypass_queue_and_dont_drop);
     RUN_TEST(test_state_broadcast_skipped_when_not_dirty);

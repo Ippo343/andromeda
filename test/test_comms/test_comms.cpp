@@ -28,6 +28,40 @@ void test_scan_cache_valid_at_exact_scan_time()
     TEST_ASSERT_TRUE(isScanCacheValid(true, 5000, 5000, 30000));
 }
 
+// ---------------------------------------------------------------------------
+// originMatchesHost - the same-origin check behind isCrossOriginPost() and
+// the WebSocket handshake guard
+// ---------------------------------------------------------------------------
+
+void test_origin_matches_host_accepts_the_devices_own_origin()
+{
+    TEST_ASSERT_TRUE(originMatchesHost("http://andromeda-ab12.local", "andromeda-ab12.local"));
+    TEST_ASSERT_TRUE(originMatchesHost("https://andromeda-ab12.local", "andromeda-ab12.local"));
+    TEST_ASSERT_TRUE(originMatchesHost("http://192.168.1.50", "192.168.1.50"));
+    // Host carrying an explicit port must match the origin's port too.
+    TEST_ASSERT_TRUE(originMatchesHost("http://192.168.1.50:8080", "192.168.1.50:8080"));
+}
+
+void test_origin_matches_host_rejects_suffix_and_port_tricks()
+{
+    // The substring check this replaced accepted all of these.
+    TEST_ASSERT_FALSE(
+        originMatchesHost("http://andromeda-ab12.local.evil.example", "andromeda-ab12.local"));
+    TEST_ASSERT_FALSE(
+        originMatchesHost("http://evil.example/?andromeda-ab12.local", "andromeda-ab12.local"));
+    TEST_ASSERT_FALSE(originMatchesHost("http://192.168.1.50:8080", "192.168.1.50"));
+    TEST_ASSERT_FALSE(originMatchesHost("http://192.168.1.500", "192.168.1.50"));
+    TEST_ASSERT_FALSE(originMatchesHost("http://evil.example", "andromeda-ab12.local"));
+}
+
+void test_origin_matches_host_rejects_empty_or_missing()
+{
+    TEST_ASSERT_FALSE(originMatchesHost("", "andromeda-ab12.local"));
+    TEST_ASSERT_FALSE(originMatchesHost(nullptr, "andromeda-ab12.local"));
+    TEST_ASSERT_FALSE(originMatchesHost("http://andromeda-ab12.local", ""));
+    TEST_ASSERT_FALSE(originMatchesHost("http://andromeda-ab12.local", nullptr));
+}
+
 void test_scan_cache_handles_millis_wraparound()
 {
     // millis() overflows back to a small value after ~49.7 days; unsigned
@@ -47,6 +81,10 @@ int main(int argc, char** argv)
     RUN_TEST(test_scan_cache_invalid_once_expired);
     RUN_TEST(test_scan_cache_valid_at_exact_scan_time);
     RUN_TEST(test_scan_cache_handles_millis_wraparound);
+
+    RUN_TEST(test_origin_matches_host_accepts_the_devices_own_origin);
+    RUN_TEST(test_origin_matches_host_rejects_suffix_and_port_tricks);
+    RUN_TEST(test_origin_matches_host_rejects_empty_or_missing);
 
     return UNITY_END();
 }

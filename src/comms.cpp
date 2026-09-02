@@ -81,7 +81,7 @@ static bool isCrossOriginPost(AsyncWebServerRequest* request)
 {
     if (!request->hasHeader("Origin")) return false;
     const AsyncWebHeader* origin = request->getHeader("Origin");
-    return origin->value().indexOf(request->host()) == -1;
+    return !originMatchesHost(origin->value().c_str(), request->host().c_str());
 }
 
 #define STATIC_FILE_ROUTE(path, contentType) \
@@ -274,6 +274,25 @@ void Comms::setupRoutes()
         {
             if (type == WS_EVT_CONNECT)
             {
+                // The WebSocket handshake is a plain GET, so a browser on an
+                // unrelated LAN-reachable page can open ws://<device>/ws with
+                // no CORS preflight and then send {"type":"reboot"} etc. -
+                // bypassing every isCrossOriginPost() guard on the HTTP
+                // routes. Reject a handshake whose Origin doesn't match this
+                // device's own host. For WS_EVT_CONNECT the event arg is the
+                // upgrade request; a request with no Origin (a native client,
+                // a same-origin page) is allowed, same policy as the POST
+                // routes.
+                auto* req = reinterpret_cast<AsyncWebServerRequest*>(arg);
+                if (req && req->hasHeader("Origin") &&
+                    !originMatchesHost(req->getHeader("Origin")->value().c_str(),
+                                       req->host().c_str()))
+                {
+                    Log.warningln("Rejecting cross-origin WebSocket handshake");
+                    client->close();
+                    return;
+                }
+
                 // Auto-ping every 30s of silence. Without this, a WiFi drop that doesn't
                 // produce a clean TCP FIN (the normal case for the device losing power or
                 // moving out of range - not a client-side "close the tab") leaves the
@@ -293,8 +312,21 @@ void Comms::setupRoutes()
                 AwsFrameInfo* info = (AwsFrameInfo*)arg;
                 if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT)
                 {
-                    data[len] = 0;
-                    const char* json = reinterpret_cast<const char*>(data);
+                    // Copy into a bounded, NUL-terminated local buffer. `data`
+                    // points into the lwIP pbuf payload, so the previous
+                    // `data[len] = 0` wrote one byte past it. Every real
+                    // command message is well under this; a longer frame
+                    // isn't one and is dropped.
+                    char json[256];
+                    if (len >= sizeof(json))
+                    {
+                        Log.warningln("Ignoring oversized WS message (%u bytes)",
+                                      static_cast<unsigned>(len));
+                        return;
+                    }
+                    memcpy(json, data, len);
+                    json[len] = 0;
+
                     MissionControl& mc = MissionControl::Instance();
 
                     // BRIGHTNESS and live COLOR updates fire at drag speed (dozens/sec) -
@@ -335,13 +367,13 @@ void Comms::setupRoutes()
                         // ArduinoLog's format strings only support a single character after
                         // '%' (no printf-style width/precision - see ArduinoLog.cpp's
                         // printFormat()), so truncating has to happen on the string itself
-                        // before logging it, not via the format spec. Bounded because `data`
+                        // before logging it, not via the format spec. Bounded because `json`
                         // is an unvalidated, client-controlled message written into the 32KB
                         // rotating log - previously unbounded, so a client (accidentally or
                         // not - no auth on this route) sending large garbage frames could
                         // flush the real diagnostic history in a handful of messages.
                         char truncated[129];
-                        snprintf(truncated, sizeof(truncated), "%s", (char*)data);
+                        snprintf(truncated, sizeof(truncated), "%s", json);
                         Log.warningln("Unrecognized WS command message: %s", truncated);
                     }
                 }
