@@ -77,12 +77,15 @@ function handleStateMessage(raw) {
 
     const modelSelect = document.getElementById('modelSelect');
     if (modelSelect && Array.isArray(msg.models)) {
-        // Only rebuild when the option count actually changed (mirrors controls.js's
-        // effectSelect handling) - this page's state broadcasts arrive up to 10x/sec during
-        // an unrelated live drag elsewhere (see comms.cpp's MIN_BROADCAST_INTERVAL_MS), and
-        // unconditionally clearing+rebuilding on every one of them was closing an open
-        // dropdown and overwriting a selection the user had just made, out from under them.
-        if (modelSelect.options.length !== msg.models.length) {
+        // Rebuild only when the list's contents actually differ from what's
+        // rendered - this page's state broadcasts arrive up to 10x/sec during
+        // an unrelated live drag elsewhere (see comms.cpp's
+        // MIN_BROADCAST_INTERVAL_MS), and clearing+rebuilding on every one
+        // closed an open dropdown / overwrote a just-made selection. A
+        // length-only check (the old guard) never fired at all, because the
+        // hard-coded fallback happened to have the same length as the model
+        // registry.
+        if (shouldRebuildOptions(modelSelect.options, msg.models)) {
             modelSelect.innerHTML = '';
             for (const model of msg.models) {
                 const option = document.createElement('option');

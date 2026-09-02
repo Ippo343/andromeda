@@ -63,6 +63,29 @@ std::set<std::string> registeredRoutes(const std::string& commsCpp)
 }
 }  // namespace
 
+// The model dropdown must be populated only from the server's state message.
+// A hard-coded <option> fallback under #modelSelect once had the same length
+// as the firmware's model registry, so advanced.js's length-only rebuild
+// guard never fired and the placeholder labels were what the user saw - and a
+// future model swap that kept the count would have left the page offering an
+// id the firmware no longer knew (a soft-brick). This is the cross-file half
+// a JS-only test can't see: assert the markup ships no options in that select.
+void test_model_select_has_no_hardcoded_options()
+{
+    std::string html = readFile("data/advanced.html");
+
+    std::smatch m;
+    std::regex selectRe(R"RE(<select[^>]*id="modelSelect"[^>]*>([\s\S]*?)</select>)RE");
+    TEST_ASSERT_TRUE_MESSAGE(std::regex_search(html, m, selectRe),
+                             "data/advanced.html has no #modelSelect element");
+
+    std::string body = m[1].str();
+    TEST_ASSERT_TRUE_MESSAGE(
+        body.find("<option") == std::string::npos,
+        "#modelSelect in data/advanced.html contains a hard-coded <option> - it must be "
+        "populated entirely from the server's models list (see shouldRebuildOptions)");
+}
+
 void test_every_html_page_local_asset_has_a_registered_route()
 {
     std::set<std::string> registered = registeredRoutes(readFile("src/comms.cpp"));
@@ -89,6 +112,7 @@ int main(int argc, char** argv)
     UNITY_BEGIN();
 
     RUN_TEST(test_every_html_page_local_asset_has_a_registered_route);
+    RUN_TEST(test_model_select_has_no_hardcoded_options);
 
     return UNITY_END();
 }

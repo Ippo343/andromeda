@@ -536,7 +536,11 @@ function handleServerMessage(raw) {
 
     const effectSelect = document.getElementById('effectSelect');
     if (effectSelect && Array.isArray(msg.effects)) {
-        if (effectSelect.options.length !== msg.effects.length) {
+        // Contents, not just count (see shouldRebuildOptions): this select
+        // starts empty so a length check happens to work today, but an
+        // effect-registry reorder that kept the count would leave stale
+        // labels - the same latent bug the model dropdown actually hit.
+        if (shouldRebuildOptions(effectSelect.options, msg.effects)) {
             effectSelect.innerHTML = '';
             for (const effect of msg.effects) {
                 const option = document.createElement('option');
