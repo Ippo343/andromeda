@@ -115,6 +115,20 @@ class Comms
 
     volatile bool scanInProgress;
     volatile bool scanComplete;
+    // millis() when the current async scan was kicked off. A scan that never
+    // fires its SCAN_DONE event (WiFi.scanNetworks() returned an error
+    // synchronously, or the event was lost during an AP<->STA mode change)
+    // would otherwise leave scanInProgress stuck true and /scan answering
+    // "scanning" for the rest of the session - scanWiFiNetworks() reaps a
+    // scan older than SCAN_STALE_MS via comms-utils.h's scanIsStale().
+    // volatile like scanInProgress/scanComplete right above: startAsyncScan()
+    // writes this from either the async_tcp task (via scanWiFiNetworks()) or
+    // the one-shot InitScan/APFallbackScan task (startAPMode()/
+    // enterAPFallbackMode()), and scanWiFiNetworks()'s staleness check reads
+    // it back on the async_tcp task - the same cross-task sharing this file's
+    // own convention already marks volatile everywhere else.
+    volatile unsigned long scanStartedAt = 0;
+    static constexpr unsigned long SCAN_STALE_MS = 20000;
     // Written from the WiFi event task (onWiFiScanComplete()), read from the async_tcp task
     // (scanWiFiNetworks()) - a plain String isn't safe to share across that without a lock (a
     // concurrent read during reassignment could see a freed/partial buffer), so every access

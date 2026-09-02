@@ -46,6 +46,18 @@ inline bool originMatchesHost(const char* origin, const char* host)
     return authorityLen == strlen(host) && strncmp(authority, host, authorityLen) == 0;
 }
 
+// Whether an in-progress async scan has been running long enough that its
+// SCAN_DONE event is almost certainly never coming (a synchronous
+// scanNetworks() error, or an event dropped across an AP<->STA transition) -
+// so scanInProgress should be reaped and /scan allowed to try again, instead
+// of answering "scanning" forever. `now - startedAt` is unsigned, so it stays
+// correct across a millis() rollover.
+inline bool scanIsStale(bool inProgress, unsigned long startedAt, unsigned long now,
+                        unsigned long timeoutMs)
+{
+    return inProgress && (now - startedAt >= timeoutMs);
+}
+
 // Escapes a string for embedding as a JSON string value between the surrounding quotes.
 // onWiFiScanComplete() hand-builds JSON out of raw SSIDs; a double-quote or backslash (both
 // legal in a WiFi SSID per 802.11) would otherwise produce unparseable JSON that permanently
