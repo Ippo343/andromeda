@@ -107,6 +107,13 @@ class Geometry
     // it per LED per frame).
     unsigned short screenRadius = 0;
 
+    // The largest polar.radius across the loaded coordinate table, set by
+    // loadCoordinates(). Unlike screenRadius (max half-dimension = distance to
+    // a side midpoint), this reaches the furthest LED - the corners on a
+    // rectangular panel - so effects can map radius onto 0..255 without the
+    // outer ring overflowing the byte.
+    unsigned short maxLedRadius = 0;
+
     // Load model coordinates from PROGMEM into RAM
     void loadCoordinates();
 
@@ -149,6 +156,12 @@ class Geometry
     inline unsigned short getScreenHalfWidth() const { return getScreenWidth() / 2; }
 
     inline unsigned short getScreenRadius() const { return screenRadius; }
+
+    // Distance to the furthest LED in the current model. Use this, not
+    // getScreenRadius(), whenever a polar.radius is being scaled to a fixed
+    // range: getScreenRadius() understates the real maximum on every
+    // non-circular layout.
+    inline unsigned short getMaxLedRadius() const { return maxLedRadius; }
 
     // Apply random rotation transform to all LED coordinates
     void applyGlobalRandomRotation();

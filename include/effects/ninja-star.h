@@ -94,8 +94,11 @@ class NinjaStar : public AbstractEffect
                 Led& led = strip.leds[iLed];
                 thetaCache[iStrip][iLed] =
                     map((led.polar.cdegrees * beams) % FULL_CIRCLE, 0, FULL_CIRCLE, 0, 255);
+                // getMaxLedRadius(), not getScreenRadius(): the latter only
+                // reaches a side midpoint, so map() extrapolated past 255 for
+                // every LED beyond it and the uint8_t store wrapped mod 256.
                 radiusCache[iStrip][iLed] =
-                    map(led.polar.radius, 0, GEOMETRY.getScreenRadius(), 0, 255);
+                    map(led.polar.radius, 0, GEOMETRY.getMaxLedRadius(), 0, 255);
             }
         }
 

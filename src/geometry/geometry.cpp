@@ -238,6 +238,7 @@ void Geometry::loadCoordinates()
     Log.verboseln("Loading coordinates from PROGMEM...");
 
     uint16_t current_offset = 0;  // Tracks the current position in the flat PROGMEM array
+    maxLedRadius = 0;
 
     for (size_t iStrip = 0; iStrip < config->num_strips; iStrip++)
     {
@@ -262,6 +263,9 @@ void Geometry::loadCoordinates()
                           cart.x, cart.y, _fixedStrips[iStrip].leds[iLed].polar.radius,
                           _fixedStrips[iStrip].leds[iLed].polar.cdegrees);
             strips[iStrip].leds[iLed].polar = _fixedStrips[iStrip].leds[iLed].polar;
+
+            maxLedRadius =
+                max(maxLedRadius, (unsigned short)_fixedStrips[iStrip].leds[iLed].polar.radius);
         }
 
         // After finishing a strip, move the offset forward by the length of that strip

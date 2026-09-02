@@ -261,6 +261,54 @@ void test_geometry_screen_radius_updates_on_reinitialize_with_different_model()
                              GEOMETRY.getScreenRadius());  // max(480,680)/2 halves = max(240,340)
 }
 
+// getScreenRadius() is max(halfWidth, halfHeight) - the distance to the middle
+// of a side, NOT the distance to a corner. Effects that map polar.radius onto
+// 0..255 against it (NinjaStar, HexagonalRippleGalaxy, PolarSwipe) overflow
+// the byte for every LED past that midpoint. getMaxLedRadius() is the real
+// maximum over the loaded coordinate table.
+void test_geometry_max_led_radius_matches_the_loaded_coordinates()
+{
+    for (ModelId id : {ModelId::SINGLE_STRIP_TEST_DEVICE, ModelId::L70_MK1, ModelId::L10_MK1,
+                       ModelId::L10_MK2, ModelId::ANDROMEDA_MK1})
+    {
+        Geometry local;
+        local.initializeForTest(id);
+
+        uint16_t brute = 0;
+        for (size_t s = 0; s < local.getNumStrips(); s++)
+        {
+            const LedStrip& strip = local.getStrips()[s];
+            for (int l = 0; l < strip.num_leds; l++) brute = max(brute, strip.leds[l].polar.radius);
+        }
+
+        TEST_ASSERT_EQUAL_UINT16(brute, local.getMaxLedRadius());
+    }
+}
+
+// The reason getMaxLedRadius() has to exist: on the real 2D panels the corner
+// LEDs sit well outside getScreenRadius() (= max half-dimension), so anything
+// scaling polar.radius against getScreenRadius() clips or wraps them.
+void test_geometry_corner_leds_exceed_screen_radius_on_the_2d_panels()
+{
+    for (ModelId id : {ModelId::L10_MK1, ModelId::L10_MK2, ModelId::L70_MK1})
+    {
+        Geometry local;
+        local.initializeForTest(id);
+        TEST_ASSERT_GREATER_THAN_UINT16(local.getScreenRadius(), local.getMaxLedRadius());
+    }
+}
+
+void test_geometry_max_led_radius_updates_on_reinitialize()
+{
+    Geometry local;
+    local.initializeForTest(ModelId::L10_MK1);
+    uint16_t l10 = local.getMaxLedRadius();
+
+    local.initializeForTest(ModelId::L70_MK1);
+    TEST_ASSERT_NOT_EQUAL_UINT16(l10, local.getMaxLedRadius());
+    TEST_ASSERT_GREATER_THAN_UINT16(l10, local.getMaxLedRadius());  // L70 is the bigger panel
+}
+
 void test_geometry_reset_global_transform_restores_original_coordinates()
 {
     GEOMETRY.initializeForTest(ModelId::SINGLE_STRIP_TEST_DEVICE);
@@ -473,6 +521,9 @@ int main(int argc, char** argv)
     RUN_TEST(test_geometry_reinitialize_frees_previous_allocation);
     RUN_TEST(test_geometry_screen_dimension_helpers);
     RUN_TEST(test_geometry_screen_radius_updates_on_reinitialize_with_different_model);
+    RUN_TEST(test_geometry_max_led_radius_matches_the_loaded_coordinates);
+    RUN_TEST(test_geometry_max_led_radius_updates_on_reinitialize);
+    RUN_TEST(test_geometry_corner_leds_exceed_screen_radius_on_the_2d_panels);
     RUN_TEST(test_geometry_reset_global_transform_restores_original_coordinates);
     RUN_TEST(test_geometry_apply_global_random_rotation_preserves_radius);
     RUN_TEST(test_geometry_apply_global_random_rotation_keeps_cdegrees_in_range);

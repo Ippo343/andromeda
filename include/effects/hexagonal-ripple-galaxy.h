@@ -106,8 +106,10 @@ class HexagonalRippleGalaxy : public AbstractEffect
             FOR_EACH_LED(iStrip)
             {
                 Led& led = strip.leds[iLed];
+                // getMaxLedRadius(), not getScreenRadius(): see NinjaStar - the
+                // outer ring of LEDs overflowed the uint8_t otherwise.
                 radius8Cache[iStrip][iLed] =
-                    map(led.polar.radius, 0, GEOMETRY.getScreenRadius(), 0, 255);
+                    map(led.polar.radius, 0, GEOMETRY.getMaxLedRadius(), 0, 255);
                 angle8Cache[iStrip][iLed] =
                     map(led.polar.cdegrees % FULL_CIRCLE, 0, FULL_CIRCLE, 0, 255);
             }

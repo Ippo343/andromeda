@@ -24,8 +24,11 @@ class PolarSwipe : public AbstractEffect
     // just inside the band, and so they get a new random color for a few consecutive frames
     // causing an annoying color flicker at the edge.
     //
+    // getMaxLedRadius(), not getScreenRadius(): the latter only reaches a side
+    // midpoint, so on a rectangular panel the band never swept far enough to
+    // cover the corner LEDs and they stayed dark for any narrow bandWidth.
     unsigned short scanMin = bandWidth / 2;
-    unsigned short scanMax = GEOMETRY.getScreenRadius() + (bandWidth + 1);
+    unsigned short scanMax = GEOMETRY.getMaxLedRadius() + (bandWidth + 1);
 
     unsigned short bandCenter;
     CRGB color;
@@ -41,7 +44,7 @@ class PolarSwipe : public AbstractEffect
         else
             bandCenter = map(v, 0, 65535, scanMin, scanMax);
 
-        if (bandCenter >= GEOMETRY.getScreenRadius() + bandWidth) color = randomColor();
+        if (bandCenter >= GEOMETRY.getMaxLedRadius() + bandWidth) color = randomColor();
     }
 
     inline uint8_t getBrightness(Led* led)

@@ -70,5 +70,14 @@ inline SweepRampResult computeSweepRamp(long coordLead, long coordTail, unsigned
         rampDistance = coordLead - coord;
     }
 
+    // A radial sweep whose maxCoord understates the real coordinate range (an
+    // LED further out than getMaxCoordinate() reports) lands here in-range but
+    // with coord past coordLead, so coordLead - coord is negative - and the
+    // caller feeds rampDistance straight into map(_, 0, rampWidth, 0, 255),
+    // which extrapolates a negative or >255 value and narrows it to a garbage
+    // brightness. Keep it inside the ramp the caller assumes.
+    if (rampDistance < 0) rampDistance = 0;
+    if (rampDistance > rampWidth) rampDistance = rampWidth;
+
     return {true, rampDistance};
 }
