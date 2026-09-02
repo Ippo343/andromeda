@@ -221,7 +221,10 @@ class RadialSweep : public BaseSweep
         return GEOMETRY.getStrip(strip).leds[led].polar.radius;
     }
 
-    unsigned short getMaxCoordinate() override { return GEOMETRY.getScreenRadius(); }
+    // getMaxLedRadius(), not getScreenRadius(): the latter stops at a side
+    // midpoint, so a sweep sized to it never reaches the corner LEDs and
+    // computeSweepRamp() had to clamp their negative ramp distance.
+    unsigned short getMaxCoordinate() override { return GEOMETRY.getMaxLedRadius(); }
 };
 
 // ============================================================================

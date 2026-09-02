@@ -59,6 +59,28 @@ void test_sweep_ramp_radial_negative_tail_has_no_wraparound()
     TEST_ASSERT_FALSE(outside.inRange);
 }
 
+void test_sweep_ramp_radial_led_beyond_the_leading_edge_clamps_not_negative()
+{
+    // RadialSweep on a panel whose corner LEDs sit further out than maxCoord:
+    // coordLead > maxCoord puts us in the radial branch, coord >= coordTail
+    // keeps the LED "in range", but coord is past coordLead so coordLead-coord
+    // is negative. Unclamped, the caller's map(rampDistance, 0, ramp, 0, 255)
+    // narrowed that into a garbage brightness byte and the corner flashed at a
+    // random level. rampDistance must stay within [0, rampWidth].
+    SweepRampResult beyond = computeSweepRamp(1100, 900, 1300, 1000, 200);
+    TEST_ASSERT_TRUE(beyond.inRange);
+    TEST_ASSERT_TRUE(beyond.rampDistance >= 0);
+    TEST_ASSERT_TRUE(beyond.rampDistance <= 200);
+
+    // And the symmetric "somehow way past the tail end" case stays capped too.
+    SweepRampResult farInside = computeSweepRamp(5000, 4800, 100, 1000, 200);
+    if (farInside.inRange)
+    {
+        TEST_ASSERT_TRUE(farInside.rampDistance >= 0);
+        TEST_ASSERT_TRUE(farInside.rampDistance <= 200);
+    }
+}
+
 void test_sweep_ramp_angular_overflow_at_leading_edge_wraps()
 {
     // maxCoord == FULL_CIRCLE, coordLead > maxCoord: wraps around to the
@@ -298,6 +320,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_sweep_ramp_normal_case_no_boundary_issues);
     RUN_TEST(test_sweep_ramp_radial_overflow_at_leading_edge_has_no_wraparound);
     RUN_TEST(test_sweep_ramp_radial_negative_tail_has_no_wraparound);
+    RUN_TEST(test_sweep_ramp_radial_led_beyond_the_leading_edge_clamps_not_negative);
     RUN_TEST(test_sweep_ramp_angular_overflow_at_leading_edge_wraps);
     RUN_TEST(test_sweep_ramp_angular_negative_tail_wraps);
 

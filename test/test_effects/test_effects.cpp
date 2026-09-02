@@ -1,8 +1,11 @@
 #include <unity.h>
 
+#include <algorithm>
 #include <chrono>
 #include <set>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "../../include/effects.h"
 
@@ -654,7 +657,7 @@ void test_ninja_star_evaluate_blends_from_inner_to_outer_by_radius()
     strip.leds[0].polar.cdegrees = 0;  // theta = 0 regardless of offset
     strip.leds[0].polar.radius = 0;
     strip.leds[1].polar.cdegrees = 0;
-    strip.leds[1].polar.radius = GEOMETRY.getScreenRadius();
+    strip.leds[1].polar.radius = GEOMETRY.getMaxLedRadius();  // maps to scaledRadius 255
 
     NinjaStar fx;
     fx.innerColor = CRGB(200, 0, 0);
@@ -674,6 +677,34 @@ void test_ninja_star_evaluate_blends_from_inner_to_outer_by_radius()
 
     TEST_ASSERT_TRUE(near == (fx.innerColor % v));
     TEST_ASSERT_TRUE(far == (fx.outerColor % v));
+}
+
+// Bad weather for the getScreenRadius() -> getMaxLedRadius() fix. On L10 MK2
+// the corner LEDs sit at radius ~66 while getScreenRadius() is 51, so
+// map(radius, 0, 51, 0, 255) extrapolated past 255 and the uint8_t cache
+// wrapped: a radius-66 LED cached as ~74, right next to a radius-51 LED cached
+// as 255. The cache must be monotone non-decreasing in true radius.
+void test_ninja_star_radius_cache_is_monotone_on_a_panel_with_far_corners()
+{
+    GEOMETRY.initializeForTest(ModelId::L10_MK2);
+
+    NinjaStar fx;
+    fx.ensurePerLedCache();
+
+    std::vector<std::pair<uint16_t, uint8_t>> pairs;
+    for (size_t s = 0; s < GEOMETRY.getNumStrips(); s++)
+    {
+        const LedStrip& strip = GEOMETRY.getStrips()[s];
+        for (int l = 0; l < strip.num_leds; l++)
+            pairs.emplace_back(strip.leds[l].polar.radius, fx.radiusCache[s][l]);
+    }
+    std::sort(pairs.begin(), pairs.end());
+
+    for (size_t i = 1; i < pairs.size(); i++)
+        TEST_ASSERT_TRUE_MESSAGE(pairs[i].second >= pairs[i - 1].second,
+                                 "radiusCache decreased as true radius increased - it wrapped");
+
+    GEOMETRY.initializeForTest(ModelId::SINGLE_STRIP_TEST_DEVICE);  // restore for later tests
 }
 
 // ---------------------------------------------------------------------------
@@ -697,6 +728,42 @@ void test_polar_swipe_evaluates_both_flip_directions()
     }
     TEST_ASSERT_TRUE(sawTrue);
     TEST_ASSERT_TRUE(sawFalse);
+}
+
+// Bad weather for the getScreenRadius() -> getMaxLedRadius() fix in PolarSwipe.
+// On L70 the furthest LED is at radius ~416 while getScreenRadius() is 340, so
+// scanMax topped out around 340 + bandWidth and, for any rolled bandWidth
+// below ~37, the band never came within bandWidth of that LED - it stayed dark
+// for the whole effect. Every rolled instance must bring the band over the
+// outermost LED at some point in its scan.
+void test_polar_swipe_band_reaches_the_outermost_leds_on_a_large_panel()
+{
+    GEOMETRY.initializeForTest(ModelId::L70_MK1);
+
+    Led* furthest = nullptr;
+    for (size_t s = 0; s < GEOMETRY.getNumStrips(); s++)
+    {
+        LedStrip& strip = GEOMETRY.getStrip(s);
+        for (int l = 0; l < strip.num_leds; l++)
+            if (!furthest || strip.leds[l].polar.radius > furthest->polar.radius)
+                furthest = &strip.leds[l];
+    }
+    TEST_ASSERT_NOT_NULL(furthest);
+    TEST_ASSERT_EQUAL_UINT16(GEOMETRY.getMaxLedRadius(), furthest->polar.radius);
+
+    for (int i = 0; i < 40; i++)
+    {
+        PolarSwipe fx;
+        bool lit = false;
+        for (unsigned long c = fx.scanMin; c <= fx.scanMax && !lit; c++)
+        {
+            fx.bandCenter = (unsigned short)c;
+            if (fx.getBrightness(furthest) > 0) lit = true;
+        }
+        TEST_ASSERT_TRUE_MESSAGE(lit, "outermost LED never enters the swipe band");
+    }
+
+    GEOMETRY.initializeForTest(ModelId::SINGLE_STRIP_TEST_DEVICE);  // restore for later tests
 }
 
 void test_polar_swipe_get_brightness_bounds()
@@ -1433,8 +1500,10 @@ int main(int argc, char** argv)
     RUN_TEST(test_ninja_star_evaluates);
     RUN_TEST(test_ninja_star_pow16_lut_fixed_points_and_shrinks_midrange);
     RUN_TEST(test_ninja_star_evaluate_blends_from_inner_to_outer_by_radius);
+    RUN_TEST(test_ninja_star_radius_cache_is_monotone_on_a_panel_with_far_corners);
 
     RUN_TEST(test_polar_swipe_evaluates_both_flip_directions);
+    RUN_TEST(test_polar_swipe_band_reaches_the_outermost_leds_on_a_large_panel);
     RUN_TEST(test_polar_swipe_get_brightness_bounds);
     RUN_TEST(test_polar_swipe_evaluate_matches_color_scaled_by_brightness);
     RUN_TEST(test_polar_swipe_andromeda_strip0_is_always_black);
