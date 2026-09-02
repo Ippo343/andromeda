@@ -1,9 +1,52 @@
 #include <unity.h>
 
+#include <fstream>
+#include <sstream>
+#include <string>
+
 #include "wifi-recovery.h"
 
 void setUp() {}
 void tearDown() {}
+
+// Plain-text guard: src/wifi-esp-adapters.cpp is excluded from the native
+// build (it polls WiFi.status() in real time), so this is the only way to pin
+// that both AP-mode entry points reapply the SoftAP config + captive-portal
+// DNS option through one shared helper rather than a bare WiFi.mode(WIFI_AP).
+// The rejoin path dropping the DNS option was the #76 gap where the portal
+// popup stopped appearing after the first failed rejoin.
+void test_ap_mode_entry_points_share_the_config_helper()
+{
+    std::ifstream f("src/wifi-esp-adapters.cpp");
+    TEST_ASSERT_TRUE_MESSAGE(f.is_open(), "could not open src/wifi-esp-adapters.cpp");
+    std::stringstream ss;
+    ss << f.rdbuf();
+    const std::string src = ss.str();
+
+    // The helper exists and does the two things that must not be forgotten.
+    TEST_ASSERT_TRUE(src.find("void reapplyApConfig()") != std::string::npos);
+    TEST_ASSERT_TRUE(src.find("WiFi.softAP(") != std::string::npos);
+    TEST_ASSERT_TRUE(src.find("esp_netif_set_dns_info(") != std::string::npos);
+
+    // Both callers go through it, and no other line falls back to a bare
+    // WiFi.mode(WIFI_AP) that would skip the DNS option.
+    size_t calls = 0;
+    for (size_t p = src.find("reapplyApConfig()"); p != std::string::npos;
+         p = src.find("reapplyApConfig()", p + 1))
+        calls++;
+    TEST_ASSERT_TRUE_MESSAGE(calls >= 3, "expected the definition + 2 call sites");
+
+    // The ";" excludes the two prose mentions in comments; "WiFi.mode(WIFI_AP_STA);"
+    // won't match because of the trailing ")". The one legitimate statement is
+    // inside reapplyApConfig() itself.
+    size_t bareApMode = 0;
+    for (size_t p = src.find("WiFi.mode(WIFI_AP);"); p != std::string::npos;
+         p = src.find("WiFi.mode(WIFI_AP);", p + 1))
+        bareApMode++;
+    TEST_ASSERT_EQUAL_INT_MESSAGE(1, (int)bareApMode,
+                                  "a WiFi.mode(WIFI_AP); outside reapplyApConfig() would skip the "
+                                  "captive-portal DNS option");
+}
 
 void test_no_action_when_never_disconnected()
 {
@@ -231,6 +274,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_connect_landing_before_a_tick_cancels_the_pending_reconnect);
     RUN_TEST(test_a_new_outage_after_recovery_does_not_inherit_the_old_dead_time);
     RUN_TEST(test_queue_applies_events_in_order);
+
+    RUN_TEST(test_ap_mode_entry_points_share_the_config_helper);
 
     return UNITY_END();
 }

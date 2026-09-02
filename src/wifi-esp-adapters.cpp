@@ -15,6 +15,36 @@ namespace
 constexpr const char* AP_PASSWORD = "";
 constexpr const char* PREFERENCES_NAMESPACE = "wifi";
 
+// (Re)apply the SoftAP + the DHCP DNS-server option. Both EspWiFiConnector::
+// enterAPMode() and apRejoinMonitorTask()'s failed-rejoin path go through
+// here so they can't drift: the rejoin path used to do a bare
+// `WiFi.mode(WIFI_AP)` after a WIFI_AP_STA probe, which on some cores drops
+// the softAP config and always drops the DNS option below - so after the
+// *first* failed rejoin the captive-portal popup stopped appearing and the
+// setup page was only reachable by typing the IP.
+void reapplyApConfig()
+{
+    WiFi.mode(WIFI_AP);
+    WiFi.softAP(DeviceIdentity::getDeviceName().c_str(), AP_PASSWORD);
+
+    // The AP-mode DHCP server doesn't offer a DNS-server option by default, so
+    // joining phones never learn to query us for DNS and skip captive-portal
+    // detection entirely (no auto-popup on iOS/Android). Explicitly offer our
+    // own IP as the DNS server so the wildcard DNSServer + hotspot-detect
+    // routes in comms.cpp actually get hit.
+    esp_netif_t* apNetif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
+    if (apNetif)
+    {
+        esp_netif_dns_info_t dnsInfo;
+        dnsInfo.ip.type = ESP_IPADDR_TYPE_V4;
+        dnsInfo.ip.u_addr.ip4.addr = static_cast<uint32_t>(WiFi.softAPIP());
+        esp_netif_dhcps_stop(apNetif);
+        esp_netif_set_dns_info(apNetif, ESP_NETIF_DNS_MAIN, &dnsInfo);
+        esp_netif_dhcps_start(apNetif);
+    }
+    else { Log.warningln("Could not get AP netif handle to set DHCP DNS option"); }
+}
+
 // Tracks a mid-run disconnect and decides when to retry vs. fall back to AP mode - see
 // wifi-recovery.h. Lives for the process lifetime. The WiFi event task only ever
 // postEvent()s into it; the monitor task below is the only one that tick()s (and so the only
@@ -106,9 +136,11 @@ void apRejoinMonitorTask(void*)
         else
         {
             // Revert cleanly to AP-only. A failed STA join inside WIFI_AP_STA can leave
-            // the radio in a half-joined state on some cores if left as-is.
+            // the radio in a half-joined state on some cores if left as-is - and a bare
+            // WiFi.mode(WIFI_AP) here dropped the softAP + captive-portal DNS option, so
+            // go through the same reapplyApConfig() enterAPMode() uses.
             WiFi.disconnect();
-            WiFi.mode(WIFI_AP);
+            reapplyApConfig();
         }
     }
 }
@@ -191,25 +223,7 @@ bool EspWiFiConnector::testConnection(const char* ssid, const char* password)
 void EspWiFiConnector::enterAPMode()
 {
     WiFi.disconnect();
-    WiFi.mode(WIFI_AP);
-    WiFi.softAP(DeviceIdentity::getDeviceName().c_str(), AP_PASSWORD);
-
-    // The AP-mode DHCP server doesn't offer a DNS-server option by default, so
-    // joining phones never learn to query us for DNS and skip captive-portal
-    // detection entirely (no auto-popup on iOS/Android). Explicitly offer our
-    // own IP as the DNS server so the wildcard DNSServer + hotspot-detect
-    // routes in comms.cpp actually get hit.
-    esp_netif_t* apNetif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
-    if (apNetif)
-    {
-        esp_netif_dns_info_t dnsInfo;
-        dnsInfo.ip.type = ESP_IPADDR_TYPE_V4;
-        dnsInfo.ip.u_addr.ip4.addr = static_cast<uint32_t>(WiFi.softAPIP());
-        esp_netif_dhcps_stop(apNetif);
-        esp_netif_set_dns_info(apNetif, ESP_NETIF_DNS_MAIN, &dnsInfo);
-        esp_netif_dhcps_start(apNetif);
-    }
-    else { Log.warningln("Could not get AP netif handle to set DHCP DNS option"); }
+    reapplyApConfig();
 }
 
 void EspPreferencesStore::saveCredentials(const String& ssid, const String& password)
