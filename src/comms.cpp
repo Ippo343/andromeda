@@ -764,6 +764,21 @@ bool Comms::processWiFiCredentials(AsyncWebServerRequest* request, const String&
             return true;
 
         case WifiManager::SaveResult::Accepted:
+            // Single-flight. saveWorkerTask holds the one WiFi radio for up to
+            // 10 s (WiFi.begin() + a status poll). A second accepted /save
+            // while the first probe runs - a typo corrected and re-submitted,
+            // or a second phone on the setup AP - would spawn a second worker
+            // whose WiFi.begin() supersedes the first's; the first worker's
+            // poll then sees WL_CONNECTED for the *second* network, persists
+            // its OWN ssid/password, and reboots the device onto credentials
+            // that can't join. /save only ever runs on the single async_tcp
+            // task, so this check-then-set isn't itself racy.
+            if (saveStatus == SaveStatus::Pending)
+            {
+                request->send(409, "text/plain", "A connection test is already in progress");
+                return true;
+            }
+
             // The blocking connection probe can't run here - this handler is on the async_tcp
             // task and a 10s WiFi.status() poll trips its watchdog (#114). Kick it to a worker
             // task and return immediately; the setup client polls GET /save-status for the
