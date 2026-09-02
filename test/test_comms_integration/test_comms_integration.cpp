@@ -253,6 +253,41 @@ void test_save_valid_credentials_returns_202_without_blocking_or_persisting()
     TEST_ASSERT_TRUE(statusReq.responseBody == String("pending"));
 }
 
+// Single-flight: a second /save while the first probe is still Pending must be
+// rejected (409), not spawn a second worker. Two concurrent probes fight over
+// the one radio and the loser persists the wrong ssid/password, bricking the
+// device into un-joinable credentials.
+void test_second_save_while_a_probe_is_pending_is_rejected()
+{
+    // The Comms singleton's saveStatus carries across tests; start from a
+    // non-Pending state so the first /save below is accepted.
+    CommsTestAccess::setSaveStatusFailed(Comms::Instance());
+
+    auto* handler = CommsTestAccess::server(Comms::Instance()).findHandler("/save", HTTP_POST);
+    TEST_ASSERT_NOT_NULL(handler);
+
+    AsyncWebServerRequest first;
+    first.setArg("ssid", "MyNetwork");
+    first.setArg("password", "hunter2");
+    (*handler)(&first);
+    TEST_ASSERT_EQUAL_INT(202, first.responseCode);  // probe kicked off, saveStatus == Pending
+
+    AsyncWebServerRequest second;
+    second.setArg("ssid", "MyNetwork-fixed");
+    second.setArg("password", "hunter2-fixed");
+    (*handler)(&second);
+    TEST_ASSERT_EQUAL_INT(409, second.responseCode);
+    TEST_ASSERT_FALSE(fakeStore().hasCredentials);  // nothing persisted by the rejected call
+
+    // Once the probe finishes (worker sets a terminal state), /save works again.
+    CommsTestAccess::setSaveStatusFailed(Comms::Instance());
+    AsyncWebServerRequest third;
+    third.setArg("ssid", "MyNetwork");
+    third.setArg("password", "hunter2");
+    (*handler)(&third);
+    TEST_ASSERT_EQUAL_INT(202, third.responseCode);
+}
+
 // The worker's actual probe-then-persist step, exercised directly against the fakes since the
 // native xTaskCreate never runs saveWorkerTask. On a successful probe the pair is persisted...
 void test_test_and_persist_persists_on_successful_probe()
@@ -979,6 +1014,7 @@ int main(int argc, char** argv)
     UNITY_BEGIN();
 
     RUN_TEST(test_save_valid_credentials_returns_202_without_blocking_or_persisting);
+    RUN_TEST(test_second_save_while_a_probe_is_pending_is_rejected);
     RUN_TEST(test_save_empty_ssid_returns_400_and_does_not_persist);
     RUN_TEST(test_save_over_long_ssid_returns_400_and_does_not_persist);
     RUN_TEST(test_save_over_long_password_returns_400_and_does_not_persist);
