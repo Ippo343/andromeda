@@ -1173,6 +1173,39 @@ void test_individual_strip_drift_transitions_to_new_target()
     TEST_ASSERT_TRUE(c == fx.colors[0]);
 }
 
+// Bad weather: near the millis() rollover, transitionEndTimes[i] (= start +
+// duration) wraps to a small value while t is still huge, so `t >=
+// transitionEndTimes[i]` was true on every frame - each strip re-rolled its
+// colour every single frame, a hard strobe. The elapsed-vs-duration form must
+// hold the transition steady until t genuinely catches up.
+void test_individual_strip_drift_does_not_strobe_across_millis_rollover()
+{
+    IndividualStripDrift fx;
+
+    const milliseconds_t start = 0xFFFFF000UL;
+    const milliseconds_t duration = 5000;
+    FOR_EACH_STRIP
+    {
+        fx.transitionStartTimes[iStrip] = start;
+        fx.transitionEndTimes[iStrip] = start + duration;  // wraps to ~0x1388
+    }
+    CRGB target0 = fx.targetColors[0];
+    milliseconds_t end0 = fx.transitionEndTimes[0];
+
+    // Frames a few seconds apart, all still inside the transition window but
+    // past where the wrapped end stamp sits numerically.
+    for (milliseconds_t t = start + 500; t < start + duration; t += 1000)
+    {
+        fx.precompute(t);
+        TEST_ASSERT_EQUAL_UINT32(end0, fx.transitionEndTimes[0]);
+        TEST_ASSERT_TRUE(fx.targetColors[0] == target0);
+    }
+
+    // Once t truly passes the (wrapped) end, exactly one re-roll happens.
+    fx.precompute(start + duration + 100);  // t = 0x1454, elapsed = 5100 >= 5000
+    TEST_ASSERT_TRUE(fx.transitionEndTimes[0] != end0);
+}
+
 // The transition's midpoint should have moved measurably closer to the target than the
 // very start did - the existing test above only checks the read-back (evaluate() ==
 // currentColors[]), never that currentColors[] actually blends toward targetColors[].
@@ -1536,6 +1569,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_hexagonal_ripple_galaxy_color_varies_with_position);
 
     RUN_TEST(test_individual_strip_drift_transitions_to_new_target);
+    RUN_TEST(test_individual_strip_drift_does_not_strobe_across_millis_rollover);
     RUN_TEST(test_individual_strip_drift_current_color_moves_toward_target_over_the_transition);
 
     RUN_TEST(test_cartesian_moodlight_randomize_and_evaluate);

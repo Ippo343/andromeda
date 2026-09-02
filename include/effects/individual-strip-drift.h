@@ -49,19 +49,26 @@ class IndividualStripDrift : public PerStripColorEffect
     {
         FOR_EACH_STRIP
         {
-            // Check if we need to pick a new color
-            if (t >= transitionEndTimes[iStrip])
+            // Rollover-safe: compare elapsed-since-start against the stored
+            // duration (itself an unsigned delta), never t against the
+            // absolute end stamp. `t >= transitionEndTimes[i]` flips at the
+            // millis() wrap - the end stamp was computed by addition before
+            // the wrap - and re-rolls every strip's colour on every frame.
+            milliseconds_t elapsed = t - transitionStartTimes[iStrip];
+            milliseconds_t duration = transitionEndTimes[iStrip] - transitionStartTimes[iStrip];
+
+            if (elapsed >= duration)
             {
                 prevColors[iStrip] = targetColors[iStrip];
                 targetColors[iStrip] = randomColor();
                 transitionStartTimes[iStrip] = t;
-                milliseconds_t duration = random(transitionDurationMin, transitionDurationMax);
+                duration = random(transitionDurationMin, transitionDurationMax);
                 transitionEndTimes[iStrip] = t + duration;
+                elapsed = 0;
             }
 
             // Compute the interpolation factor between the two colors
-            uint8_t factor =
-                cmap(t, transitionStartTimes[iStrip], transitionEndTimes[iStrip], 0, 255);
+            uint8_t factor = cmap(elapsed, 0, duration, 0, 255);
             factor = ease8InOutCubic(factor);
 
             colors[iStrip] = CRGB::blend(prevColors[iStrip], targetColors[iStrip], factor);

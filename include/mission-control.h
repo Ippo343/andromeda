@@ -362,6 +362,12 @@ class MissionControl
     // effect
     milliseconds_t effectStart = 0;     // time when the current effect started
     milliseconds_t nextTransition = 0;  // time when the current effect will end
+
+    // Whether nextTransition is a real deadline to watch for. False while an
+    // effect is held (holdEffect()): a rollover-safe "has t reached
+    // nextTransition?" can't distinguish a sentinel far-future deadline from a
+    // real one, so hold is a flag rather than nextTransition = ~0UL.
+    bool transitionScheduled = false;
     milliseconds_t fadeInEnd;  // time when the fade in will end ( = effectStart + FADE_IN_DURATION)
     milliseconds_t
         fadeOutStart;  // time when the fade out will start ( = nextTransition - FADE_OUT_DURATION)

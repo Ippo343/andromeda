@@ -96,6 +96,8 @@ class MissionControlTestAccess
     static void setEffectStartValue(MissionControl& mc, milliseconds_t t) { mc.effectStart = t; }
     static void setFadeInEndValue(MissionControl& mc, milliseconds_t t) { mc.fadeInEnd = t; }
     static void setFadeOutStartValue(MissionControl& mc, milliseconds_t t) { mc.fadeOutStart = t; }
+    static void setTransitionScheduled(MissionControl& mc, bool v) { mc.transitionScheduled = v; }
+    static bool transitionScheduled(MissionControl& mc) { return mc.transitionScheduled; }
 
     static RenderMode getMode(MissionControl& mc) { return mc.mode; }
     static void setMode(MissionControl& mc, RenderMode m) { mc.mode = m; }
@@ -319,14 +321,22 @@ void test_queue_web_command_and_process_hold()
     TEST_ASSERT_TRUE(mc.queueWebCommand(Command::Hold()));
 
     MissionControlTestAccess::setNextTransition(mc);
-    milliseconds_t before = MissionControlTestAccess::nextTransition(mc);
+    milliseconds_t scheduled = MissionControlTestAccess::nextTransition(mc);
 
-    mc.update(before);  // drains the queue and calls holdEffect()
+    mc.update(scheduled);  // drains the queue and calls holdEffect()
 
-    // holdEffect() sets nextTransition to the maximum possible value
-    TEST_ASSERT_EQUAL_UINT32(~0UL, MissionControlTestAccess::nextTransition(mc));
     TEST_ASSERT_TRUE(mc.isHolding());
     TEST_ASSERT_EQUAL(RenderMode::HOLDING, MissionControlTestAccess::getMode(mc));
+
+    // holdEffect() drops the scheduled transition (no sentinel deadline). A
+    // held effect must not transition no matter how far t advances - including
+    // right past what would have been its deadline, and across a millis()
+    // rollover.
+    MissionControlTestAccess::setMode(mc, RenderMode::HOLDING);
+    mc.update(scheduled + (60 MINUTES));
+    TEST_ASSERT_TRUE(mc.isHolding());
+    mc.update(10);  // t wrapped back to near zero
+    TEST_ASSERT_TRUE(mc.isHolding());
 }
 
 // resumeEffect() must clear the holding flag and schedule a real (non-max)
@@ -727,6 +737,73 @@ void test_update_transition_guards_against_t_before_window_start()
 
     TEST_ASSERT_EQUAL_UINT8(0, FastLED.getBrightness());
     TEST_ASSERT_EQUAL(RenderMode::TRANSITIONING, MissionControlTestAccess::getMode(mc));
+}
+
+// millis() rollover, FX_LOOP: setNextTransition() builds nextTransition by
+// adding to an absolute millis() near 2^32, so it wraps to a small value.
+// `t >= nextTransition` was then true on every frame for the last minutes
+// before the wrap - a continuous handleTransition() storm (new animation +
+// effect allocation per tick). reached() must not fire until t genuinely
+// catches up to the (wrapped) deadline.
+void test_fx_loop_does_not_transition_storm_before_millis_rollover()
+{
+    MissionControl& mc = MissionControl::Instance();
+    RotatingEffectStub* fx = new RotatingEffectStub();
+    MissionControlTestAccess::setEffect(mc, fx);
+    MissionControlTestAccess::setMode(mc, RenderMode::FX_LOOP);
+    MissionControlTestAccess::setAnimation(mc, nullptr);
+
+    // Anchor the window's start just under the millis() wrap, whatever width
+    // milliseconds_t is on this host: 32-bit on the ESP32 (and Windows), 64-bit
+    // on the Linux CI box. A hardcoded 0xFFFF0000 only wraps in 32-bit math.
+    const milliseconds_t MS_MAX = ~0UL;  // millis() wrap point at this host's milliseconds_t width
+    const milliseconds_t start = MS_MAX - 0xFFFF;  // 0x10000 ms before the wrap
+    MissionControlTestAccess::setEffectStartValue(mc, start);
+    MissionControlTestAccess::setFadeInEndValue(mc, start + 700);
+    MissionControlTestAccess::setFadeOutStartValue(mc, start + 700 + (5 MINUTES));
+    MissionControlTestAccess::setNextTransitionValue(mc, start + 700 + (5 MINUTES) + 900);  // wraps
+    MissionControlTestAccess::setTransitionScheduled(mc, true);
+
+    // A frame a few seconds before the wrap: well inside the effect's window,
+    // must keep rendering it, not transition.
+    mc.update(start + 30000);
+    TEST_ASSERT_EQUAL(RenderMode::FX_LOOP, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_EQUAL_PTR(fx, MissionControlTestAccess::getEffect(mc));
+
+    // The instant right before the wrap - still inside the window.
+    mc.update(MS_MAX - 0x10);
+    TEST_ASSERT_EQUAL(RenderMode::FX_LOOP, MissionControlTestAccess::getMode(mc));
+    TEST_ASSERT_EQUAL_PTR(fx, MissionControlTestAccess::getEffect(mc));
+}
+
+// millis() rollover, TRANSITIONING: transitionWindow.start is captured from
+// millis() before the wrap, so afterwards `t < transitionWindow.start` was
+// true on every tick - updateTransition() cut to black and returned forever,
+// leaving the device dark for the next ~49 days. The transition must still
+// run to completion across the wrap.
+void test_transition_completes_across_millis_rollover_instead_of_latching_black()
+{
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setMaxBrightness(mc, 255);
+    MissionControlTestAccess::setAnimation(mc, new StubAnimation());  // finishes on first frame
+    MissionControlTestAccess::setMode(mc, RenderMode::TRANSITIONING);
+
+    // Anchor the window relative to the millis() wrap at whatever width
+    // milliseconds_t is on this host (32-bit on the ESP32, 64-bit on CI) -
+    // start + 0x160 must wrap past zero, which a hardcoded 0xFFFFFF00 does
+    // only in 32-bit math.
+    const milliseconds_t MS_MAX = ~0UL;  // millis() wrap point at this host's milliseconds_t width
+    const milliseconds_t start = MS_MAX - 0xFF;  // window opens 0x100 ms before the wrap
+    MissionControlTestAccess::setTransitionWindowStart(mc, start);
+    MissionControlTestAccess::setTransitionWindowPreDelayEnd(mc, start + 0x160);  // wraps to ~0x60
+    MissionControlTestAccess::setTransitionWindowAnimationFinishedAt(mc, 0);
+
+    mc.update(start + 0x40);  // still within the pre-animation delay, just before the wrap
+    TEST_ASSERT_EQUAL(RenderMode::TRANSITIONING, MissionControlTestAccess::getMode(mc));
+    mc.update(0xA0);   // t has wrapped, past pre-delay: StubAnimation renders once and reports done
+    mc.update(0x400);  // past the post-animation delay: hand off to finishTransition()
+
+    TEST_ASSERT_EQUAL(RenderMode::FX_LOOP, MissionControlTestAccess::getMode(mc));
 }
 
 // The strip must actually go to black (brightness pushed via FASTLED_SHOW(),
@@ -1315,6 +1392,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_next_command_starts_transitioning_without_blocking_later_commands);
     RUN_TEST(test_next_command_mid_update_does_not_flash_stale_t_into_high_brightness);
     RUN_TEST(test_update_transition_guards_against_t_before_window_start);
+    RUN_TEST(test_fx_loop_does_not_transition_storm_before_millis_rollover);
+    RUN_TEST(test_transition_completes_across_millis_rollover_instead_of_latching_black);
     RUN_TEST(test_transitioning_pre_and_post_delay_windows_zero_the_strip_brightness);
     RUN_TEST(test_transitioning_animation_applies_gamma_corrected_max_brightness);
     RUN_TEST(test_power_off_mid_transition_cancels_animation_and_blanks_strip);
