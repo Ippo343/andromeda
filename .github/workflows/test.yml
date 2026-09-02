@@ -7,6 +7,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Callable from release.yml, which must not publish OTA firmware to the
+  # fleet without the suite having run. A tag push fires neither of the events
+  # above, so before this existed a `git push origin v1.2.3` from a red commit
+  # built and published all 7 assets with nothing checking them.
+  workflow_call:
 
 jobs:
   native-tests:
@@ -79,3 +84,11 @@ jobs:
 
       - name: Build firmware
         run: pio run -e ${{ matrix.env }}
+
+      # The filesystem image used to be built only by release.yml, so a data/
+      # change that broke it - or overflowed the spiffs partition - passed
+      # every PR check and first failed on the release tag, after both firmware
+      # halves were already staged. build-scripts/check_fs_ceiling.py gates the
+      # size as a post-action.
+      - name: Build filesystem image
+        run: pio run -e ${{ matrix.env }} -t buildfs

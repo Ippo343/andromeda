@@ -13,8 +13,18 @@ on:
       - "v*"
 
 jobs:
+  # A tag push fires neither of test.yml's own triggers, so without this the
+  # release job would build and publish to the fleet having run no tests at
+  # all - the project's "full suite green on every commit" discipline had no
+  # enforcement at the one moment it mattered most. Reusing test.yml rather
+  # than duplicating its steps keeps one definition of "the suite".
+  test:
+    name: Test suite
+    uses: ./.github/workflows/test.yml
+
   release:
     name: Build + publish OTA release
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: write # gh release create / upload
@@ -55,6 +65,21 @@ jobs:
         with:
           python-version: "3.x"
 
+      # Before anything is built: a version code that isn't strictly greater
+      # than the newest published one produces a release the fleet can never
+      # see. Devices compare `latest.versionCode > FIRMWARE_VERSION_CODE`, so
+      # such a release is reported UpToDate and silently never offered - which
+      # is exactly what a hot-fix cut off an older commit would do. Fail here,
+      # loudly, rather than publish something invisible.
+      - name: Version code must be newer than the published one
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python build-scripts/check_version_code.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --tag "$GITHUB_REF_NAME" \
+            --version-code "${{ steps.meta.outputs.version_code }}"
+
       - name: Install PlatformIO
         run: pip install --upgrade platformio
 
@@ -88,11 +113,45 @@ jobs:
             --out dist/manifest.json
           ls -l dist
 
-      - name: Publish GitHub Release
+      # Two steps, not one, and deliberately so. Creating the release live
+      # meant a device polling mid-upload could fetch a manifest.json whose
+      # firmware URLs 404 - and with the filesystem write erasing LittleFS
+      # before it fetches, that is a device with no web UI. It only ever
+      # worked because `dist/*` globs alphabetically (f < l < m), putting the
+      # manifest last: an accident, not a guarantee, that renaming any asset
+      # would have silently removed. A draft is invisible to the OTA check, so
+      # the upload can't be observed half-done.
+      - name: Upload assets to a draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="$GITHUB_REF_NAME"
-          FLAGS="--title $TAG --generate-notes"
+          # Publishing in two steps means a run can now fail *after* the draft
+          # exists (a short upload, a failed asset check). gh release create
+          # refuses a tag that already has a release, so without this a single
+          # failed attempt would block every retry of that tag. Clear a
+          # leftover draft first - never a published one, which would be
+          # destroying a release the fleet may already have seen.
+          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null)" = "true" ]; then
+            echo "Removing a leftover draft for $TAG from a previous failed run."
+            gh release delete "$TAG" --yes
+          fi
+          FLAGS="--title $TAG --generate-notes --draft"
           [ "${{ steps.meta.outputs.prerelease }}" = "true" ] && FLAGS="$FLAGS --prerelease"
           gh release create "$TAG" dist/* $FLAGS
+
+      - name: Verify the draft has every asset, then publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          # 3 firmware + 3 littlefs + manifest.json - see build-scripts/make_manifest.py.
+          EXPECTED_ASSETS=7
+          actual=$(gh release view "$TAG" --json assets --jq '.assets | length')
+          if [ "$actual" -ne "$EXPECTED_ASSETS" ]; then
+            echo "::error::$TAG has $actual assets, expected $EXPECTED_ASSETS - not publishing."
+            gh release view "$TAG" --json assets --jq '.assets[].name'
+            exit 1
+          fi
+          gh release edit "$TAG" --draft=false
+          echo "Published $TAG with $actual assets."
