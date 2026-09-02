@@ -38,11 +38,15 @@ struct Entry
 
 // Suggested JsonDocument capacities for callers. The release-list doc only
 // ever holds the Filter-reduced result (tag_name + prerelease + asset
-// name/url per release for ~5 releases), not the raw response - but it's
-// still several KB, so src/ota-updater.cpp puts it on the heap
-// (DynamicJsonDocument) since the check runs once a day, well off any hot
-// path. The per-board manifest is small enough for the stack.
-constexpr size_t RELEASE_LIST_DOC_CAPACITY = 8192;
+// name/url per release), not the raw response - but src/ota-updater.cpp asks
+// GitHub for up to 20 releases (see RELEASES_API_URL) so a run of pre-release
+// tags can't hide the newest stable one from a stable-channel device. It goes
+// on the heap (DynamicJsonDocument) since the check runs once a day, well off
+// any hot path; if the reduced list still overruns this, deserializeJson just
+// returns NoMemory and the check fails cleanly (no worse than "no release
+// found") - it never touches the flash. The per-board manifest is small
+// enough for the stack.
+constexpr size_t RELEASE_LIST_DOC_CAPACITY = 20480;
 constexpr size_t MANIFEST_DOC_CAPACITY = 3072;
 
 // Filter for the api.github.com "list releases" response - keep only the
@@ -73,6 +77,25 @@ inline bool copyField(char* dst, size_t dstCap, const char* src)
     if (n == 0 || n >= dstCap) return false;
     std::memcpy(dst, src, n + 1);
     return true;
+}
+
+// An MD5 hex digest is exactly 32 lowercase hex characters. This is the only
+// integrity check on a flashed image (the transport is TLS but unverified,
+// #160), and Update.setMD5() silently disables verification unless it's given
+// exactly 32 chars - so a manifest row whose md5 is any other length or
+// contains a non-hex character must be rejected here, before it can reach
+// Update, rather than flashing an unverified image.
+inline bool isMd5Hex(const char* s)
+{
+    if (s == nullptr) return false;
+    size_t n = 0;
+    for (; s[n] != '\0'; ++n)
+    {
+        char c = s[n];
+        bool hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+        if (!hex || n >= 32) return false;
+    }
+    return n == 32;
 }
 }  // namespace detail
 
@@ -141,11 +164,15 @@ inline bool parse(const char* manifestJson, const char* board, Entry& out)
         // tag is display-only; tolerate its absence.
         if (tag != nullptr && std::strlen(tag) < sizeof(e.tag)) std::strcpy(e.tag, tag);
 
+        const char* fwMd5 = fw["md5"].as<const char*>();
+        const char* fsMd5 = fs["md5"].as<const char*>();
+        if (!detail::isMd5Hex(fwMd5) || !detail::isMd5Hex(fsMd5)) return false;
+
         bool ok = detail::copyField(e.board, sizeof(e.board), rowBoard) &&
                   detail::copyField(e.fwUrl, sizeof(e.fwUrl), fw["url"].as<const char*>()) &&
-                  detail::copyField(e.fwMd5, sizeof(e.fwMd5), fw["md5"].as<const char*>()) &&
+                  detail::copyField(e.fwMd5, sizeof(e.fwMd5), fwMd5) &&
                   detail::copyField(e.fsUrl, sizeof(e.fsUrl), fs["url"].as<const char*>()) &&
-                  detail::copyField(e.fsMd5, sizeof(e.fsMd5), fs["md5"].as<const char*>());
+                  detail::copyField(e.fsMd5, sizeof(e.fsMd5), fsMd5);
         if (!ok || e.fwBytes == 0 || e.fsBytes == 0) return false;
 
         out = e;

@@ -510,8 +510,11 @@ void Comms::setupRoutes()
                       r->send(403, "text/plain", "Cross-origin request rejected");
                       return;
                   }
-                  OtaUpdater::startUpdate();
-                  r->send(202, "text/plain", "OTA update started");
+                  // Answer with what actually happened: 202 only if a worker
+                  // was spawned, 409/503 (with a reason) otherwise, so the
+                  // Advanced page never polls a request that did nothing.
+                  OtaStartGate::Outcome o = OtaUpdater::startUpdate();
+                  r->send(OtaStartGate::httpStatus(o), "text/plain", OtaStartGate::message(o));
               });
     server.on("/ota-check", HTTP_POST,
               [](AsyncWebServerRequest* r)
@@ -521,8 +524,8 @@ void Comms::setupRoutes()
                       r->send(403, "text/plain", "Cross-origin request rejected");
                       return;
                   }
-                  OtaUpdater::startCheck();
-                  r->send(202, "text/plain", "OTA check started");
+                  OtaStartGate::Outcome o = OtaUpdater::startCheck();
+                  r->send(OtaStartGate::httpStatus(o), "text/plain", OtaStartGate::message(o));
               });
     server.on("/ota-channel", HTTP_POST,
               [](AsyncWebServerRequest* r)

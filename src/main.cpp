@@ -12,11 +12,13 @@
 // ArduinoLog.h) that every Log.*ln() call below already degrades to.
 #include "loggers.h"
 #endif
+#include "fs-health.h"
 #include "mission-control.h"
+#include "ota-eligibility.h"
 #include "perf-monitor.h"
 #include "version.h"
-
 #ifndef NATIVE_RUNTIME
+#include "ota-config.h"
 #include "ota-updater.h"
 #include "status-led.h"
 #endif
@@ -46,12 +48,30 @@ void setup()
     // with logs
     delay(100);
 
-    LittleFS.begin();
+    if (!LittleFS.begin())
+    {
+        // Mount failed - most likely an OTA (#63) that lost power during the
+        // raw filesystem write. Reformat so logging and the render loop still
+        // come up, and flag it so OtaUpdater re-fetches this version's
+        // filesystem image instead of refusing it as "already up to date" -
+        // the only in-band way back to a working web UI.
+        g_fsDamaged = true;
+        LittleFS.begin(true);
+    }
     setupLoggers();
 #endif
     Log.noticeln("=== Andromeda Device Starting Up ===");
     Log.noticeln("=== Version: %s", VERSION);
     Log.noticeln("====================================");
+    if (g_fsDamaged)
+        Log.errorln("LittleFS did not mount - reformatted empty; OTA will restore the web UI");
+#ifndef NATIVE_RUNTIME
+    if (OtaEligibility::didNotTake(OtaConfig::lastAppliedCode(), FIRMWARE_VERSION_CODE))
+        Log.errorln(
+            "OTA: recorded an update to code %u but booted code %d - the new image is "
+            "not active; a re-check will re-offer it",
+            OtaConfig::lastAppliedCode(), FIRMWARE_VERSION_CODE);
+#endif
 
     // Load model ID
     ModelId model;
@@ -174,16 +194,33 @@ void setup()
     // Background OTA (#63). A detached task, not part of setup(), so it adds
     // no boot delay: it waits ~10 s for WiFi/services to settle, checks
     // GitHub once, then re-checks daily. Nothing is ever applied without an
-    // explicit request from the web UI.
+    // explicit request from the web UI - except when the filesystem came up
+    // damaged, where the first pass triggers the self-repair described in
+    // fs-health.h (re-flashing the running version's FS image, never new
+    // firmware) since there is no web UI left to ask through.
     OtaUpdater::begin();
     xTaskCreate(
         [](void*)
         {
             vTaskDelay(pdMS_TO_TICKS(10000));
+            bool repairFs = g_fsDamaged;
             for (;;)
             {
-                OtaUpdater::startCheck();
-                vTaskDelay(pdMS_TO_TICKS(24UL * 60 * 60 * 1000));
+                if (repairFs)
+                {
+                    Log.warningln("OTA: filesystem damaged - attempting self-repair");
+                    // Keep retrying on a short interval until the worker
+                    // actually spawns (WiFi is often not up yet at boot+10s);
+                    // only then fall back to the normal daily cadence.
+                    if (OtaUpdater::startUpdate() == OtaStartGate::Outcome::Started)
+                        repairFs = false;
+                    vTaskDelay(pdMS_TO_TICKS(repairFs ? 60UL * 1000 : 24UL * 60 * 60 * 1000));
+                }
+                else
+                {
+                    OtaUpdater::startCheck();
+                    vTaskDelay(pdMS_TO_TICKS(24UL * 60 * 60 * 1000));
+                }
             }
         },
         "OtaAutoCheck", 3072, nullptr, 1, nullptr);

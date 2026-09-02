@@ -14,8 +14,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "fs-health.h"
 #include "loggers.h"
 #include "ota-config.h"
+#include "ota-eligibility.h"
 #include "ota-manifest.h"
 #include "version.h"
 
@@ -26,8 +28,15 @@ namespace
 // GitHub "list releases" for this repo, newest first. Unauthenticated: 60
 // req/h per IP, far above a daily check. A User-Agent is mandatory or GitHub
 // answers 403.
+//
+// per_page=20 (not 5): a stable-channel device skips every pre-release, so a
+// normal -rc/-beta run longer than the page would leave the newest stable
+// release off the end of the list and the device reporting "no matching
+// release found" until a plain tag lands back inside the window. 20 is still
+// a single request, far inside the 60/h budget, and the Filter-reduced list
+// fits RELEASE_LIST_DOC_CAPACITY with headroom.
 constexpr const char* RELEASES_API_URL =
-    "https://api.github.com/repos/Ippo343/andromeda/releases?per_page=5";
+    "https://api.github.com/repos/Ippo343/andromeda/releases?per_page=20";
 constexpr const char* USER_AGENT =
     "andromeda-led-controller (OTA; +https://github.com/Ippo343/andromeda)";
 
@@ -108,19 +117,26 @@ void releaseTask()
     xSemaphoreGive(g_lock);
 }
 
-bool preconditionsOk()
+// Evaluate the entry gate (WiFi / heap / single-flight) and log why if it's
+// not clear. The pure decision lives in OtaStartGate so the native suite
+// covers it; this just samples the live state to feed it.
+OtaStartGate::Outcome startOutcome()
 {
-    if ((WiFi.getMode() & WIFI_MODE_STA) == 0 || WiFi.status() != WL_CONNECTED)
+    bool wifiSta = (WiFi.getMode() & WIFI_MODE_STA) != 0 && WiFi.status() == WL_CONNECTED;
+
+    bool inFlight = true;  // lock not up yet -> treat as busy, never spawn
+    if (g_lock != nullptr)
     {
-        Log.noticeln("OTA: skipped - WiFi not connected in station mode");
-        return false;
+        xSemaphoreTake(g_lock, portMAX_DELAY);
+        inFlight = g_taskInFlight;
+        xSemaphoreGive(g_lock);
     }
-    if (ESP.getFreeHeap() < MIN_FREE_HEAP)
-    {
-        Log.warningln("OTA: skipped - only %u bytes free heap", ESP.getFreeHeap());
-        return false;
-    }
-    return true;
+
+    OtaStartGate::Outcome o =
+        OtaStartGate::evaluate(wifiSta, ESP.getFreeHeap(), MIN_FREE_HEAP, inFlight);
+    if (o != OtaStartGate::Outcome::Started)
+        Log.noticeln("OTA: not starting - %s", OtaStartGate::message(o));
+    return o;
 }
 
 void configureClient(WiFiClientSecure& client, HTTPClient& http, const char* url)
@@ -243,7 +259,17 @@ bool flashFromUrl(const char* url, const char* md5, uint32_t expectedBytes, int 
         fail(Update.errorString());
         return false;
     }
-    Update.setMD5(md5);
+    // setMD5() returns false and leaves verification *off* unless it's handed
+    // exactly 32 chars. OtaManifest::parse already enforces 32 lowercase hex,
+    // so this should never fail - but a flashed-but-unverified image is bad
+    // enough that we bail rather than trust that invariant held.
+    if (!Update.setMD5(md5))
+    {
+        http.end();
+        Update.abort();
+        fail("bad md5 in manifest - refusing to flash unverified");
+        return false;
+    }
     Update.onProgress([](size_t done, size_t total)
                       { setProgress(total ? static_cast<uint8_t>(done * 100 / total) : 0); });
 
@@ -295,7 +321,13 @@ void updateTask(void*)
         return;
     }
 
-    if (e.versionCode <= FIRMWARE_VERSION_CODE)
+    // g_fsDamaged: setup() found LittleFS unmountable (an OTA that lost power
+    // mid-write is the likely cause) and reformatted it empty. The firmware is
+    // fine but there's no web UI, and `latest > running` would refuse the only
+    // update that repairs it - so allow re-flashing the *current* version's
+    // filesystem in that one case. Never a downgrade. See ota-eligibility.h.
+    const bool fsDamaged = g_fsDamaged;
+    if (!OtaEligibility::shouldApply(e.versionCode, FIRMWARE_VERSION_CODE, fsDamaged))
     {
         recordCheckResult(State::UpToDate, e.versionCode, e.tag);
         Log.noticeln("OTA: update requested but already on the newest build");
@@ -306,8 +338,11 @@ void updateTask(void*)
 
     // Firmware first: the worst case is new firmware + old assets, which still
     // works (routes are only ever added). FS-first could leave old firmware
-    // serving a new index.html whose assets it has no route for.
-    if (!flashFromUrl(e.fwUrl, e.fwMd5, e.fwBytes, U_FLASH, State::WritingFw))
+    // serving a new index.html whose assets it has no route for. A same-version
+    // run is the fs-damage recovery path only - the firmware slot is already
+    // correct, so skip straight to the filesystem.
+    const bool needFirmware = e.versionCode > FIRMWARE_VERSION_CODE;
+    if (needFirmware && !flashFromUrl(e.fwUrl, e.fwMd5, e.fwBytes, U_FLASH, State::WritingFw))
     {
         releaseTask();
         vTaskDelete(nullptr);
@@ -316,9 +351,11 @@ void updateTask(void*)
 
     // Skip the filesystem write when data/ hasn't changed since the last
     // applied update - it's a full-partition transfer + flash-wear + risk
-    // window for nothing.
+    // window for nothing. Never skip it on the recovery path: the on-flash
+    // image is the thing that's broken, and NVS still holds the pre-failure
+    // md5 (persistApplied runs only after a successful write).
     char appliedFsMd5[33];
-    bool fsUnchanged = OtaConfig::appliedFsMd5(appliedFsMd5, sizeof(appliedFsMd5)) &&
+    bool fsUnchanged = !fsDamaged && OtaConfig::appliedFsMd5(appliedFsMd5, sizeof(appliedFsMd5)) &&
                        std::strcmp(appliedFsMd5, e.fsMd5) == 0;
     if (fsUnchanged) { Log.noticeln("OTA: filesystem unchanged (%s) - skipping", e.fsMd5); }
     else
@@ -361,16 +398,31 @@ void begin()
     if (g_lock == nullptr) g_lock = xSemaphoreCreateMutex();
 }
 
-void startCheck()
+OtaStartGate::Outcome startCheck()
 {
-    if (g_lock == nullptr || !preconditionsOk() || !claimTask()) return;
-    if (xTaskCreate(checkTask, "OtaCheck", 10240, nullptr, 1, nullptr) != pdPASS) releaseTask();
+    OtaStartGate::Outcome o = startOutcome();
+    if (o != OtaStartGate::Outcome::Started) return o;
+    // claimTask() can still lose to a request that raced us past startOutcome().
+    if (!claimTask()) return OtaStartGate::Outcome::Busy;
+    if (xTaskCreate(checkTask, "OtaCheck", 10240, nullptr, 1, nullptr) != pdPASS)
+    {
+        releaseTask();
+        return OtaStartGate::Outcome::LowHeap;  // no TCB/stack available
+    }
+    return OtaStartGate::Outcome::Started;
 }
 
-void startUpdate()
+OtaStartGate::Outcome startUpdate()
 {
-    if (g_lock == nullptr || !preconditionsOk() || !claimTask()) return;
-    if (xTaskCreate(updateTask, "OtaUpdate", 16384, nullptr, 1, nullptr) != pdPASS) releaseTask();
+    OtaStartGate::Outcome o = startOutcome();
+    if (o != OtaStartGate::Outcome::Started) return o;
+    if (!claimTask()) return OtaStartGate::Outcome::Busy;
+    if (xTaskCreate(updateTask, "OtaUpdate", 16384, nullptr, 1, nullptr) != pdPASS)
+    {
+        releaseTask();
+        return OtaStartGate::Outcome::LowHeap;
+    }
+    return OtaStartGate::Outcome::Started;
 }
 
 Status status()
