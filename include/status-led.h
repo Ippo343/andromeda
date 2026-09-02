@@ -2,9 +2,13 @@
 
 #include "esp32-hal-rmt.h"
 
-// "Board is powered" indicator: lights the onboard WS2812 a dim solid colour as
-// the very first thing setup() does, so a bare board on a bench isn't a black
-// rectangle you have to poke with a multimeter to trust.
+// On-board status LED (#141): drives the onboard WS2812 to a dim solid colour
+// reflecting the device state - Booting (the original "board has power" latch,
+// set first thing in setup()), then WifiConnecting / WifiConnected / ApMode /
+// Error / Running as those become known. statusLedSet() only writes on an
+// actual state change, so it stays edge-triggered and never touches the RMT
+// channel from the render loop. The state->colour table is the pure,
+// natively-tested status-led-state.h.
 //
 // Only the two Waveshare "Zero" boards have a known onboard RGB LED, and their
 // wiring does NOT match the DevKit board definitions we build against:
@@ -30,24 +34,28 @@
 #define STATUS_LED_PIN 10
 #endif
 
-inline void statusLedOn()
-{
+#include "status-led-state.h"
+
 #ifdef STATUS_LED_PIN
+// One 24-bit WS2812 frame: init a channel, blast the bits, hand it straight
+// back (rmtDeinit) so FastLED can claim it at strip init. The pixel latches
+// the last value, so it holds the colour with no refresh. Blocking, but every
+// caller is either setup() or an edge-triggered state change - never the
+// render loop (see statusLedSet()).
+inline void statusLedWriteFrame(StatusLed::LedColor c)
+{
     rmt_obj_t* rmt = rmtInit(STATUS_LED_PIN, RMT_TX_MODE, RMT_MEM_64);
     if (rmt == nullptr) { return; }
     rmtSetTick(rmt, 100);  // 100 ns per tick
 
-    // Dim warm-white: unmistakably lit in a dark room, not a desk-blinding
-    // beacon and barely any current draw. WS2812 wire order is G, R, B.
-    const uint8_t color[3] = {5, 6, 3};
-
+    const uint8_t bytes[3] = {c.g, c.r, c.b};  // WS2812 wire order
     rmt_data_t bits[24];
     int i = 0;
-    for (int c = 0; c < 3; c++)
+    for (int byteIdx = 0; byteIdx < 3; byteIdx++)
     {
         for (int bit = 7; bit >= 0; bit--)
         {
-            const bool one = color[c] & (1 << bit);
+            const bool one = bytes[byteIdx] & (1 << bit);
             bits[i].level0 = 1;
             bits[i].duration0 = one ? 8 : 4;  // T1H 0.8us / T0H 0.4us
             bits[i].level1 = 0;
@@ -56,9 +64,26 @@ inline void statusLedOn()
         }
     }
     rmtWriteBlocking(rmt, bits, 24);
-
-    // Hand the channel back so FastLED can claim it at strip init - the pixel
-    // holds the colour we just latched.
     rmtDeinit(rmt);
+}
+#endif
+
+// Drive the on-board LED to reflect a device state. A no-op on boards with no
+// known onboard LED (the WROOM - STATUS_LED_PIN undefined). Only performs the
+// RMT write when the state actually changed, so it's safe to call from
+// edge-y places (WiFi callbacks, mode changes) or, in principle, per frame.
+inline void statusLedSet(StatusLed::DeviceState state)
+{
+#ifdef STATUS_LED_PIN
+    static StatusLed::DeviceState last = StatusLed::DeviceState::_Count;  // force the first write
+    if (!StatusLed::shouldWrite(last, state)) return;
+    last = state;
+    statusLedWriteFrame(StatusLed::colorFor(state));
+#else
+    (void)state;
 #endif
 }
+
+// Back-compat name for main.cpp's first-thing-in-setup() call: "the board has
+// power" is the Booting state.
+inline void statusLedOn() { statusLedSet(StatusLed::DeviceState::Booting); }

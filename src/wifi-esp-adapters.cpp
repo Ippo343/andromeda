@@ -8,6 +8,7 @@
 #include "comms.h"
 #include "device-identity.h"
 #include "nvs-utils.h"
+#include "status-led.h"
 #include "wifi-recovery.h"
 
 namespace
@@ -142,10 +143,12 @@ bool EspWiFiConnector::connect(const char* ssid, const char* password)
             {
                 case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
                     wifiRecovery.onDisconnected(millis());
+                    statusLedSet(StatusLed::DeviceState::WifiConnecting);
                     break;
                 case ARDUINO_EVENT_WIFI_STA_GOT_IP:
                     Log.noticeln("WiFi connected with IP %s", WiFi.localIP().toString().c_str());
                     wifiRecovery.onConnected();
+                    statusLedSet(StatusLed::DeviceState::WifiConnected);
                     break;
                 default:
                     break;
@@ -211,6 +214,8 @@ void EspWiFiConnector::enterAPMode()
         esp_netif_dhcps_start(apNetif);
     }
     else { Log.warningln("Could not get AP netif handle to set DHCP DNS option"); }
+
+    statusLedSet(StatusLed::DeviceState::ApMode);
 }
 
 void EspPreferencesStore::saveCredentials(const String& ssid, const String& password)

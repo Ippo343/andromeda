@@ -135,13 +135,16 @@ void setup()
     MissionControl::Instance().restoreStartupState();
 
 #ifndef NATIVE_RUNTIME
+    statusLedSet(StatusLed::DeviceState::WifiConnecting);
     WiFiConnectingAnimation connecting;
     connecting.run();
 
-    switch (Comms::Instance().setup())
+    const Comms::SetupOutcome wifiOutcome = Comms::Instance().setup();
+    switch (wifiOutcome)
     {
         case Comms::SetupOutcome::Connected:
         {
+            statusLedSet(StatusLed::DeviceState::WifiConnected);
             WiFiSuccessAnimation success;
             success.run();
             break;
@@ -150,6 +153,7 @@ void setup()
         {
             // Stored credentials exist but didn't work (router password changed, out of
             // range, ...) - genuinely something to flag, unlike NeverConfigured below.
+            statusLedSet(StatusLed::DeviceState::Error);
             ErrorAnimation error;
             error.run();
             break;
@@ -158,6 +162,7 @@ void setup()
             // A brand-new device's expected first-boot state - landing in AP mode here is
             // normal, not an error, so no alarming indicator for what is otherwise a
             // completely ordinary out-of-box power-on.
+            statusLedSet(StatusLed::DeviceState::ApMode);
             break;
     }
 #endif
@@ -194,6 +199,12 @@ void setup()
     // and the SDK default (5s, panic-on-trigger - see sdkconfig CONFIG_ESP_TASK_WDT_*)
     // reboots the device instead. Enabled last, once setup() itself can no longer trip it.
     enableLoopWDT();
+
+    // Normal-running indicator - but not over the ApMode/Error colour: a
+    // device parked in the setup AP or flagging a bad credential set should
+    // keep showing that, not "everything's fine".
+    if (wifiOutcome == Comms::SetupOutcome::Connected)
+        statusLedSet(StatusLed::DeviceState::Running);
 #endif
 }
 
