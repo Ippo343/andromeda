@@ -634,7 +634,20 @@ void Comms::startAsyncScan()
     if (scanInProgress) return;
     scanInProgress = true;
     scanComplete = false;
-    WiFi.scanNetworks(true);
+    scanStartedAt = millis();
+
+    // A successful async start returns WIFI_SCAN_RUNNING (-1); WIFI_SCAN_FAILED
+    // (-2) means esp_wifi_scan_start() refused (e.g. the STA is mid-association
+    // after an AP-mode rejoin attempt) and NO SCAN_DONE event will ever fire -
+    // so the handler below never clears scanInProgress and /scan answers
+    // "scanning" for the rest of the session. Reap it here; the scanIsStale()
+    // watchdog in scanWiFiNetworks() covers a genuinely lost event.
+    if (WiFi.scanNetworks(true) == WIFI_SCAN_FAILED)
+    {
+        Log.warningln("WiFi scan failed to start - will retry on the next /scan");
+        scanInProgress = false;
+        return;
+    }
 
     // Registered once rather than on every call: WiFi.onEvent() appends a new callback to the
     // global event list each time, and none of the previous ones are ever removed - a long
@@ -673,6 +686,14 @@ String Comms::scanWiFiNetworks()
         String result = scanResults;
         xSemaphoreGive(scanResultsMutex);
         return result;
+    }
+    // A scan whose SCAN_DONE event never arrived (see startAsyncScan()) would
+    // otherwise keep this method returning "scanning" forever. Reap it so the
+    // next line can start a fresh one.
+    if (scanIsStale(scanInProgress, scanStartedAt, millis(), SCAN_STALE_MS))
+    {
+        Log.warningln("WiFi scan stuck for >%lus - abandoning it", SCAN_STALE_MS / 1000);
+        scanInProgress = false;
     }
     if (!scanInProgress) startAsyncScan();
     if (scanInProgress) return "{\"networks\":[],\"status\":\"scanning\"}";

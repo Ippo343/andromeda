@@ -26,6 +26,12 @@ constexpr WiFiEvent_t ARDUINO_EVENT_WIFI_STA_DISCONNECTED = 1;
 constexpr WiFiEvent_t ARDUINO_EVENT_WIFI_STA_GOT_IP = 2;
 constexpr WiFiEvent_t ARDUINO_EVENT_WIFI_SCAN_DONE = 3;
 
+// WiFiScanClass::scanNetworks(async) return codes (WiFiType.h). A successful
+// async start returns WIFI_SCAN_RUNNING; only WIFI_SCAN_FAILED means "no
+// SCAN_DONE event is coming".
+constexpr int16_t WIFI_SCAN_RUNNING = -1;
+constexpr int16_t WIFI_SCAN_FAILED = -2;
+
 using wifi_auth_mode_t = int;
 constexpr wifi_auth_mode_t WIFI_AUTH_OPEN = 0;
 constexpr wifi_auth_mode_t WIFI_AUTH_WPA2_PSK = 3;
@@ -82,7 +88,14 @@ class WiFiClass
 
     void onEvent(std::function<void(WiFiEvent_t, WiFiEventInfo_t)> cb) { lastEventCallback = cb; }
 
-    void scanNetworks(bool /*async*/) {}
+    // Real WiFiClass::scanNetworks(async) returns WIFI_SCAN_RUNNING (-1) on a
+    // successful start; script scriptedScanStartResult to WIFI_SCAN_FAILED to
+    // exercise the synchronous-failure branch.
+    std::optional<int16_t> scriptedScanStartResult;
+    int16_t scanNetworks(bool /*async*/)
+    {
+        return scriptedScanStartResult.value_or(WIFI_SCAN_RUNNING);
+    }
     // Overrides scanComplete()'s return - a negative value (e.g. WIFI_SCAN_FAILED) can't be
     // expressed by scriptedScanSSIDs.size() (a real WiFiClass::scanComplete() return can be
     // negative; size() never is), and comms.cpp's WiFi.onEvent(SCAN_DONE) handler has a

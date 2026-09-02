@@ -62,6 +62,35 @@ void test_origin_matches_host_rejects_empty_or_missing()
     TEST_ASSERT_FALSE(originMatchesHost("http://andromeda-ab12.local", nullptr));
 }
 
+// ---------------------------------------------------------------------------
+// scanIsStale - the watchdog for a scan whose SCAN_DONE event never came
+// ---------------------------------------------------------------------------
+
+void test_scan_not_stale_when_no_scan_is_running()
+{
+    TEST_ASSERT_FALSE(scanIsStale(false, 0, 100000, 20000));
+}
+
+void test_scan_not_stale_within_the_timeout()
+{
+    TEST_ASSERT_FALSE(scanIsStale(true, 1000, 1000 + 19999, 20000));
+    TEST_ASSERT_FALSE(scanIsStale(true, 5000, 5000, 20000));  // just started
+}
+
+void test_scan_is_stale_once_past_the_timeout()
+{
+    TEST_ASSERT_TRUE(scanIsStale(true, 1000, 1000 + 20000, 20000));
+    TEST_ASSERT_TRUE(scanIsStale(true, 1000, 1000 + 45000, 20000));
+}
+
+void test_scan_stale_check_survives_millis_wraparound()
+{
+    unsigned long startedAt = std::numeric_limits<unsigned long>::max() - 5000;
+    unsigned long now = 5000;  // 10s elapsed across the wrap
+    TEST_ASSERT_FALSE(scanIsStale(true, startedAt, now, 20000));
+    TEST_ASSERT_TRUE(scanIsStale(true, startedAt, now + 20000, 20000));
+}
+
 void test_scan_cache_handles_millis_wraparound()
 {
     // millis() overflows back to a small value after ~49.7 days; unsigned
@@ -85,6 +114,11 @@ int main(int argc, char** argv)
     RUN_TEST(test_origin_matches_host_accepts_the_devices_own_origin);
     RUN_TEST(test_origin_matches_host_rejects_suffix_and_port_tricks);
     RUN_TEST(test_origin_matches_host_rejects_empty_or_missing);
+
+    RUN_TEST(test_scan_not_stale_when_no_scan_is_running);
+    RUN_TEST(test_scan_not_stale_within_the_timeout);
+    RUN_TEST(test_scan_is_stale_once_past_the_timeout);
+    RUN_TEST(test_scan_stale_check_survives_millis_wraparound);
 
     return UNITY_END();
 }

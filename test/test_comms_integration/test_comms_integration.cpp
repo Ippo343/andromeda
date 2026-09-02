@@ -526,6 +526,31 @@ void test_scan_failure_clears_scan_in_progress()
     WiFi.scriptedScanCompleteResult.reset();  // don't leak into later tests/scans
 }
 
+// scanNetworks(true) can also fail *synchronously* (WIFI_SCAN_FAILED) with no
+// SCAN_DONE event ever firing - startAsyncScan() must reap scanInProgress
+// itself in that case, or /scan answers "scanning" for the rest of the
+// session with no way to retry.
+void test_synchronous_scan_start_failure_does_not_wedge_scan_in_progress()
+{
+    CommsTestAccess::setScanInProgress(Comms::Instance(), false);
+    CommsTestAccess::setScanComplete(Comms::Instance(), false);
+
+    WiFi.scriptedScanStartResult = WIFI_SCAN_FAILED;  // esp_wifi_scan_start() refused
+    CommsTestAccess::scanWiFiNetworks(Comms::Instance());
+    TEST_ASSERT_FALSE(CommsTestAccess::scanInProgress(Comms::Instance()));
+
+    // The very next /scan can start a real scan again (start now succeeds).
+    WiFi.scriptedScanStartResult.reset();
+    CommsTestAccess::scanWiFiNetworks(Comms::Instance());
+    TEST_ASSERT_TRUE(CommsTestAccess::scanInProgress(Comms::Instance()));
+
+    // Let the SCAN_DONE it's now waiting on complete, so state doesn't leak.
+    WiFi.scriptedScanCompleteResult = 0;
+    if (WiFi.lastEventCallback)
+        WiFi.lastEventCallback(ARDUINO_EVENT_WIFI_SCAN_DONE, WiFiEventInfo_t{});
+    WiFi.scriptedScanCompleteResult.reset();
+}
+
 // ---------------------------------------------------------------------------
 // WebSocket handler wiring
 // ---------------------------------------------------------------------------
@@ -980,6 +1005,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_scan_route_returns_scanning_placeholder_on_cache_miss);
     RUN_TEST(test_scan_complete_escapes_ssid_and_reports_encryption);
     RUN_TEST(test_scan_failure_clears_scan_in_progress);
+    RUN_TEST(test_synchronous_scan_start_failure_does_not_wedge_scan_in_progress);
 
     RUN_TEST(test_ws_valid_text_frame_queues_command);
     RUN_TEST(test_ws_color_commit_on_fast_path_persists_holding_color);
