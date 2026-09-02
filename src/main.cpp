@@ -199,10 +199,14 @@ void setup()
     // fs-health.h (re-flashing the running version's FS image, never new
     // firmware) since there is no web UI left to ask through.
     OtaUpdater::begin();
+    // ticksFromMs, not pdMS_TO_TICKS: the daily re-check delay's ms*1000
+    // intermediate overflows 32-bit TickType_t and the macro would schedule it
+    // every ~8m21s instead (see include/utils.h).
+    static_assert(configTICK_RATE_HZ == 1000, "ticksFromMs() assumes a 1 kHz FreeRTOS tick");
     xTaskCreate(
         [](void*)
         {
-            vTaskDelay(pdMS_TO_TICKS(10000));
+            vTaskDelay(ticksFromMs(10000));
             bool repairFs = g_fsDamaged;
             for (;;)
             {
@@ -214,12 +218,12 @@ void setup()
                     // only then fall back to the normal daily cadence.
                     if (OtaUpdater::startUpdate() == OtaStartGate::Outcome::Started)
                         repairFs = false;
-                    vTaskDelay(pdMS_TO_TICKS(repairFs ? 60UL * 1000 : 24UL * 60 * 60 * 1000));
+                    vTaskDelay(ticksFromMs(repairFs ? 60ULL * 1000 : 24ULL * 60 * 60 * 1000));
                 }
                 else
                 {
                     OtaUpdater::startCheck();
-                    vTaskDelay(pdMS_TO_TICKS(24UL * 60 * 60 * 1000));
+                    vTaskDelay(ticksFromMs(24ULL * 60 * 60 * 1000));
                 }
             }
         },
