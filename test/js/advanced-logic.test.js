@@ -12,6 +12,7 @@ const {
     isNewer,
     otaBadgeText,
     otaProgressLabel,
+    otaStartRejectionLabel,
     isOtaTerminalState,
     isOtaPollDone,
 } = require('../../data/js/advanced-logic.js');
@@ -217,6 +218,20 @@ describe('otaProgressLabel', () => {
     });
     test('missing progress defaults to 0%', () => {
         assert.equal(otaProgressLabel({ state: 'downloading' }), 'Downloading… 0%');
+    });
+});
+
+describe('otaStartRejectionLabel', () => {
+    test('good weather: uses the server reason text', () => {
+        assert.equal(
+            otaStartRejectionLabel(409, 'an OTA task is already running'),
+            "Couldn't start: an OTA task is already running",
+        );
+    });
+    test('bad weather: falls back to the status code when the body is empty', () => {
+        assert.equal(otaStartRejectionLabel(503, ''), "Couldn't start: HTTP 503");
+        assert.equal(otaStartRejectionLabel(503, '   '), "Couldn't start: HTTP 503");
+        assert.equal(otaStartRejectionLabel(0, null), "Couldn't start: HTTP 0");
     });
 });
 

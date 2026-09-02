@@ -143,6 +143,15 @@ function otaProgressLabel(s) {
     }
 }
 
+// A failed POST /ota or /ota-check now comes back non-2xx with a plain-text
+// reason (see OtaStartGate in the firmware) instead of a lying 202. Turn that
+// into a line for #otaProgress. `bodyText` is the response body; `status` the
+// HTTP code as a fallback when the body is empty.
+function otaStartRejectionLabel(status, bodyText) {
+    const reason = (bodyText || '').trim() || ('HTTP ' + status);
+    return `Couldn't start: ${reason}`;
+}
+
 // States where the poll loop should stop (nothing more will change without a
 // new user action, or the device is about to reboot out from under us).
 function isOtaTerminalState(state) {
@@ -174,6 +183,7 @@ if (typeof module !== 'undefined' && module.exports) {
         isNewer,
         otaBadgeText,
         otaProgressLabel,
+        otaStartRejectionLabel,
         isOtaTerminalState,
         isOtaPollDone,
     };
