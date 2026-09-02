@@ -16,10 +16,9 @@ constexpr const char* AP_PASSWORD = "";
 constexpr const char* PREFERENCES_NAMESPACE = "wifi";
 
 // Tracks a mid-run disconnect and decides when to retry vs. fall back to AP mode - see
-// wifi-recovery.h. Lives for the process lifetime alongside the WiFi event handler that
-// drives it; only ever touched from the WiFi event task and the monitor task below, both of
-// which are effectively serialized by how rarely they run (an event per disconnect/reconnect,
-// a tick once a second), so no additional locking.
+// wifi-recovery.h. Lives for the process lifetime. The WiFi event task only ever
+// postEvent()s into it; the monitor task below is the only one that tick()s (and so the only
+// one that mutates the state machine), so there's no shared read-modify-write to lock.
 WifiRecovery wifiRecovery;
 
 // Polls wifiRecovery roughly once a second and acts on its decision. A dedicated low-priority
@@ -141,11 +140,11 @@ bool EspWiFiConnector::connect(const char* ssid, const char* password)
             switch (event)
             {
                 case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-                    wifiRecovery.onDisconnected(millis());
+                    wifiRecovery.postEvent(WifiRecovery::Event::Disconnected, millis());
                     break;
                 case ARDUINO_EVENT_WIFI_STA_GOT_IP:
                     Log.noticeln("WiFi connected with IP %s", WiFi.localIP().toString().c_str());
-                    wifiRecovery.onConnected();
+                    wifiRecovery.postEvent(WifiRecovery::Event::Connected, millis());
                     break;
                 default:
                     break;
