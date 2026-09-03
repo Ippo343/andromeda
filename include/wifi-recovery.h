@@ -19,8 +19,13 @@ class WifiRecovery
 {
    public:
     static constexpr milliseconds_t INITIAL_BACKOFF_MS = 1000;
-    static constexpr milliseconds_t MAX_BACKOFF_MS = 60000;
-    static constexpr milliseconds_t AP_FALLBACK_DEAD_TIME_MS = 5UL * 60 * 1000;  // 5 minutes
+    // Capped well below AP_FALLBACK_DEAD_TIME_MS so several reconnect attempts still
+    // land inside the dead-time window (1s,2s,4s,8s,15s,15s,... -> ~7 tries in a minute)
+    // rather than one long wait eating the whole window.
+    static constexpr milliseconds_t MAX_BACKOFF_MS = 15000;
+    // How long a mid-run outage may persist before we give up on the saved network and
+    // fall back to the setup AP so someone standing next to the device can still reach it.
+    static constexpr milliseconds_t AP_FALLBACK_DEAD_TIME_MS = 1UL * 60 * 1000;  // 1 minute
 
     enum class Action
     {

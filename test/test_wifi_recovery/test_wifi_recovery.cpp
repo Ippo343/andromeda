@@ -78,12 +78,11 @@ void test_backoff_doubles_and_caps_at_max()
     t += 4000;
     TEST_ASSERT_TRUE(r.tick(t) == WifiRecovery::Action::Reconnect);  // schedules +8000
 
-    // Keep doubling past the cap - 8000 -> 16000 -> 32000 (clamped to 60000) -> stays 60000.
+    // Keep doubling past the cap - 8000 -> 15000 (clamped) -> stays 15000. All of this
+    // still fits inside AP_FALLBACK_DEAD_TIME_MS, so the cap is actually observable.
     t += 8000;
-    r.tick(t);
-    t += 16000;
-    r.tick(t);
-    t += 32000;
+    r.tick(t);  // schedules +15000
+    t += 15000;
     WifiRecovery::Action a = r.tick(t);
     TEST_ASSERT_TRUE(a == WifiRecovery::Action::Reconnect);
 
