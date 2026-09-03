@@ -1,0 +1,106 @@
+name: Pages
+
+# Publishes https://ippo343.github.io/andromeda/ - the browser flasher (#162).
+#
+# The binaries must be served same-origin: GitHub release-asset downloads
+# send no Access-Control-Allow-Origin header (verified against a real
+# release asset - api.github.com sends one, release downloads don't), so a
+# page fetching them straight from github.com/.../releases/download/...
+# fails in the browser. This job downloads the newest *stable* release's
+# assets and serves the exact released bits from the Pages artifact -
+# nothing is rebuilt, and no binary is ever committed to git (artifact
+# deploy via actions/deploy-pages, not a gh-pages branch).
+#
+# Triggered by release.yml (workflow_call) right after a stable release
+# publishes - see that workflow for why it can't just be `on: release`.
+# workflow_dispatch is kept for a manual re-deploy of the current newest
+# stable release. There is deliberately no dry-run/tag input here: that
+# whole pipeline (offsets, NVS-overlap validation, manifest shape, the
+# shared on-device styling) is exercised on every commit by
+# build-scripts/assemble_site.py through test.yml's hardware-build /
+# web-installer-assemble jobs - this workflow only adds the
+# download-release-assets and actually-deploy steps on top.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      # Always re-resolved, never taken from an event payload: a re-run or a
+      # manual dispatch must converge on the same "newest stable" answer.
+      - name: Resolve the newest stable release
+        id: rel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 50 \
+                 --json tagName,isDraft,isPrerelease,publishedAt \
+                 --jq 'map(select(.isDraft==false and .isPrerelease==false))
+                       | sort_by(.publishedAt) | last | .tagName // empty')
+          if [ -z "$TAG" ]; then
+            echo "::error::no published stable release to publish a web installer for"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Download the released assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Passed through the environment, never interpolated straight into
+          # the script: a git tag name isn't restricted from containing shell
+          # metacharacters (quotes, `$()`, backticks are all legal in a ref
+          # name), so a literal `${{ steps.rel.outputs.tag }}` inside `run:`
+          # would let anyone able to push a tag inject commands into a job
+          # holding pages:write/id-token:write. See test_web_installer.cpp's
+          # workflow-injection guard.
+          REL_TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          gh release download "$REL_TAG" --repo "$GITHUB_REPOSITORY" --dir dl \
+            --pattern 'flashparts-*.zip' --pattern 'firmware-*.bin' --pattern 'littlefs-*.bin'
+
+      - name: Unpack each board's parts
+        env:
+          REL_TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          for env in esp32_wroom esp32_s3_zero esp32_c3_zero; do
+            mkdir -p "parts/$env"
+            unzip -q "dl/flashparts-$env-$REL_TAG.zip" -d "parts/$env"
+            cp "dl/firmware-$env-$REL_TAG.bin" "parts/$env/firmware.bin"
+            cp "dl/littlefs-$env-$REL_TAG.bin" "parts/$env/littlefs.bin"
+          done
+
+      - name: Assemble the site
+        env:
+          REL_TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          python build-scripts/assemble_site.py \
+            --parts-dir parts --out _site \
+            --tag "$REL_TAG" --repo "$GITHUB_REPOSITORY"
+          du -sh _site
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

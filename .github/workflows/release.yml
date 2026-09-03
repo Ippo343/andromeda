@@ -1,12 +1,18 @@
 name: Release
 
-# One `git push` of an annotated v* tag builds all three boards (firmware +
-# filesystem) and publishes a GitHub Release with the 7 OTA assets (#63):
-# firmware-<env>-<tag>.bin x3, littlefs-<env>-<tag>.bin x3, manifest.json.
+# One `git push` of an annotated v* tag runs the full test suite - which
+# builds all three boards' firmware, filesystem and flashparts images as part
+# of test.yml's hardware-build job - and republishes those same images as a
+# GitHub Release with the OTA assets (#63) plus the browser-installer boot
+# parts (#162): firmware-<env>-<tag>.bin x3, littlefs-<env>-<tag>.bin x3,
+# flashparts-<env>-<tag>.zip x3, manifest.json - 10 assets total (see the
+# derived EXPECTED_ASSETS check below). Nothing is built a second time here.
 #
 # Channel comes from the tag suffix: v1.2.3-name-dev / -alpha / -beta / -rcN
 # publish as a pre-release = the dev channel; a plain v1.2.3-name is stable.
-# A device only ever tracks pre-releases if its owner ticked the box.
+# A device only ever tracks pre-releases if its owner ticked the box. Only a
+# stable release triggers the chained `pages` job below - the web installer
+# always serves the newest *stable* build.
 on:
   push:
     tags:
@@ -28,6 +34,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # gh release create / upload
+    outputs:
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      tag: ${{ github.ref_name }}
 
     steps:
       - uses: actions/checkout@v4
@@ -80,21 +89,33 @@ jobs:
             --tag "$GITHUB_REF_NAME" \
             --version-code "${{ steps.meta.outputs.version_code }}"
 
-      - name: Install PlatformIO
-        run: pip install --upgrade platformio
+      # Every image here was already built - and gated - by the `test` job's
+      # hardware-build matrix above (needs: test). Rebuilding a second time
+      # here bought nothing but several extra minutes and a chance of a
+      # second, non-identical build silently diverging from the one CI just
+      # verified; reuse it instead. (Correctness depends on test.yml's
+      # hardware-build checkout using fetch-depth: 0, so the version baked
+      # into the binary by inject_version.py is the real one - see that
+      # step's comment.)
+      - name: Download the images test.yml's hardware-build already built
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "flashparts-*"
+          path: downloaded
 
-      - name: Build every board, staging each image as it finishes
+      - name: Stage the already-built images
         run: |
-          # Copy firmware.bin / littlefs.bin into staging/<env>/ immediately,
-          # before the next `pio run` in the loop: a later env's build has been
-          # seen to wipe an earlier env's .pio/build/<env>/firmware.bin on the
-          # hosted runner, so nothing may sit un-staged across a pio invocation.
           for env in esp32_wroom esp32_s3_zero esp32_c3_zero; do
-            mkdir -p "staging/$env"
-            pio run -e "$env"
-            cp ".pio/build/$env/firmware.bin" "staging/$env/firmware.bin"
-            pio run -e "$env" -t buildfs
-            cp ".pio/build/$env/littlefs.bin" "staging/$env/littlefs.bin"
+            mkdir -p "staging/$env/flashparts"
+            cp "downloaded/flashparts-$env/firmware.bin" "staging/$env/firmware.bin"
+            cp "downloaded/flashparts-$env/littlefs.bin" "staging/$env/littlefs.bin"
+            # Boot parts only, into their own subdir - firmware/littlefs stay
+            # at staging/$env/ above; the zip step below reads only this dir.
+            cp "downloaded/flashparts-$env/bootloader.bin" \
+               "downloaded/flashparts-$env/partitions.bin" \
+               "downloaded/flashparts-$env/boot_app0.bin" \
+               "downloaded/flashparts-$env/parts.json" \
+               "staging/$env/flashparts/"
           done
 
       - name: Stage release assets
@@ -104,6 +125,15 @@ jobs:
           for env in esp32_wroom esp32_s3_zero esp32_c3_zero; do
             cp "staging/$env/firmware.bin" "dist/firmware-$env-$TAG.bin"
             cp "staging/$env/littlefs.bin" "dist/littlefs-$env-$TAG.bin"
+            # Boot parts only (~30 KB) - firmware/littlefs stay their own
+            # assets above; build-scripts/assemble_site.py's caller in
+            # pages.yml unzips this and renames those two back in alongside it.
+            # `zip archive .` with neither -r nor a shell-expanded glob adds
+            # nothing (bare "." isn't file content to zip, and there's no -r
+            # to recurse into it) - "zip error: Nothing to do!", caught by
+            # actually running this in CI on a dry-run tag (#162). `./*`
+            # forces the shell to expand it to the real file list first.
+            (cd "staging/$env/flashparts" && zip -q -j "$GITHUB_WORKSPACE/dist/flashparts-$env-$TAG.zip" ./*)
           done
           python build-scripts/make_manifest.py \
             --repo "$GITHUB_REPOSITORY" --tag "$TAG" \
@@ -145,8 +175,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="$GITHUB_REF_NAME"
-          # 3 firmware + 3 littlefs + manifest.json - see build-scripts/make_manifest.py.
-          EXPECTED_ASSETS=7
+          # Derived from what was actually staged, not a literal (#181 - the
+          # count already drifted once, 7 -> 10, when the flashparts zips
+          # landed for #162). The floor still catches a catastrophic staging
+          # failure from trivially satisfying the check.
+          EXPECTED_ASSETS=$(find dist -maxdepth 1 -type f | wc -l)
+          if [ "$EXPECTED_ASSETS" -lt 10 ]; then
+            echo "::error::only $EXPECTED_ASSETS files staged in dist/ - refusing to publish."
+            exit 1
+          fi
           actual=$(gh release view "$TAG" --json assets --jq '.assets | length')
           if [ "$actual" -ne "$EXPECTED_ASSETS" ]; then
             echo "::error::$TAG has $actual assets, expected $EXPECTED_ASSETS - not publishing."
@@ -155,3 +192,19 @@ jobs:
           fi
           gh release edit "$TAG" --draft=false
           echo "Published $TAG with $actual assets."
+
+  # `gh release edit --draft=false` above runs as GITHUB_TOKEN, and events
+  # raised by GITHUB_TOKEN never start new workflow runs - an `on: release`
+  # trigger on pages.yml would silently never fire for our own releases. So
+  # the deploy is chained here instead, gated to stable releases only (the
+  # web installer always serves the newest stable build; the dev channel
+  # stays an OTA-only opt-in, same as it is today).
+  pages:
+    name: Publish the web installer
+    needs: release
+    if: needs.release.outputs.prerelease == 'false'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/pages.yml

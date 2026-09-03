@@ -10,7 +10,7 @@ on:
   # Callable from release.yml, which must not publish OTA firmware to the
   # fleet without the suite having run. A tag push fires neither of the events
   # above, so before this existed a `git push origin v1.2.3` from a red commit
-  # built and published all 7 assets with nothing checking them.
+  # built and published every release asset with nothing checking them.
   workflow_call:
 
 jobs:
@@ -73,7 +73,17 @@ jobs:
       matrix:
         env: [esp32_wroom, esp32_s3_zero, esp32_c3_zero]
     steps:
+      # Full history, not the default shallow depth: build-scripts/
+      # inject_version.py's `git rev-list --count HEAD` / `git describe`
+      # need it to bake the real version into the binary. On a shallow
+      # checkout it silently falls back to "1 commit" / "unknown" instead -
+      # invisible while this job's output was only ever a compile gate, but
+      # release.yml now reuses these exact images instead of rebuilding
+      # (see its "Download the images ... already built" step), so a wrong
+      # embedded version here would ship to devices.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -92,3 +102,55 @@ jobs:
       # size as a post-action.
       - name: Build filesystem image
         run: pio run -e ${{ matrix.env }} -t buildfs
+
+      # Boot parts for the browser web installer (#162) - exercised here on
+      # every push/PR, no release or tag involved, so this pipeline is part
+      # of the regular suite rather than a dry-run someone has to remember to
+      # trigger. firmware.bin/littlefs.bin are copied alongside the exported
+      # parts so the artifact is a complete, flat --parts-dir/<env>/ input for
+      # web-installer-assemble's build-scripts/assemble_site.py call below.
+      - name: Export web-installer flash parts
+        run: |
+          pio run -e ${{ matrix.env }} -t flashparts
+          cp ".pio/build/${{ matrix.env }}/firmware.bin" ".pio/build/${{ matrix.env }}/flashparts/"
+          cp ".pio/build/${{ matrix.env }}/littlefs.bin" ".pio/build/${{ matrix.env }}/flashparts/"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flashparts-${{ matrix.env }}
+          path: .pio/build/${{ matrix.env }}/flashparts
+
+  web-installer-assemble:
+    name: Web installer assembly
+    needs: hardware-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "flashparts-*"
+          path: parts-raw
+
+      # Every "web-installer-*" pipeline change lands here on every commit:
+      # this runs the exact same build-scripts/assemble_site.py call pages.yml
+      # makes for a real deploy (offset/NVS-overlap validation, board-list
+      # consistency, manifest shape, the shared on-device styling), against
+      # real build output, with no release or tag anywhere in the loop.
+      - name: Assemble the site
+        run: |
+          mkdir -p parts
+          for env in esp32_wroom esp32_s3_zero esp32_c3_zero; do
+            cp -r "parts-raw/flashparts-$env" "parts/$env"
+          done
+          python build-scripts/assemble_site.py \
+            --parts-dir parts --out _site --tag local --repo local/local
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-installer-preview
+          path: _site
