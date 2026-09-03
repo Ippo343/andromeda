@@ -139,17 +139,21 @@ void test_release_checks_version_code_is_newer_than_the_published_one()
         "release.yml must run check_version_code.py - a tag whose version code is not strictly "
         "greater than the newest published release's would ship an update the fleet can never see");
 
-    // Fail fast: the guard is worthless if it runs after the build has already
-    // produced artifacts, and worse than worthless after the publish step.
+    // Fail fast: the guard is worthless if it runs after this job has already
+    // downloaded/staged the built images, and worse than worthless after the
+    // publish step. The actual build lives in a separate `test` job this one
+    // depends on (needs: test, checked elsewhere) - #162 changed the release
+    // job from building its own images to downloading test.yml's, so there's
+    // no in-job `pio run` left to order against here.
     const size_t guardAt = findCommandLine(yaml, "python build-scripts/check_version_code.py");
-    const size_t buildAt = findCommandLine(yaml, "pio run -e");
+    const size_t downloadAt = yaml.find("actions/download-artifact");
     const size_t publishAt = findCommandLine(yaml, "gh release create");
     TEST_ASSERT_TRUE_MESSAGE(guardAt != std::string::npos,
                              "the version-code guard must be invoked as its own command");
-    TEST_ASSERT_TRUE_MESSAGE(buildAt != std::string::npos && publishAt != std::string::npos,
-                             "release.yml must still build and publish");
-    TEST_ASSERT_TRUE_MESSAGE(guardAt < buildAt,
-                             "the version-code guard must run before the build, not after");
+    TEST_ASSERT_TRUE_MESSAGE(downloadAt != std::string::npos && publishAt != std::string::npos,
+                             "release.yml must still download the built images and publish");
+    TEST_ASSERT_TRUE_MESSAGE(guardAt < downloadAt,
+                             "the version-code guard must run before staging any build output");
     TEST_ASSERT_TRUE_MESSAGE(guardAt < publishAt,
                              "the version-code guard must run before the publish step");
 }
