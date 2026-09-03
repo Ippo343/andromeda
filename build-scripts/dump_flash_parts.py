@@ -13,8 +13,8 @@ Every offset is read out of PlatformIO's own resolved build environment -
 FLASH_EXTRA_IMAGES for the bootloader/partition-table/boot_app0 triplet,
 $ESP32_APP_OFFSET for the app slot, the resolved $PARTITIONS_TABLE_CSV for the
 filesystem slot and the nvs row - never a literal. The bootloader address in
-particular differs by chip (0x1000 on ESP32, 0x0 on S3/C3) and would be wrong
-half the time if hard-coded.
+particular differs by chip (one address on ESP32, a different one on S3/C3)
+and would be wrong half the time if hard-coded.
 
 Writes $BUILD_DIR/flashparts/:
   bootloader.bin, partitions.bin, boot_app0.bin  (copied out - "bundled" parts)
