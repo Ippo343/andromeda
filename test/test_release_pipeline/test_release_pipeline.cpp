@@ -3,8 +3,9 @@
 // reaching the fleet are still wired.
 //
 // Everything here guards the path that publishes OTA firmware, where a silent
-// failure is worst: a tag push builds and publishes 7 assets that every device
-// on that channel is then offered. The audit found five ways that path could
+// failure is worst: a tag push builds and publishes 10 assets (3 firmware +
+// 3 littlefs + 3 flashparts zips + manifest.json, #162) that every device on
+// that channel is then offered. The audit found five ways that path could
 // ship or perpetuate a bad build, three of them with no error anywhere:
 //
 //   R1  test.yml didn't trigger on tags, so a release ran no tests at all.
@@ -187,10 +188,14 @@ void test_release_is_published_as_a_verified_draft()
                              "the release must be created as a draft before it is un-drafted");
 }
 
-// Bad weather: exactly 7 assets ship (3 firmware + 3 littlefs + manifest.json,
-// see build-scripts/make_manifest.py). Asserting the count in the workflow
-// means an asset silently added or dropped fails the release rather than
-// publishing a set the devices can't use.
+// Bad weather: exactly 10 assets ship (3 firmware + 3 littlefs + 3 flashparts
+// zips + manifest.json, see build-scripts/make_manifest.py and
+// test_release_reuses_test_jobs_build_artifacts_instead_of_rebuilding below).
+// Asserting the count in the workflow means an asset silently added or
+// dropped fails the release rather than publishing a set the devices can't
+// use - see test_expected_asset_count_is_derived_not_a_literal, which pins
+// that the count itself is computed, not hard-coded, after this drifted once
+// (7 -> 10) when the flashparts zips landed (#181).
 void test_release_verifies_the_asset_count_before_publishing()
 {
     std::string yaml = stripComments(readFile(".github/workflows/release.yml"));

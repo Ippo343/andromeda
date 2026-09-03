@@ -19,9 +19,10 @@
 //   - the NVS-overlap validation exists at all (test_assemble_site_logic.py
 //     style unit coverage isn't practical here without a Python test
 //     runner in the native suite, so this pins the source instead).
-//   - the shared-styling copy (data/css/common.css et al) and its absolute
-//     '/fonts/' rewrite - the one thing that silently 404s under a
-//     project-page subpath.
+//   - the shared-styling copy (data/css/common.css et al): the on-device
+//     Cinzel font subset is stripped out (not shipped, not rewritten - see
+//     _copy_shared_ui_assets()'s docstring), the one thing that would
+//     otherwise 404 under a project-page subpath with no CORS-friendly fix.
 //   - the CI wiring itself (test.yml's hardware-build + web-installer-assemble
 //     jobs) - the "exercised on every commit" contract, so a future edit
 //     can't quietly drop this pipeline from CI.
