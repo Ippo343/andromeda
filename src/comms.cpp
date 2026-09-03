@@ -766,8 +766,7 @@ size_t Comms::buildCurrentStateJson(char* outBuffer, size_t outBufferSize)
 {
     MissionControl& mc = MissionControl::Instance();
     const ModelConfig* runningConfig = GEOMETRY.getConfig();
-    ModelId configuredId =
-        FactoryConfig::isConfigured() ? FactoryConfig::getModelId() : runningConfig->id;
+    ModelId configuredId = FactoryConfig::getModelId();
     const ModelConfig* configuredConfig = getModelConfig(configuredId);
     String configuredDeviceName = DeviceIdentity::getDeviceName();
 
@@ -791,7 +790,6 @@ size_t Comms::buildCurrentStateJson(char* outBuffer, size_t outBufferSize)
         .runningModel = {static_cast<uint16_t>(runningConfig->id), runningConfig->name},
         .configuredModel = {static_cast<uint16_t>(configuredId),
                             configuredConfig ? configuredConfig->name : "Unknown"},
-        .factoryConfigured = FactoryConfig::isConfigured(),
         .fps = PerformanceMonitor::Instance().fps(),
         .deviceUid = DeviceIdentity::getUid(),
         .runningDeviceName = runningNameSnapshot,

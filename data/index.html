@@ -20,17 +20,6 @@
             <a href="http://192.168.4.1/wifi" target="_blank" style="color: #64b5f6; text-decoration: underline;">Open WiFi Setup</a>
         </div>
 
-        <!-- Shown when FactoryConfig::isConfigured() is false (main.cpp falls back to a
-             generic test-rig model with only a serial log warning otherwise) - without
-             this the device renders as a plausible-looking, correctly-configured unit
-             with no other signal that it isn't. Toggled from the state broadcast's
-             model.factoryConfigured field - see controls.js's handleServerMessage. -->
-        <div class="info-box" id="notConfiguredInfo" style="display: none;">
-            ⚠️ This device hasn't been set up for its hardware yet - it's running as a
-            generic test rig. Pick the correct model in
-            <a href="/advanced.html" style="color: #64b5f6; text-decoration: underline;">Advanced</a>.
-        </div>
-
         <!-- Mode selector: Random rotation / a specific pinned Effect / a
              pinned static Color are mutually exclusive "what's on screen"
              states - see data/js/controls.js for the tab-switch logic. -->

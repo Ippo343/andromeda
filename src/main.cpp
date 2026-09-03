@@ -80,16 +80,10 @@ void setup()
     // NativeRuntime::init(), called before setup() in main() below.
     model = NativeRuntime::model();
 #else
-    if (FactoryConfig::isConfigured())
-    {
-        model = FactoryConfig::getModelId();
-        Log.noticeln("Loading factory configuration: %s", getModelName(model));
-    }
-    else
-    {
-        model = ModelId::SINGLE_STRIP_TEST_DEVICE;
-        Log.warningln("Device not factory configured, using default: %s", getModelName(model));
-    }
+    // Never "unconfigured" - getModelId() self-persists a safe default (L10_MK2) the
+    // first time it's ever asked, so this always resolves to a real, working model.
+    model = FactoryConfig::getModelId();
+    Log.noticeln("Loading factory configuration: %s", getModelName(model));
 #endif
 
 #ifdef NATIVE_RUNTIME

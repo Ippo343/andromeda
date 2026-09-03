@@ -525,14 +525,7 @@ function handleServerMessage(raw) {
 
     // Model selection and device name moved to their own pages (/advanced.html,
     // /device-name.html); the state message still carries msg.models / msg.model
-    // / msg.device, this page just no longer renders most of them - except
-    // factoryConfigured, which needs a visible signal here since it otherwise renders
-    // as an ordinary, correctly-configured device.
-    const notConfiguredInfo = document.getElementById('notConfiguredInfo');
-    if (notConfiguredInfo) {
-        notConfiguredInfo.style.display =
-            (msg.model && msg.model.factoryConfigured === false) ? 'block' : 'none';
-    }
+    // / msg.device, this page just doesn't render any of it.
 
     const effectSelect = document.getElementById('effectSelect');
     if (effectSelect && Array.isArray(msg.effects)) {
