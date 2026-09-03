@@ -210,6 +210,15 @@ bool fetchLatest(OtaManifest::Entry& out)
         fail("manifest request failed");
         return false;
     }
+    // A manifest.json is a few hundred bytes; getString() sizes its buffer
+    // from Content-Length, so a hostile/garbled response could otherwise ask
+    // for an unbounded allocation. Anything this large isn't our manifest.
+    if (mHttp.getSize() > 8192)
+    {
+        mHttp.end();
+        fail("manifest response implausibly large");
+        return false;
+    }
     String body = mHttp.getString();
     mHttp.end();
 
