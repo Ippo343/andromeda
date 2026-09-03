@@ -36,17 +36,28 @@ struct Entry
     char fsMd5[33];
 };
 
-// Suggested JsonDocument capacities for callers. The release-list doc only
-// ever holds the Filter-reduced result (tag_name + prerelease + asset
-// name/url per release), not the raw response - but src/ota-updater.cpp asks
-// GitHub for up to 20 releases (see RELEASES_API_URL) so a run of pre-release
-// tags can't hide the newest stable one from a stable-channel device. It goes
-// on the heap (DynamicJsonDocument) since the check runs once a day, well off
-// any hot path; if the reduced list still overruns this, deserializeJson just
+// Suggested JsonDocument capacities for callers. Both only ever hold the
+// Filter-reduced result (asset name/url, per release), not the raw response.
+//
+// A release now carries 10 assets (#162: 3 firmware + 3 littlefs + 3
+// flashparts zips + manifest.json); measured at ~3 KB filtered for one
+// release with realistic (long, codenamed) tag names - see
+// test_ota_manifest's capacity-headroom tests. Both capacities keep ~2x
+// headroom over that on top of being sized for exactly one release, not many:
+// selectRelease() only ever needs to look at the single newest release per
+// GET call (see RELEASES_API_URL / LATEST_RELEASE_API_URL in
+// src/ota-updater.cpp) - a *previous* version of this asked GitHub for up to
+// 20 releases in one page, sized generously enough for the 7-asset releases
+// of the time, and silently started failing every check with "release list
+// JSON parse failed" once #162 grew each release to 10 assets (measured: even
+// 7 releases already overflowed the old 20480 B budget). Both go on the heap
+// (DynamicJsonDocument) since the check runs at most once a day, well off any
+// hot path; if a filtered response still overruns this, deserializeJson just
 // returns NoMemory and the check fails cleanly (no worse than "no release
 // found") - it never touches the flash. The per-board manifest is small
 // enough for the stack.
-constexpr size_t RELEASE_LIST_DOC_CAPACITY = 20480;
+constexpr size_t RELEASE_LIST_DOC_CAPACITY = 6144;
+constexpr size_t LATEST_RELEASE_DOC_CAPACITY = 6144;
 constexpr size_t MANIFEST_DOC_CAPACITY = 3072;
 
 // Filter for the api.github.com "list releases" response - keep only the
@@ -63,6 +74,20 @@ inline StaticJsonDocument<512> releaseListFilter()
     filter[0]["prerelease"] = true;
     filter[0]["assets"][0]["name"] = true;
     filter[0]["assets"][0]["browser_download_url"] = true;
+    return filter;
+}
+
+// Filter for GET .../releases/latest - the same per-asset fields as
+// releaseListFilter(), but not wrapped in the array-of-releases idiom: this
+// endpoint returns one release object directly. No "prerelease"/"tag_name"
+// either - GitHub's own "latest" semantics already guarantee this is the
+// newest non-draft, non-prerelease release, so selectFromLatestRelease()
+// below has no channel logic left to do.
+inline StaticJsonDocument<512> latestReleaseFilter()
+{
+    StaticJsonDocument<512> filter;
+    filter["assets"][0]["name"] = true;
+    filter["assets"][0]["browser_download_url"] = true;
     return filter;
 }
 
@@ -127,6 +152,31 @@ inline bool selectRelease(const JsonDocument& releaseList, bool devChannel, char
         // The newest release for this channel has no manifest.json - don't
         // fall through to an older one, that would silently downgrade.
         return false;
+    }
+    return false;
+}
+
+// From a parsed (Filter-reduced) GET .../releases/latest response - a single
+// release object, not a list - write its manifest.json download URL into
+// outUrl[outCap]. The stable-channel counterpart to selectRelease(): GitHub's
+// "latest" already means the newest non-draft, non-prerelease release, so
+// there's no list to walk and no prerelease check to make, only the same
+// manifest.json lookup selectRelease() does per-release. Returns false if the
+// doc isn't an object, has no "assets" array, has no manifest.json asset, or
+// the URL doesn't fit - never falls back to an older release, same as
+// selectRelease().
+inline bool selectFromLatestRelease(const JsonDocument& release, char* outUrl, size_t outCap)
+{
+    if (!release.is<JsonObjectConst>()) return false;
+    JsonObjectConst rel = release.as<JsonObjectConst>();
+    if (!rel.containsKey("assets")) return false;
+
+    for (JsonObjectConst asset : rel["assets"].as<JsonArrayConst>())
+    {
+        const char* name = asset["name"].as<const char*>();
+        if (name != nullptr && std::strcmp(name, "manifest.json") == 0)
+            return detail::copyField(outUrl, outCap,
+                                     asset["browser_download_url"].as<const char*>());
     }
     return false;
 }

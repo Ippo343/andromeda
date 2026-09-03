@@ -42,9 +42,11 @@ const char* kReleaseList = R"json([
 ])json";
 
 // A normal release cycle: six consecutive pre-releases sit on top of the
-// newest stable one. A stable-channel device skips all six - so the stable
-// release has to still be in the fetched page (per_page=30, not 5) for
-// selectRelease to find it. Finding #3.
+// newest stable one. selectRelease() itself still walks past a run of
+// pre-releases like this (dev channel would too), even though production no
+// longer feeds it a multi-release page for the stable channel - stable now
+// gets GitHub's own already-filtered releases/latest instead (see
+// LATEST_RELEASE_API_URL in src/ota-updater.cpp). Finding #3.
 const char* kLongPrereleaseRun = R"json([
   {"tag_name": "v1.0-rc6", "prerelease": true,
    "assets": [{"name": "manifest.json", "browser_download_url": "https://gh/x/v1.0-rc6/manifest.json"}]},
@@ -100,6 +102,70 @@ bool parseList(const char* json, StaticJsonDocument<OtaManifest::RELEASE_LIST_DO
     return deserializeJson(doc, json,
                            DeserializationOption::Filter(OtaManifest::releaseListFilter())) ==
            DeserializationError::Ok;
+}
+
+// A realistic 10-asset release body (#162: 3 firmware + 3 littlefs + 3
+// flashparts zips + manifest.json), with the same long, codenamed tag shape
+// and full github.com/.../releases/download/... URLs a real release actually
+// has - not the 1-2 asset toy fixtures above, which are too small to catch a
+// capacity regression. Used by both the array-wrapped (dev, per_page=1) and
+// bare-object (stable, releases/latest) shapes below.
+std::string buildAssets(const std::string& tag)
+{
+    static const char* kBoards[] = {"esp32_wroom", "esp32_s3_zero", "esp32_c3_zero"};
+    std::string base = "https://github.com/Ippo343/andromeda/releases/download/" + tag + "/";
+    std::string assets = "[";
+    bool first = true;
+    for (const char* board : kBoards)
+    {
+        for (const char* kind : {"firmware", "littlefs"})
+        {
+            if (!first) assets += ",";
+            first = false;
+            std::string name = std::string(kind) + "-" + board + "-" + tag + ".bin";
+            assets +=
+                R"({"name":")" + name + R"(","browser_download_url":")" + base + name + R"("})";
+        }
+        std::string name = std::string("flashparts-") + board + "-" + tag + ".zip";
+        assets += R"(,{"name":")" + name + R"(","browser_download_url":")" + base + name + R"("})";
+    }
+    assets += R"(,{"name":"manifest.json","browser_download_url":")" + base + R"(manifest.json"}])";
+    return assets;
+}
+
+// The dev-channel shape: a one-element array, matching per_page=1 on
+// RELEASES_API_URL.
+std::string buildOneReleasePage(const std::string& tag, bool prerelease)
+{
+    return R"([{"tag_name":")" + tag + R"(","prerelease":)" + (prerelease ? "true" : "false") +
+           R"(,"assets":)" + buildAssets(tag) + "}]";
+}
+
+// The stable-channel shape: GET .../releases/latest returns one release
+// object directly, not wrapped in an array - and with no "prerelease" field
+// needed, since GitHub's own "latest" already excludes drafts/prereleases.
+std::string buildLatestRelease(const std::string& tag)
+{
+    return R"({"tag_name":")" + tag + R"(","assets":)" + buildAssets(tag) + "}";
+}
+
+// The old misconfiguration this fix replaces: a full page of many releases,
+// each with the real 10-asset shape. Reproduces the exact overflow closed by
+// cutting RELEASES_API_URL down to per_page=1 - see the capacity constants'
+// comments in ota-manifest.h.
+std::string buildManyReleasesPage(int count)
+{
+    std::string out = "[";
+    for (int i = 0; i < count; ++i)
+    {
+        if (i > 0) out += ",";
+        std::string tag = "v0." + std::to_string(count - i) + "-some-long-codename-here";
+        bool stable = (i == count - 1);  // oldest (last) entry is the stable one
+        out += R"({"tag_name":")" + tag + R"(","prerelease":)" + (stable ? "false" : "true") +
+               R"(,"assets":)" + buildAssets(tag) + "}";
+    }
+    out += "]";
+    return out;
 }
 }  // namespace
 
@@ -298,6 +364,101 @@ void test_select_rejects_url_that_does_not_fit()
     TEST_ASSERT_FALSE(OtaManifest::selectRelease(doc, true, tiny, sizeof(tiny)));
 }
 
+// ---- capacity: a real 10-asset release, in both shapes production uses ----
+// (#181-class regression: the release-list buffer used to be sized for the
+// 7-asset releases of the time and silently overflowed once #162 grew every
+// release to 10 assets - RELEASES_API_URL asked for up to 20 of them in one
+// page. selectRelease()/selectFromLatestRelease() only ever need to look at
+// the single newest release now (RELEASES_API_URL is per_page=1 for dev,
+// LATEST_RELEASE_API_URL is releases/latest for stable), so these prove that
+// one real release actually fits - with real headroom, not by accident.)
+
+void test_dev_channel_shape_fits_a_real_release_with_headroom()
+{
+    std::string json = buildOneReleasePage("v0.9-deep-space-network", /*prerelease=*/false);
+
+    DynamicJsonDocument doc(OtaManifest::RELEASE_LIST_DOC_CAPACITY);
+    DeserializationError err =
+        deserializeJson(doc, json, DeserializationOption::Filter(OtaManifest::releaseListFilter()));
+    TEST_ASSERT_TRUE_MESSAGE(err == DeserializationError::Ok,
+                             "a single real 10-asset release must fit RELEASE_LIST_DOC_CAPACITY - "
+                             "it no longer needs to hold more than one");
+    TEST_ASSERT_TRUE_MESSAGE(doc.memoryUsage() < OtaManifest::RELEASE_LIST_DOC_CAPACITY / 2,
+                             "expected real headroom over one release's actual footprint, not a "
+                             "capacity sized right up against it");
+
+    char url[256] = {};
+    TEST_ASSERT_TRUE(OtaManifest::selectRelease(doc, /*devChannel=*/true, url, sizeof(url)));
+    TEST_ASSERT_EQUAL_STRING(
+        "https://github.com/Ippo343/andromeda/releases/download/v0.9-deep-space-network/"
+        "manifest.json",
+        url);
+}
+
+void test_stable_channel_shape_fits_a_real_release_with_headroom()
+{
+    std::string json = buildLatestRelease("v0.9-deep-space-network");
+
+    DynamicJsonDocument doc(OtaManifest::LATEST_RELEASE_DOC_CAPACITY);
+    DeserializationError err = deserializeJson(
+        doc, json, DeserializationOption::Filter(OtaManifest::latestReleaseFilter()));
+    TEST_ASSERT_TRUE_MESSAGE(err == DeserializationError::Ok,
+                             "a single real 10-asset releases/latest response must fit "
+                             "LATEST_RELEASE_DOC_CAPACITY");
+    TEST_ASSERT_TRUE(doc.memoryUsage() < OtaManifest::LATEST_RELEASE_DOC_CAPACITY / 2);
+
+    char url[256] = {};
+    TEST_ASSERT_TRUE(OtaManifest::selectFromLatestRelease(doc, url, sizeof(url)));
+    TEST_ASSERT_EQUAL_STRING(
+        "https://github.com/Ippo343/andromeda/releases/download/v0.9-deep-space-network/"
+        "manifest.json",
+        url);
+}
+
+void test_select_from_latest_release_rejects_non_object_and_missing_assets()
+{
+    char url[64] = {};
+
+    StaticJsonDocument<64> arr;
+    deserializeJson(arr, "[]");
+    TEST_ASSERT_FALSE(OtaManifest::selectFromLatestRelease(arr, url, sizeof(url)));
+
+    StaticJsonDocument<64> noAssets;
+    deserializeJson(noAssets, R"({"tag_name":"v1"})");
+    TEST_ASSERT_FALSE(OtaManifest::selectFromLatestRelease(noAssets, url, sizeof(url)));
+}
+
+void test_select_from_latest_release_does_not_find_manifest_among_unrelated_assets()
+{
+    StaticJsonDocument<256> doc;
+    deserializeJson(doc, R"({"assets":[{"name":"firmware-esp32_wroom-v1.bin",)"
+                         R"("browser_download_url":"https://x/firmware.bin"}]})");
+    char url[64] = {};
+    TEST_ASSERT_FALSE(OtaManifest::selectFromLatestRelease(doc, url, sizeof(url)));
+}
+
+// Bad weather / regression: the exact old misconfiguration (a 20-release
+// page, each with the real 10-asset shape) must NOT be mistaken for something
+// that still has to fit - production never requests that page any more
+// (RELEASES_API_URL is per_page=1). This pins the actual fix: the capacity
+// constants stay sized for one release, not blown out to accommodate many,
+// which is the "raise the capacity" alternative this project deliberately
+// didn't take (MIN_FREE_HEAP is 60 KB and the TLS session is already open
+// when this document is allocated).
+void test_the_old_twenty_release_page_would_still_overflow_the_capacity()
+{
+    std::string json = buildManyReleasesPage(20);
+
+    DynamicJsonDocument doc(OtaManifest::RELEASE_LIST_DOC_CAPACITY);
+    DeserializationError err =
+        deserializeJson(doc, json, DeserializationOption::Filter(OtaManifest::releaseListFilter()));
+    TEST_ASSERT_TRUE_MESSAGE(
+        err == DeserializationError::NoMemory,
+        "RELEASE_LIST_DOC_CAPACITY is deliberately sized for one release, not many - if this "
+        "starts passing, either the capacity grew far past what a single release needs (risking "
+        "the MIN_FREE_HEAP budget) or per_page crept back up from 1, reopening the original bug");
+}
+
 int main(int, char**)
 {
     UNITY_BEGIN();
@@ -316,5 +477,10 @@ int main(int, char**)
     RUN_TEST(test_select_rejects_empty_and_non_array);
     RUN_TEST(test_select_does_not_downgrade_when_newest_lacks_manifest);
     RUN_TEST(test_select_rejects_url_that_does_not_fit);
+    RUN_TEST(test_dev_channel_shape_fits_a_real_release_with_headroom);
+    RUN_TEST(test_stable_channel_shape_fits_a_real_release_with_headroom);
+    RUN_TEST(test_select_from_latest_release_rejects_non_object_and_missing_assets);
+    RUN_TEST(test_select_from_latest_release_does_not_find_manifest_among_unrelated_assets);
+    RUN_TEST(test_the_old_twenty_release_page_would_still_overflow_the_capacity);
     return UNITY_END();
 }
