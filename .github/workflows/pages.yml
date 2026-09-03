@@ -20,6 +20,17 @@ name: Pages
 # build-scripts/assemble_site.py through test.yml's hardware-build /
 # web-installer-assemble jobs - this workflow only adds the
 # download-release-assets and actually-deploy steps on top.
+#
+# One-time repo-settings prerequisite, outside this file's reach: GitHub
+# Pages must be enabled with Source = "GitHub Actions" (Settings > Pages) -
+# actions/configure-pages@v5 below runs with its default enablement: false,
+# and if Pages isn't already on, its own getPages() 404s and the step throws.
+# enablement: true is not a usable substitute: it requires a token other than
+# GITHUB_TOKEN (a PAT with repo scope, or a GitHub App with
+# administration:write), so it would swap this failure for a different one,
+# not fix it. Confirmed live: this setting was lost once already when the
+# webflasher-dryrun tags/releases were rolled back, silently turning a green
+# deploy into a Pages deployment nothing could reach.
 on:
   workflow_call:
   workflow_dispatch:
