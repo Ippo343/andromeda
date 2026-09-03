@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Install Andromeda</title>
+    <!-- The on-device UI ships a Cinzel Decorative subset containing only the
+         glyph "A" to keep the flashed filesystem small - see
+         build-scripts/assemble_site.py's _copy_shared_ui_assets(), which
+         strips that @font-face out of the copied common.css. No such
+         constraint applies to a webpage, so the logo here gets the real,
+         full face straight from Google Fonts instead. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="css/installer.css">
+    <!-- Exact version pin, deliberately - see build-scripts/assemble_site.py's
+         header comment and test/test_web_installer for why this is never @latest:
+         an upstream esp-web-tools release would otherwise change how strangers
+         flash their boards with no commit in this repo. -->
+    <script type="module"
+            src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+</head>
+<body>
+    <div class="container">
+        <h1 class="logo" id="logo">A</h1>
+
+        <p class="version-line" id="version">Loading the latest release&hellip;</p>
+
+        <!-- esp-web-install-button already renders its own fallback content
+             into the unsupported/not-allowed slots below when Web Serial
+             isn't available, so there's no separate browser-support banner
+             to keep in sync with it. -->
+        <esp-web-install-button manifest="manifest.json">
+            <button slot="activate" title="Connect &amp; install" aria-label="Connect &amp; install">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            </button>
+            <div slot="unsupported" class="info-box">
+                This browser can't talk to USB serial devices. Use desktop Chrome, Edge, or
+                Opera - Web Serial isn't available in Firefox, Safari, or on iOS/Android.
+            </div>
+            <div slot="not-allowed" class="info-box">
+                This page needs to be loaded over HTTPS for Web Serial to work.
+            </div>
+        </esp-web-install-button>
+    </div>
+    <script src="js/utils.js"></script>
+    <script src="js/installer-logic.js"></script>
+    <script src="js/installer.js"></script>
+</body>
+</html>
