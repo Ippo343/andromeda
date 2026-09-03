@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <iterator>
 #include <map>
+#include <set>
 #include <string>
 
 #include "WString.h"
@@ -12,16 +13,37 @@
 // resets on process exit, which is exactly what native tests want) so
 // FactoryConfig (geometry.cpp) and Comms' WiFi credential storage actually
 // round-trip natively instead of silently no-op'ing.
+//
+// begin(name, readOnly) mirrors real NVS's lazy-namespace-creation behavior:
+// a write-mode open always succeeds and creates the namespace (real
+// nvs_open() does this too - a namespace is nothing but an implicit mapping
+// created the first time it's opened for write), but a *readonly* open on a
+// namespace that has never been opened for write fails, matching
+// ESP_ERR_NVS_NOT_FOUND. This is what FactoryConfig::getModelId() (#162's
+// L10_MK2-default work) depends on to detect "never configured" and
+// self-persist a default on first access.
 
 class Preferences
 {
    public:
-    bool begin(const char* name, bool = false)
+    bool begin(const char* name, bool readOnly = false)
     {
         ns = name;
-        return true;
+        if (!readOnly)
+        {
+            writtenNamespaces().insert(ns);
+            return true;
+        }
+        return writtenNamespaces().count(ns) > 0;
     }
     void end() {}
+
+    bool isKey(const char* key)
+    {
+        const std::string fullKey = ns + "/" + key;
+        return ushortStore().count(fullKey) || uintStore().count(fullKey) ||
+               stringStore().count(fullKey);
+    }
 
     size_t putUShort(const char* key, uint16_t value)
     {
@@ -83,6 +105,20 @@ class Preferences
         return removed;
     }
 
+    // Test-only: wipes every namespace back to "never opened", not just the
+    // key/value data - clear() alone (like real NVS's nvs_erase_all()) does
+    // NOT undo a namespace's existence, so it can't be used to simulate a
+    // truly virgin device. Needed by any test exercising the "never
+    // configured" self-persist path (FactoryConfig::getModelId()) in
+    // isolation from whatever an earlier test in the same binary wrote.
+    static void resetAllForTests()
+    {
+        ushortStore().clear();
+        uintStore().clear();
+        stringStore().clear();
+        writtenNamespaces().clear();
+    }
+
    private:
     std::string ns;
 
@@ -101,6 +137,11 @@ class Preferences
     static std::map<std::string, std::string>& stringStore()
     {
         static std::map<std::string, std::string> s;
+        return s;
+    }
+    static std::set<std::string>& writtenNamespaces()
+    {
+        static std::set<std::string> s;
         return s;
     }
 };

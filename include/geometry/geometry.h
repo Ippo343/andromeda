@@ -191,10 +191,11 @@ namespace FactoryConfig
 // Should only be called during factory configuration
 void setModelId(ModelId model_id);
 
-// Get the configured model ID from persistent storage
-// Returns ModelId::UNKNOWN if not configured
+// Get the configured model ID from persistent storage. A device is never
+// left "unconfigured": if nothing has ever been saved (or the saved value
+// has no registry entry), this persists DEFAULT_MODEL_ID and returns it, so
+// every device resolves to a real, working model from the first call
+// onward - see geometry.cpp for why that self-persisting default also
+// avoids leaving the "device" NVS namespace uncreated forever.
 ModelId getModelId();
-
-// Check if device has been configured with a model
-bool isConfigured();
 }  // namespace FactoryConfig

@@ -12,7 +12,12 @@
 // natively since FastLED.addLeds is stubbed under FASTLED_STUB_IMPL.
 void addLedsToPin(uint8_t pin, CRGB* buffer, int count);
 
-void setUp() {}
+// Wipes the Preferences mock back to "never opened" (not just clearing
+// key/value data - see Preferences::resetAllForTests()) before every test,
+// so the FactoryConfig tests below can rely on the "device" NVS namespace
+// genuinely never having been touched, which is what the self-persisting
+// default (FactoryConfig::getModelId()) needs to detect a fresh device.
+void setUp() { Preferences::resetAllForTests(); }
 void tearDown() {}
 
 // ---------------------------------------------------------------------------
@@ -404,38 +409,62 @@ void test_model_config_is_in_family()
 // FactoryConfig (Preferences-backed model ID storage)
 // ---------------------------------------------------------------------------
 
-void test_factory_config_is_configured_reflects_model_id()
+// A never-touched "device" NVS namespace (Preferences::resetAllForTests() in
+// setUp() guarantees that here) means a genuinely fresh device - getModelId()
+// must self-persist L10_MK2 rather than returning some transient/recomputed
+// default, so the device is durably configured from its very first read.
+void test_factory_config_defaults_to_l10_mk2_on_a_never_configured_device()
 {
-    FactoryConfig::setModelId(ModelId::UNKNOWN);
-    TEST_ASSERT_FALSE(FactoryConfig::isConfigured());
+    TEST_ASSERT_TRUE(ModelId::L10_MK2 == FactoryConfig::getModelId());
 
-    FactoryConfig::setModelId(ModelId::SINGLE_STRIP_TEST_DEVICE);
-    TEST_ASSERT_TRUE(FactoryConfig::isConfigured());
+    // Persisted, not just returned: a second, completely independent
+    // Preferences handle must see it too.
+    Preferences prefs;
+    TEST_ASSERT_TRUE(prefs.begin("device", true));
+    TEST_ASSERT_TRUE(prefs.isKey("model_id"));
+    TEST_ASSERT_EQUAL((uint16_t)ModelId::L10_MK2, prefs.getUShort("model_id"));
+    prefs.end();
+}
+
+void test_factory_config_get_model_id_returns_an_explicitly_saved_value()
+{
+    FactoryConfig::setModelId(ModelId::L70_MK1);
+    TEST_ASSERT_TRUE(FactoryConfig::getModelId() == ModelId::L70_MK1);
 }
 
 // setModelId() only writes what it's given - the actual defense against a corrupt/garbage
 // stored value (independent of the write-side guard in MissionControl's MODEL command
 // handler) lives in getModelId() itself. Simulates corruption by writing directly to the same
 // NVS namespace/key FactoryConfig uses, bypassing setModelId() entirely.
-void test_factory_config_get_model_id_rejects_unregistered_stored_value()
+void test_factory_config_get_model_id_falls_back_to_default_on_unregistered_stored_value()
 {
     Preferences prefs;
     prefs.begin("device", false);
     prefs.putUShort("model_id", 12345);  // no registry entry for this id
     prefs.end();
 
-    TEST_ASSERT_TRUE(FactoryConfig::getModelId() == ModelId::UNKNOWN);
-    TEST_ASSERT_FALSE(FactoryConfig::isConfigured());
+    TEST_ASSERT_TRUE(FactoryConfig::getModelId() == ModelId::L10_MK2);
 }
 
-void test_factory_config_get_model_id_accepts_registered_stored_value()
+// Comms::buildCurrentStateJson calls getModelId() on every state-keepalive tick (a few
+// seconds apart) - if the corrupt-value fallback above only returned the default without
+// writing it back, a genuinely corrupted NVS value would re-hit that branch and re-log the
+// same ERROR forever, the same class of spam #186 fixed for a never-configured device. The
+// fallback must persist, so the second call sees an already-valid stored value and takes the
+// ordinary "explicitly saved" path instead of falling back again.
+void test_factory_config_get_model_id_persists_the_fallback_so_corruption_self_heals()
 {
     Preferences prefs;
     prefs.begin("device", false);
-    prefs.putUShort("model_id", (uint16_t)ModelId::L70_MK1);
+    prefs.putUShort("model_id", 12345);  // no registry entry for this id
     prefs.end();
 
-    TEST_ASSERT_TRUE(FactoryConfig::getModelId() == ModelId::L70_MK1);
+    TEST_ASSERT_TRUE(FactoryConfig::getModelId() == ModelId::L10_MK2);
+
+    Preferences verify;
+    TEST_ASSERT_TRUE(verify.begin("device", true));
+    TEST_ASSERT_EQUAL((uint16_t)ModelId::L10_MK2, verify.getUShort("model_id"));
+    verify.end();
 }
 
 // ---------------------------------------------------------------------------
@@ -533,9 +562,10 @@ int main(int argc, char** argv)
     RUN_TEST(test_get_model_name_known_and_unknown);
     RUN_TEST(test_model_config_is_in_family);
 
-    RUN_TEST(test_factory_config_is_configured_reflects_model_id);
-    RUN_TEST(test_factory_config_get_model_id_rejects_unregistered_stored_value);
-    RUN_TEST(test_factory_config_get_model_id_accepts_registered_stored_value);
+    RUN_TEST(test_factory_config_defaults_to_l10_mk2_on_a_never_configured_device);
+    RUN_TEST(test_factory_config_get_model_id_returns_an_explicitly_saved_value);
+    RUN_TEST(test_factory_config_get_model_id_falls_back_to_default_on_unregistered_stored_value);
+    RUN_TEST(test_factory_config_get_model_id_persists_the_fallback_so_corruption_self_heals);
 
     RUN_TEST(test_geometry_destructor_frees_allocated_strips);
     RUN_TEST(test_geometry_destructor_on_never_initialized_instance_is_a_no_op);

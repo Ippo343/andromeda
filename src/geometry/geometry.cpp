@@ -334,6 +334,16 @@ namespace FactoryConfig
 const char* PREFS_NAMESPACE = "device";
 const char* MODEL_ID_KEY = "model_id";
 
+// The safest default when nothing has ever been saved for this device, or
+// what was saved doesn't resolve to a real model. A device is never left in
+// an ambiguous "not set up" state (that used to mean main.cpp silently
+// falling back to SINGLE_STRIP_TEST_DEVICE with only a log line, and the
+// web UI showing a "hasn't been set up for its hardware yet" banner) -
+// getModelId() below persists this the first time it's asked, so from that
+// point on the device genuinely *is* configured, as this model, same as if
+// someone had picked it by hand.
+constexpr ModelId DEFAULT_MODEL_ID = ModelId::L10_MK2;
+
 void setModelId(ModelId model_id)
 {
     Preferences prefs;
@@ -347,25 +357,50 @@ void setModelId(ModelId model_id)
 
 ModelId getModelId()
 {
+    // A read-only open fails when the "device" NVS namespace has never been
+    // opened for write at all (the very first-ever call on this device) -
+    // folded into the same "never saved" path as a present namespace with no
+    // model_id key, so there's one place that decides whether anything has
+    // actually been configured.
     Preferences prefs;
-    if (!beginPreferencesOrWarn(prefs, PREFS_NAMESPACE, true)) return ModelId::UNKNOWN;
-    uint16_t id = prefs.getUShort(MODEL_ID_KEY, (uint16_t)ModelId::UNKNOWN);
-    prefs.end();
+    bool opened = prefs.begin(PREFS_NAMESPACE, true);
+    bool everSaved = opened && prefs.isKey(MODEL_ID_KEY);
+    uint16_t id = everSaved ? prefs.getUShort(MODEL_ID_KEY, (uint16_t)DEFAULT_MODEL_ID)
+                            : (uint16_t)DEFAULT_MODEL_ID;
+    if (opened) prefs.end();
+
+    if (!everSaved)
+    {
+        // Persist the default right away rather than merely returning it:
+        // that both makes this device durably "configured" (not recomputed
+        // from nothing every call) and creates the "device" namespace, so
+        // every other Preferences::begin("device", true) caller (device-
+        // identity.cpp's name lookup, etc.) succeeds too instead of failing
+        // - and logging an error - on every single call forever (#186).
+        Log.noticeln("Factory config: no model configured yet, defaulting to %s",
+                     getModelName(DEFAULT_MODEL_ID));
+        setModelId(DEFAULT_MODEL_ID);
+        return DEFAULT_MODEL_ID;
+    }
 
     ModelId model = (ModelId)id;
 
     // Defense in depth against a corrupt/garbage NVS value, independent of the write-side
-    // guard in MissionControl's MODEL command handler: isConfigured() below only checks
-    // != UNKNOWN, so a stored id with no registry entry would otherwise still make it to
-    // Geometry::initialize() with a null config and brick the boot.
-    if (model != ModelId::UNKNOWN && !getModelConfig(model))
+    // guard in MissionControl's MODEL command handler: a stored id with no registry entry
+    // would otherwise reach Geometry::initialize() with a null config and brick the boot.
+    if (!getModelConfig(model))
     {
-        Log.errorln("Factory config: stored model ID %d has no registry entry, ignoring", id);
-        return ModelId::UNKNOWN;
+        Log.errorln("Factory config: stored model ID %d has no registry entry, falling back to %s",
+                    id, getModelName(DEFAULT_MODEL_ID));
+        // Persist the fallback, same as the "never saved" branch above - this exact call
+        // site (Comms::buildCurrentStateJson) runs on every state-keepalive tick, so
+        // returning without writing back would re-hit this branch and re-log the same
+        // ERROR every ~5s forever (the same class of spam #186 fixed for a never-configured
+        // device, just triggered by corruption instead of absence).
+        setModelId(DEFAULT_MODEL_ID);
+        return DEFAULT_MODEL_ID;
     }
 
     return model;
 }
-
-bool isConfigured() { return getModelId() != ModelId::UNKNOWN; }
 }  // namespace FactoryConfig

@@ -6,8 +6,8 @@
 #include "device-identity.h"
 
 // Clears whatever DeviceIdentity persisted so each test starts from "no
-// custom name set", mirroring how test_geometry resets FactoryConfig via
-// setModelId(UNKNOWN) between tests.
+// custom name set", mirroring how test_geometry resets the Preferences mock
+// (Preferences::resetAllForTests()) between its FactoryConfig tests.
 void setUp() { DeviceIdentity::setDeviceName(""); }
 void tearDown() {}
 
