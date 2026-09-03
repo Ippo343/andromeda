@@ -29,14 +29,30 @@ namespace
 // req/h per IP, far above a daily check. A User-Agent is mandatory or GitHub
 // answers 403.
 //
-// per_page=20 (not 5): a stable-channel device skips every pre-release, so a
-// normal -rc/-beta run longer than the page would leave the newest stable
-// release off the end of the list and the device reporting "no matching
-// release found" until a plain tag lands back inside the window. 20 is still
-// a single request, far inside the 60/h budget, and the Filter-reduced list
-// fits RELEASE_LIST_DOC_CAPACITY with headroom.
+// Used only by the dev channel, which always wants the single most recent
+// release, period - even a pre-release. GitHub already returns releases
+// newest-first, so per_page=1 is exactly that; no paging past older releases
+// is ever needed (selectRelease() with devChannel=true takes releases[0]
+// unconditionally and never falls through to an older entry). A previous
+// version of this asked for up to 20 releases so a stable-channel device
+// could skip past a run of dev pre-releases within one page - that concern
+// moved to LATEST_RELEASE_API_URL below (GitHub filters prereleases out
+// server-side), and the 20-release page was never actually safe: sized for
+// the 7-asset releases of the time, it silently overflowed
+// RELEASE_LIST_DOC_CAPACITY once #162 grew each release to 10 assets.
 constexpr const char* RELEASES_API_URL =
-    "https://api.github.com/repos/Ippo343/andromeda/releases?per_page=20";
+    "https://api.github.com/repos/Ippo343/andromeda/releases?per_page=1";
+
+// GitHub "latest release" - the newest non-draft, non-prerelease release,
+// filtered server-side. Used by the stable channel: replaces walking the list
+// endpoint looking for the first non-prerelease entry, which needed room for
+// as many consecutive pre-releases as might ever precede the next stable one
+// - not a bound that's actually knowable in advance, and the reason
+// RELEASES_API_URL used to ask for a much bigger page than a single release
+// ever needs.
+constexpr const char* LATEST_RELEASE_API_URL =
+    "https://api.github.com/repos/Ippo343/andromeda/releases/latest";
+
 constexpr const char* USER_AGENT =
     "andromeda-led-controller (OTA; +https://github.com/Ippo343/andromeda)";
 
@@ -159,9 +175,17 @@ void configureClient(WiFiClientSecure& client, HTTPClient& http, const char* url
 // on any error.
 bool fetchLatest(OtaManifest::Entry& out)
 {
+    // Dev takes the single newest release, period (RELEASES_API_URL, a list);
+    // stable takes GitHub's own server-side "latest" (LATEST_RELEASE_API_URL,
+    // one object) - see both constants' comments for why they're split.
+    const bool dev = OtaConfig::devChannel();
+    const char* url = dev ? RELEASES_API_URL : LATEST_RELEASE_API_URL;
+    const size_t capacity =
+        dev ? OtaManifest::RELEASE_LIST_DOC_CAPACITY : OtaManifest::LATEST_RELEASE_DOC_CAPACITY;
+
     WiFiClientSecure client;
     HTTPClient http;
-    configureClient(client, http, RELEASES_API_URL);
+    configureClient(client, http, url);
     http.addHeader("Accept", "application/vnd.github+json");
 
     int code = http.GET();
@@ -172,7 +196,7 @@ bool fetchLatest(OtaManifest::Entry& out)
         return false;
     }
 
-    auto* listDoc = new (std::nothrow) DynamicJsonDocument(OtaManifest::RELEASE_LIST_DOC_CAPACITY);
+    auto* listDoc = new (std::nothrow) DynamicJsonDocument(capacity);
     if (listDoc == nullptr)
     {
         http.end();
@@ -180,8 +204,10 @@ bool fetchLatest(OtaManifest::Entry& out)
         return false;
     }
     DeserializationError jsonErr =
-        deserializeJson(*listDoc, http.getStream(),
-                        DeserializationOption::Filter(OtaManifest::releaseListFilter()));
+        dev ? deserializeJson(*listDoc, http.getStream(),
+                              DeserializationOption::Filter(OtaManifest::releaseListFilter()))
+            : deserializeJson(*listDoc, http.getStream(),
+                              DeserializationOption::Filter(OtaManifest::latestReleaseFilter()));
     http.end();
     if (jsonErr)
     {
@@ -191,8 +217,10 @@ bool fetchLatest(OtaManifest::Entry& out)
     }
 
     char manifestUrl[256];
-    bool picked = OtaManifest::selectRelease(*listDoc, OtaConfig::devChannel(), manifestUrl,
-                                             sizeof(manifestUrl));
+    bool picked =
+        dev ? OtaManifest::selectRelease(*listDoc, /*devChannel=*/true, manifestUrl,
+                                         sizeof(manifestUrl))
+            : OtaManifest::selectFromLatestRelease(*listDoc, manifestUrl, sizeof(manifestUrl));
     delete listDoc;
     if (!picked)
     {
