@@ -8,7 +8,8 @@ name: Release
 # flashparts-<env>-<tag>.zip x3, manifest.json - 10 assets total (see the
 # derived EXPECTED_ASSETS check below). Nothing is built a second time here.
 #
-# Channel comes from the tag suffix: v1.2.3-name-dev / -alpha / -beta / -rcN
+# Channel comes from the tag suffix: v1.2.3-name-dev / -alpha / -beta / -rcN,
+# each with an optional trailing iteration number (-alpha-1, -beta-37),
 # publish as a pre-release = the dev channel; a plain v1.2.3-name is stable.
 # A device only ever tracks pre-releases if its owner ticked the box. Only a
 # stable release triggers the chained `pages` job below - the web installer
@@ -61,7 +62,7 @@ jobs:
         id: meta
         run: |
           TAG="$GITHUB_REF_NAME"
-          if echo "$TAG" | grep -Eq -- '-(dev|alpha|beta|rc[0-9]*)$'; then
+          if echo "$TAG" | grep -Eq -- '-(dev|alpha|beta|rc[0-9]*)(-[0-9]+)?$'; then
             echo "channel=dev" >> "$GITHUB_OUTPUT"
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           else
