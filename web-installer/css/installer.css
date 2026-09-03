@@ -1,0 +1,48 @@
+/* Installer-only styling. The shared look (background, .container, .btn,
+   .info-box, the Cinzel logo) comes from data/css/common.css, copied in by
+   build-scripts/assemble_site.py - never duplicate those rules here. */
+
+.container {
+    max-width: 480px;
+}
+
+esp-web-install-button {
+    display: block;
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+esp-web-install-button [slot="activate"] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 1.2rem 1rem;
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    cursor: pointer;
+}
+
+/* .icon-btn/.icon aren't in common.css (only data/css/controls.css, which
+   isn't copied into the site - see assemble_site.py's
+   _copy_shared_ui_assets()), so the activate button - a download glyph, no
+   label text - defines its own icon sizing here rather than pulling in the
+   whole device-page stylesheet for one class. */
+esp-web-install-button [slot="activate"] .icon {
+    width: 28px;
+    height: 28px;
+    fill: currentColor;
+}
+
+.version-line {
+    text-align: center;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 1.5rem;
+}
+
+.version-line a {
+    color: #64b5f6;
+}
