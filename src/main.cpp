@@ -19,6 +19,7 @@
 #include "version.h"
 #ifndef NATIVE_RUNTIME
 #include "ota-config.h"
+#include "ota-retry-schedule.h"
 #include "ota-updater.h"
 #include "status-led.h"
 #endif
@@ -193,32 +194,32 @@ void setup()
     // fs-health.h (re-flashing the running version's FS image, never new
     // firmware) since there is no web UI left to ask through.
     OtaUpdater::begin();
-    // ticksFromMs, not pdMS_TO_TICKS: the daily re-check delay's ms*1000
-    // intermediate overflows 32-bit TickType_t and the macro would schedule it
-    // every ~8m21s instead (see include/utils.h).
+    // ticksFromMs, not pdMS_TO_TICKS: a 24h delay's ms*1000 intermediate
+    // overflows 32-bit TickType_t and the macro would schedule it every
+    // ~8m21s instead (see include/utils.h).
     static_assert(configTICK_RATE_HZ == 1000, "ticksFromMs() assumes a 1 kHz FreeRTOS tick");
     xTaskCreate(
         [](void*)
         {
             vTaskDelay(ticksFromMs(10000));
-            bool repairFs = g_fsDamaged;
+            // Fixed for the life of this task: success reboots the device
+            // (see ota-retry-schedule.h), so if we're still here it's still
+            // damaged and still needs repairing, no matter what the last
+            // attempt's outcome was.
+            const bool fsDamaged = g_fsDamaged;
+            uint32_t delayMs = 0;
             for (;;)
             {
-                if (repairFs)
+                OtaStartGate::Outcome outcome;
+                if (fsDamaged)
                 {
                     Log.warningln("OTA: filesystem damaged - attempting self-repair");
-                    // Keep retrying on a short interval until the worker
-                    // actually spawns (WiFi is often not up yet at boot+10s);
-                    // only then fall back to the normal daily cadence.
-                    if (OtaUpdater::startUpdate() == OtaStartGate::Outcome::Started)
-                        repairFs = false;
-                    vTaskDelay(ticksFromMs(repairFs ? 60ULL * 1000 : 24ULL * 60 * 60 * 1000));
+                    outcome = OtaUpdater::startUpdate();
                 }
-                else
-                {
-                    OtaUpdater::startCheck();
-                    vTaskDelay(ticksFromMs(24ULL * 60 * 60 * 1000));
-                }
+                else { outcome = OtaUpdater::startCheck(); }
+
+                delayMs = OtaRetrySchedule::nextDelayMs(fsDamaged, outcome, delayMs);
+                vTaskDelay(ticksFromMs(delayMs));
             }
         },
         "OtaAutoCheck", 3072, nullptr, 1, nullptr);
