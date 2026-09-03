@@ -404,6 +404,7 @@ void Comms::setupRoutes()
     // content type
     STATIC_FILE_ROUTE("/index.html", "text/html");
     STATIC_FILE_ROUTE("/wifi-setup.html", "text/html");
+    STATIC_FILE_ROUTE("/favicon.svg", "image/svg+xml");
     STATIC_FILE_ROUTE("/fonts/cinzel.woff2", "font/woff2");
     STATIC_FILE_ROUTE("/js/utils.js", "application/javascript");
     STATIC_FILE_ROUTE("/js/ws-client-utils.js", "application/javascript");
