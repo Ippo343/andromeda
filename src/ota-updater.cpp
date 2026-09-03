@@ -371,12 +371,12 @@ void updateTask(void*)
     {
         // The write below overwrites the exact flash region LittleFS has
         // mounted for logging (and everything comms.cpp serves out of it).
-        // Unmount first and stop the file logger from touching it - a log
-        // line racing the raw write corrupted the fresh image every time
-        // (reproduced on hardware: "Corrupted dir pair", failed mount on the
-        // next boot) before this guard existed. No LittleFS access of any
+        // Suspend the file logger AND wait for any in-flight write() to leave
+        // before unmounting - a log line racing the raw write corrupted the
+        // fresh image every time (reproduced on hardware: "Corrupted dir
+        // pair", failed mount on the next boot). No LittleFS access of any
         // kind is safe again until the reboot below.
-        suspendFileLogging();
+        suspendFileLogging([] { vTaskDelay(pdMS_TO_TICKS(1)); });
         LittleFS.end();
 
         if (!flashFromUrl(e.fsUrl, e.fsMd5, e.fsBytes, U_SPIFFS, State::WritingFs))

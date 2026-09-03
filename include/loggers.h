@@ -3,17 +3,26 @@
 #include <ArduinoLog.h>
 #include <LittleFS.h>
 
+#include "log-suspend.h"
 #include "utils.h"
 
-// Set true by OtaUpdater right before it overwrites the LittleFS partition raw
-// (#63's filesystem update) and never cleared - a reboot always follows. Once
-// set, SimpleFileLog stops touching LittleFS entirely: a log line racing that
-// raw write corrupts the freshly-written image, because it goes through the
-// *old* mount's cached filesystem state onto flash the OTA write just changed
-// out from under it. Reproduced on hardware as "Corrupted dir pair" / a failed
-// mount on the very next boot before this guard existed.
-inline volatile bool g_fileLoggingSuspended = false;
-inline void suspendFileLogging() { g_fileLoggingSuspended = true; }
+// Suspends SimpleFileLog before OtaUpdater overwrites the LittleFS partition
+// raw (#63's filesystem update) and never resumes it - a reboot always
+// follows. Once suspended, SimpleFileLog stops touching LittleFS entirely: a
+// log line racing that raw write corrupts the freshly-written image, because
+// it goes through the *old* mount's cached filesystem state onto flash the OTA
+// write just changed out from under it. Reproduced on hardware as "Corrupted
+// dir pair" / a failed mount on the very next boot before this guard existed.
+//
+// The suspend must also *drain*: setting the flag isn't enough if another task
+// is already inside write() - see log-suspend.h. Callers pass a yield (e.g.
+// vTaskDelay) so the OTA task can wait for in-flight writes to finish before
+// LittleFS.end().
+template <typename YieldFn>
+inline bool suspendFileLogging(YieldFn yield)
+{
+    return LogSuspend::suspendAndDrain(yield);
+}
 
 // Logger extension that logs everything to a file in LittleFS
 // with simple log rotation
@@ -45,7 +54,15 @@ class SimpleFileLog : public Print
 
     size_t write(uint8_t c) override
     {
-        if (g_fileLoggingSuspended || !_logFile) return 0;
+        // Hold a slot for the whole body, not just a flag check: the OTA
+        // suspend path waits for this to return before LittleFS.end() (see
+        // log-suspend.h). Returns false once a suspend is in progress.
+        if (!LogSuspend::beginWrite()) return 0;
+        if (!_logFile)
+        {
+            LogSuspend::endWrite();
+            return 0;
+        }
 
         size_t result = _logFile.write(c);
 
@@ -56,6 +73,7 @@ class SimpleFileLog : public Print
             checkRotation();
         }
 
+        LogSuspend::endWrite();
         return result;
     }
 };
