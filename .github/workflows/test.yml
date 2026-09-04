@@ -27,6 +27,12 @@ jobs:
       - name: Install PlatformIO
         run: pip install --upgrade platformio
 
+      # Pure stdlib, no toolchain - the packed-semver version-code logic (#164)
+      # shared by inject_version.py and release.yml. Kept here rather than in
+      # its own job so it rides the runner this job already spun up.
+      - name: Version-code packer unit tests
+        run: python -m unittest discover -s build-scripts -p 'test_*.py'
+
       - name: Install lcov
         run: sudo apt-get update && sudo apt-get install -y lcov
 

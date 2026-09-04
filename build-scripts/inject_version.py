@@ -5,16 +5,27 @@
 This script runs 'git describe' to get the current version and injects it
 into include/version.h as a C++ header file.
 
-It also emits FIRMWARE_VERSION_CODE - a monotonically increasing integer
-(the commit count) that OTA (#63) uses for "is the release newer than me?"
-comparisons, since the git-describe string isn't ordered - and FIRMWARE_TAG,
-the bare describe string without the branch suffix.
+It also emits FIRMWARE_VERSION_CODE - a monotonically increasing integer that
+OTA (#63) uses for "is the release newer than me?" comparisons, since the
+git-describe string isn't ordered - and FIRMWARE_TAG, the bare describe string
+without the branch suffix.
+
+FIRMWARE_VERSION_CODE is the packed-semver number derived from the git tag by
+build-scripts/version_code.py (#164). It used to be `git rev-list --count`,
+which is only monotonic along one line of history - a tag off a side branch or
+an older commit could produce a code the fleet had already passed, stranding it.
 """
 
 Import("env")
 import subprocess
 import os
+import sys
 from datetime import datetime
+
+# SCons exec()s this script, so __file__ is undefined here - locate the sibling
+# module via the project dir instead.
+sys.path.insert(0, os.path.join(env.get("PROJECT_DIR"), "build-scripts"))
+from version_code import code_for_tag
 
 
 def get_git_version():
@@ -45,23 +56,22 @@ def get_git_version():
             return "unknown"
 
 
-def get_git_version_code():
-    """Commit count on HEAD - a monotonic integer version for OTA comparisons.
+def get_git_version_code(version):
+    """Packed-semver code (build-scripts/version_code.py) for the current tag.
 
-    Linear (fast-forward-only) history is a project convention, so this only
-    ever increases. Falls back to 0 if git is unavailable, which makes every
-    published release look newer - safe, since OTA never auto-applies.
+    `version` is the `git describe` string from get_git_version(); its
+    "-<n>-g<hash>" / "-dirty" trailer is stripped by code_for_tag, so a dev
+    checkout packs the same code as its base tag. That is imprecise between
+    tags but safe: OTA only ever compares against a *published* manifest, so a
+    dev box still sees any real newer release as newer.
+
+    Falls back to 0 when git is unavailable or the string doesn't parse
+    (e.g. a repo with no tags), which makes every published release look newer
+    - safe, since OTA never auto-applies.
     """
     try:
-        result = subprocess.run(
-            ['git', 'rev-list', '--count', 'HEAD'],
-            capture_output=True,
-            text=True,
-            check=True,
-            cwd=env.get("PROJECT_DIR")
-        )
-        return int(result.stdout.strip())
-    except (subprocess.CalledProcessError, ValueError):
+        return code_for_tag(version)
+    except ValueError:
         return 0
 
 
@@ -97,7 +107,8 @@ def generate_version_header(version, branch, version_code):
 // Bare `git describe` string (no branch suffix) - display only.
 #define FIRMWARE_TAG "{version}"
 
-// Monotonic integer (commit count). OTA (#63) compares this against a
+// Monotonic integer: the packed-semver number for this build's git tag
+// (build-scripts/version_code.py, #164). OTA (#63) compares this against a
 // release manifest's versionCode to decide whether an update is newer.
 #define FIRMWARE_VERSION_CODE {version_code}
 
@@ -112,7 +123,7 @@ def main():
     # Get version information
     version = get_git_version()
     branch = get_git_branch()
-    version_code = get_git_version_code()
+    version_code = get_git_version_code(version)
 
     print(f"  Version: {version}")
     print(f"  Branch: {branch}")
