@@ -75,9 +75,9 @@ struct ModelConfig
     // user-facing brightness slider - the safety net for a customer sliding to 255 and
     // picking white on a PSU that can't deliver it.
     //
-    // TODO(#<placeholder-issue>): this is a conservative placeholder, not a measured
-    // PSU rating - same budget for every model regardless of LED count. Replace with
-    // the real number for each model's actual shipped PSU before shipping units.
+    // 2000mA default is a conservative placeholder for models that don't override
+    // it (test devices only - every shipped model sets a real measured value, see
+    // #159). Not a PSU rating for any actual hardware.
     uint16_t max_milliamps = 2000;
 
     bool isInFamily(FamilyID family) const { return ((uint16_t)id >> 8) == ((uint16_t)family); }

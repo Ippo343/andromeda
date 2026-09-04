@@ -51,6 +51,10 @@ extern const ModelConfig CONFIG = {
     .screen_width_mm = 520,
 
     .cartesian_data = (const CartesianCoordinates*)CARTESIAN_COORDS,
+
+    // 50W/5V PSU = 10000mA rated; budgeted at 90% to leave headroom for the ESP32
+    // and regulator losses on the same rail. See #159.
+    .max_milliamps = 9000,
 };
 
 }  // namespace AndromedaMk0
