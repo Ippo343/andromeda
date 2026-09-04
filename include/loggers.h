@@ -28,6 +28,12 @@ inline bool suspendFileLogging(YieldFn yield)
 // with simple log rotation
 class SimpleFileLog : public Print
 {
+   public:
+    // Per-file rotation cap. Halved from the original 32768 (#212/#214): the Advanced/Logs
+    // page's browser-side fetch pulls the full retained history of both rotated files on every
+    // poll, so this bounds that payload to ~32KB worst case (two files) instead of ~64KB.
+    static constexpr size_t DEFAULT_MAX_LOG_BYTES = 16384;
+
    private:
     File _logFile;
     size_t _maxSize;
@@ -47,7 +53,7 @@ class SimpleFileLog : public Print
     }
 
    public:
-    SimpleFileLog(size_t maxSize = 32768) : _maxSize(maxSize)
+    SimpleFileLog(size_t maxSize = DEFAULT_MAX_LOG_BYTES) : _maxSize(maxSize)
     {
         _logFile = LittleFS.open(LOG_FILE_CUR, "a");
     }
@@ -112,7 +118,7 @@ class TeeLog : public Print
 // keeps that legal instead of a multiple-definition link error.
 inline void setupLoggers()
 {
-    static SimpleFileLog fileLogger(32768);
+    static SimpleFileLog fileLogger(SimpleFileLog::DEFAULT_MAX_LOG_BYTES);
     static TeeLog teeLogger(&Serial, &fileLogger);
 
     Log.begin(LOG_RUNTIME_LEVEL, &teeLogger, true);
