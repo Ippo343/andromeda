@@ -107,3 +107,27 @@ esp-web-install-button [slot="activate"] .icon {
 .parts-drawer[open] summary {
     margin-bottom: 0.75rem;
 }
+
+.console-controls {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.console-controls .btn {
+    flex: 1;
+}
+
+.console-log {
+    height: 12rem;
+    overflow-y: auto;
+    margin: 0;
+    padding: 0.5rem;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    font-family: 'Consolas', ui-monospace, monospace;
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
