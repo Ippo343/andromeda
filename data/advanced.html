@@ -9,40 +9,54 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 </head>
 <body class="ws-disconnected">
-    <div class="container">
+    <div class="container adv-container">
         <h1 class="logo" id="logo">A</h1>
 
         <a href="/" class="btn back-link">← Back to Controls</a>
 
-        <span class="section-label">Diagnostics</span>
-        <div class="metrics-grid" id="metrics"></div>
+        <!-- Stacked on mobile, in this same DOM order (Diagnostics, Log,
+             Device Model/Firmware/OTA) - identical to the old flat markup.
+             Once there's room, advanced.css's grid-template-areas rearranges
+             these three into a dashboard: Diagnostics + the controls side by
+             side on top, Log spanning the full width underneath (it wants
+             more room than either column alone gives it). -->
+        <div class="adv-grid">
+            <section class="adv-diag">
+                <span class="section-label">Diagnostics</span>
+                <div class="metrics-grid" id="metrics"></div>
+            </section>
 
-        <span class="section-label">Log</span>
-        <div class="logbox" id="logbox"></div>
+            <section class="adv-log">
+                <span class="section-label">Log</span>
+                <div class="logbox" id="logbox"></div>
+            </section>
 
-        <span class="section-label">Device Model</span>
-        <!-- Populated entirely from the server's "models" list in the state
-             message pushed right after the WebSocket connects. Deliberately
-             left empty: a hard-coded fallback list happened to have the same
-             length as the firmware's model registry, so the old
-             length-only rebuild guard never fired and the placeholder labels
-             were what the user actually saw. -->
-        <div class="model-row" id="modelRow">
-            <select class="model-select" id="modelSelect"></select>
-            <button id="rebootBtn" class="reboot-btn" title="Reboot Device">Reboot</button>
+            <section class="adv-ctrl">
+                <span class="section-label">Device Model</span>
+                <!-- Populated entirely from the server's "models" list in the
+                     state message pushed right after the WebSocket connects.
+                     Deliberately left empty: a hard-coded fallback list happened
+                     to have the same length as the firmware's model registry, so
+                     the old length-only rebuild guard never fired and the
+                     placeholder labels were what the user actually saw. -->
+                <div class="model-row" id="modelRow">
+                    <select class="model-select" id="modelSelect"></select>
+                    <button id="rebootBtn" class="reboot-btn" title="Reboot Device">Reboot</button>
+                </div>
+
+                <span class="section-label">Firmware</span>
+                <div class="firmware-box" id="firmwareVersion">—</div>
+                <div class="ota-badge" id="fwUpdateBadge" hidden></div>
+                <div class="ota-row">
+                    <button id="otaCheckBtn" class="btn scan-btn">Check for update</button>
+                    <button id="otaUpdateBtn" class="btn primary" hidden>Update now</button>
+                </div>
+                <div class="ota-progress" id="otaProgress" hidden></div>
+                <label class="ota-channel">
+                    <input type="checkbox" id="otaDevChannel"> Receive dev / beta updates
+                </label>
+            </section>
         </div>
-
-        <span class="section-label">Firmware</span>
-        <div class="firmware-box" id="firmwareVersion">—</div>
-        <div class="ota-badge" id="fwUpdateBadge" hidden></div>
-        <div class="ota-row">
-            <button id="otaCheckBtn" class="btn scan-btn">Check for update</button>
-            <button id="otaUpdateBtn" class="btn primary" hidden>Update now</button>
-        </div>
-        <div class="ota-progress" id="otaProgress" hidden></div>
-        <label class="ota-channel">
-            <input type="checkbox" id="otaDevChannel"> Receive dev / beta updates
-        </label>
     </div>
 
     <!-- External JavaScript -->
