@@ -169,3 +169,24 @@ jobs:
           path: _site
       - id: deployment
         uses: actions/deploy-pages@v4
+
+      # deploy-pages succeeding only means a deployment was *created*, not that
+      # the site answers. A truncated upload artifact, a Pages propagation
+      # failure, or an assemble_site.py change that wrote into the wrong
+      # subdirectory would all end this run green with an installer that 404s.
+      # Fetch the live URL and fail unless it actually serves the manifest and
+      # the binaries it points at. (Seen for real once: a rollback that
+      # disabled the Pages repo setting left configure/deploy green against an
+      # unreachable site.)
+      - name: Verify the deployed site answers
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          curl -fsS "${PAGE_URL}manifest.json" -o live-manifest.json
+          jq -e '.builds | length == 3' live-manifest.json > /dev/null
+          for path in $(jq -r '.builds[].parts[0].path' live-manifest.json); do
+            echo "HEAD ${PAGE_URL}${path}"
+            curl -fsI "${PAGE_URL}${path}" > /dev/null
+          done
+          echo "live site OK: ${PAGE_URL}"
