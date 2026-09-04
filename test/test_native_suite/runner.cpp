@@ -58,6 +58,7 @@ DECLARE_SUITE(test_ota_start_gate);
 DECLARE_SUITE(test_partition_layout);
 DECLARE_SUITE(test_perf_monitor);
 DECLARE_SUITE(test_physics);
+DECLARE_SUITE(test_power_monitor);
 DECLARE_SUITE(test_release_pipeline);
 DECLARE_SUITE(test_segmented_animation);
 DECLARE_SUITE(test_serial_line_buffer);
@@ -90,6 +91,7 @@ int main(int, char**)
     RUN_SUITE(test_partition_layout);
     RUN_SUITE(test_perf_monitor);
     RUN_SUITE(test_physics);
+    RUN_SUITE(test_power_monitor);
     RUN_SUITE(test_release_pipeline);
     RUN_SUITE(test_segmented_animation);
     RUN_SUITE(test_serial_line_buffer);
