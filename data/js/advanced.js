@@ -1,14 +1,23 @@
-// Advanced page wiring: pulls /metrics over plain HTTP every 1s and
-// re-renders, and reuses the existing /ws WebSocket + state broadcast for the
-// device-model selector (the same {type:'model'} / {type:'reboot'} commands
-// controls.js sends). DOM/network glue only - the parsing and formatting
-// live in advanced-logic.js so they can be unit-tested. The log viewer moved
-// to its own page (data/logs.html, #212) - see that page's logs.js instead.
+// Advanced page wiring: metrics are pushed over the existing /ws WebSocket
+// (the {type:'subscribe',topic:'metrics'} / {type:'metrics'} frames - #214)
+// instead of polled, and that same socket carries the device-model selector
+// state ({type:'model'} / {type:'reboot'} commands, like controls.js sends).
+// A slow fallback timer covers a device on older firmware or a lost
+// subscription by falling back to the original HTTP /metrics poll. DOM/
+// network glue only - the parsing and formatting live in advanced-logic.js
+// so they can be unit-tested. The log viewer moved to its own page
+// (data/logs.html, #212) - see that page's logs.js instead.
 
-const REFRESH_MS = 1000;
 let ws = null;
 let reconnectAttempt = 0;
 let reconnectTimer = null;
+
+// Merged metrics state fed by both the WS push and the HTTP fallback (see
+// mergeMetrics()'s own comment for why this is a merge, not a replace), and
+// when the most recent WS metrics frame arrived (null = never).
+let metricsCache = {};
+let lastMetricsFrameAt = null;
+let metricsFallbackTimer = null;
 
 function scheduleReconnect() {
     if (reconnectTimer) return;
@@ -47,6 +56,9 @@ function connectWebSocket() {
         clearTimeout(connectTimeout);
         reconnectAttempt = 0;
         document.body.classList.remove('ws-disconnected');
+        // Skip if the tab is currently hidden (e.g. a reconnect happening in the background) -
+        // the visibilitychange handler below is what (re)subscribes once it's visible again.
+        if (document.visibilityState !== 'hidden') ws.send(subscribeMetricsMessage());
     };
     ws.onerror = () => scheduleReconnect();
     ws.onclose = () => {
@@ -74,6 +86,16 @@ function handleStateMessage(raw) {
     } catch (e) {
         return;
     }
+
+    if (msg.type === 'metrics') {
+        metricsCache = mergeMetrics(metricsCache, msg);
+        lastMetricsFrameAt = Date.now();
+        renderMetrics(metricsCache);
+        renderFirmware(metricsCache);
+        renderOta(metricsCache);
+        return;
+    }
+
     if (msg.type !== 'state') return;
 
     const modelSelect = document.getElementById('modelSelect');
@@ -140,12 +162,14 @@ function renderFirmware(metrics) {
     if (el) el.textContent = firmwareLabel(metrics);
 }
 
-// True while an OTA action is running, so the 2s /metrics refresh doesn't
-// yank the checkbox back or hide the progress line under an in-flight update.
+// True while an OTA action is running, so a metrics repaint (WS push or the
+// HTTP fallback) doesn't yank the checkbox back or hide the progress line
+// under an in-flight update.
 let otaBusy = false;
 
-// Driven by the /metrics poll: the "update available" badge, the "Update now"
-// button, and the dev-channel checkbox (unless the user is mid-interaction).
+// Driven by the merged metrics state: the "update available" badge, the
+// "Update now" button, and the dev-channel checkbox (unless the user is
+// mid-interaction).
 function renderOta(metrics) {
     const badge = document.getElementById('fwUpdateBadge');
     const updateBtn = document.getElementById('otaUpdateBtn');
@@ -214,7 +238,7 @@ function pollOtaStatus(duringUpdate) {
 }
 
 // In-flight guard + timeout: without it, a device that's gone dark leaves the fetch queued
-// behind the browser's own (much longer) connection timeout, and the next REFRESH_MS tick was
+// behind the browser's own (much longer) connection timeout, and the next fallback tick was
 // free to fire another overlapping request on top - piling up exactly when the link is already
 // struggling.
 let metricsRequestInFlight = false;
@@ -226,15 +250,21 @@ function fetchWithTimeout(url) {
     return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timeout));
 }
 
+// One-shot HTTP /metrics fetch + repaint. Two roles now that the WS push (#214) is the primary
+// path: the pre-socket first paint on load, and the "repaint right now" callers below
+// (pollOtaStatus()'s terminal branch, the dev-channel checkbox) that don't want to wait for
+// either the WS push or the slow fallback timer. Its result also feeds metricsCache via
+// mergeMetrics(), same as a WS frame would.
 function refresh() {
     if (metricsRequestInFlight) return;
     metricsRequestInFlight = true;
     fetchWithTimeout('/metrics')
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error('not ok'))))
         .then((m) => {
-            renderMetrics(m);
-            renderFirmware(m);
-            renderOta(m);
+            metricsCache = mergeMetrics(metricsCache, m);
+            renderMetrics(metricsCache);
+            renderFirmware(metricsCache);
+            renderOta(metricsCache);
         })
         .catch(() => {
             const el = document.getElementById('metrics');
@@ -318,7 +348,41 @@ document.addEventListener('DOMContentLoaded', () => {
             .finally(() => { otaBusy = false; refresh(); });
     });
 
+    // Fallback poll, only when shouldPollMetricsHttp() says the WS push isn't covering us
+    // (socket down, or no metrics frame within the grace window) - on a healthy device this
+    // never fires a single /metrics request after the first paint.
+    function metricsFallbackTick() {
+        if (shouldPollMetricsHttp(!!(ws && ws.readyState === WebSocket.OPEN), lastMetricsFrameAt,
+                                  Date.now())) {
+            refresh();
+        }
+    }
+    function startMetricsFallbackTimer() {
+        if (metricsFallbackTimer) return;
+        metricsFallbackTimer = setInterval(metricsFallbackTick, METRICS_HTTP_FALLBACK_MS);
+    }
+    function stopMetricsFallbackTimer() {
+        if (!metricsFallbackTimer) return;
+        clearInterval(metricsFallbackTimer);
+        metricsFallbackTimer = null;
+    }
+
+    // Hidden tab: unsubscribe (no point pushing metrics nobody's looking at) and stop the
+    // fallback timer. Visible again: re-subscribe (the firmware answers with a fresh full
+    // frame - see WS_EVT_DATA in comms.cpp) and resume the fallback timer. The OTA poll loop
+    // (pollOtaStatus) and its reboot countdown are deliberately untouched by this - an
+    // in-flight update or a pending reload must survive a tab switch.
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            stopMetricsFallbackTimer();
+            if (ws && ws.readyState === WebSocket.OPEN) ws.send(unsubscribeMetricsMessage());
+        } else {
+            if (ws && ws.readyState === WebSocket.OPEN) ws.send(subscribeMetricsMessage());
+            startMetricsFallbackTimer();
+        }
+    });
+
     connectWebSocket();
-    refresh();
-    setInterval(refresh, REFRESH_MS);
+    refresh();  // pre-socket first paint
+    startMetricsFallbackTimer();
 });

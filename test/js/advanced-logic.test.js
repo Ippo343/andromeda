@@ -14,6 +14,11 @@ const {
     otaStartRejectionLabel,
     isOtaTerminalState,
     isOtaPollDone,
+    subscribeMetricsMessage,
+    unsubscribeMetricsMessage,
+    mergeMetrics,
+    shouldPollMetricsHttp,
+    WS_METRICS_GRACE_MS,
 } = require('../../data/js/advanced-logic.js');
 
 describe('formatUptime', () => {
@@ -243,5 +248,62 @@ describe('isOtaPollDone', () => {
     test('update flow still ends on a real terminal result', () => {
         assert.equal(isOtaPollDone('uptodate', true), true);
         assert.equal(isOtaPollDone('failed', true), true);
+    });
+});
+
+describe('subscribeMetricsMessage / unsubscribeMetricsMessage', () => {
+    test('emit the exact JSON WsCommandParser::parseSubscription expects', () => {
+        assert.equal(subscribeMetricsMessage(), '{"type":"subscribe","topic":"metrics"}');
+        assert.equal(unsubscribeMetricsMessage(), '{"type":"unsubscribe","topic":"metrics"}');
+    });
+});
+
+describe('mergeMetrics', () => {
+    test('a volatile-only frame does not blank fields from an earlier full frame', () => {
+        const full = { chip: 'ESP32-S3', version: 'v1.0', uptimeMs: 100, fps: 60 };
+        const volatile = { uptimeMs: 200, fps: 61 };
+        const merged = mergeMetrics(full, volatile);
+        assert.equal(merged.chip, 'ESP32-S3');
+        assert.equal(merged.version, 'v1.0');
+        assert.equal(merged.uptimeMs, 200);
+        assert.equal(merged.fps, 61);
+    });
+
+    test('a later frame overrides matching keys from an earlier one', () => {
+        const merged = mergeMetrics({ rssi: -70 }, { rssi: -50 });
+        assert.equal(merged.rssi, -50);
+    });
+
+    test('"type" never leaks into the merged object', () => {
+        const merged = mergeMetrics({}, { type: 'metrics', uptimeMs: 5 });
+        assert.equal('type' in merged, false);
+        assert.equal(merged.uptimeMs, 5);
+    });
+
+    test('a null or non-object frame is a no-op', () => {
+        const prev = { chip: 'ESP32-S3' };
+        assert.deepEqual(mergeMetrics(prev, null), prev);
+        assert.deepEqual(mergeMetrics(prev, undefined), prev);
+        assert.deepEqual(mergeMetrics(prev, 'not an object'), prev);
+    });
+
+    test('missing prev starts from an empty object', () => {
+        assert.deepEqual(mergeMetrics(undefined, { fps: 42 }), { fps: 42 });
+    });
+});
+
+describe('shouldPollMetricsHttp', () => {
+    test('closed socket -> always poll', () => {
+        assert.equal(shouldPollMetricsHttp(false, Date.now(), Date.now()), true);
+        assert.equal(shouldPollMetricsHttp(false, null, Date.now()), true);
+    });
+    test('open socket, a frame arrived within the grace window -> no poll', () => {
+        assert.equal(shouldPollMetricsHttp(true, 1000, 1000 + WS_METRICS_GRACE_MS - 1), false);
+    });
+    test('open socket, last frame is stale -> poll', () => {
+        assert.equal(shouldPollMetricsHttp(true, 1000, 1000 + WS_METRICS_GRACE_MS), true);
+    });
+    test('open socket, no frame ever received -> poll', () => {
+        assert.equal(shouldPollMetricsHttp(true, null, Date.now()), true);
     });
 });
