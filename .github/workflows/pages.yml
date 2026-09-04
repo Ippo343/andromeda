@@ -157,6 +157,10 @@ jobs:
           python build-scripts/assemble_site.py \
             --parts-dir parts --out _site \
             --tag "$REL_TAG" --repo "$GITHUB_REPOSITORY"
+          # assemble_site.py validates its inputs; check_site.py reads the
+          # manifest.json / version.json it just wrote and fails if they don't
+          # describe all 3 boards with every referenced part file present.
+          python build-scripts/check_site.py --site _site
           du -sh _site
 
       - uses: actions/configure-pages@v5

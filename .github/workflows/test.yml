@@ -149,6 +149,11 @@ jobs:
           done
           python build-scripts/assemble_site.py \
             --parts-dir parts --out _site --tag local --repo local/local
+          # Inspect what assemble_site.py actually wrote - 3 builds, the 3
+          # expected chip families, every referenced part file present. A wrong
+          # manifest that still passes assemble_site's own input validation
+          # fails here instead of shipping to the deploy with CI green.
+          python build-scripts/check_site.py --site _site
 
       - uses: actions/upload-artifact@v4
         with:
