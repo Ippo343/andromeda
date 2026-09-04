@@ -171,6 +171,21 @@ class CommsTestAccess
     static bool scanInProgress(Comms& c) { return c.scanInProgress; }
     static void setScanInProgress(Comms& c, bool v) { c.scanInProgress = v; }
     static void setScanComplete(Comms& c, bool v) { c.scanComplete = v; }
+
+    // --- Metrics WS push (#214) ---
+    static AsyncWebSocket& ws(Comms& c) { return c.ws; }
+    static void pushMetricsIfDue(Comms& c) { c.pushMetricsIfDue(); }
+    static unsigned long metricsPushIntervalMs() { return Comms::METRICS_PUSH_INTERVAL_MS; }
+    static unsigned long metricsOtaTierIntervalMs() { return Comms::METRICS_OTA_TIER_INTERVAL_MS; }
+    // Comms::Instance() is a singleton shared across every test in this program - clears the
+    // subscriber array and both push timers so one test's subscriptions/timing never leak into
+    // the next (mirrors resetBroadcastThrottle() above for the state broadcast).
+    static void resetMetricsState(Comms& c)
+    {
+        for (auto& sub : c.metricsSubscribers) sub = Comms::MetricsSubscriber{};
+        c.lastMetricsPushMs = 0;
+        c.lastMetricsOtaTierMs = 0;
+    }
 };
 
 // Deterministic clock for the broadcast-throttle test - the stub millis() this
@@ -195,6 +210,21 @@ WifiManager& fakeWifiManager()
     static WifiManager wm(fakeConnector(), fakeStore());
     return wm;
 }
+
+// Shared by the metrics-subscription tests below: feeds one WS_EVT_DATA text frame from
+// `client` through the same path a real message from the network takes, mirroring the
+// hand-rolled info/buf setup every other WS test in this file repeats individually - worth
+// factoring out here since #214 adds several tests that each send more than one message.
+void sendWsMessage(AsyncWebSocket* ws, AsyncWebSocketClient* client, const char* message)
+{
+    AwsFrameInfo info;
+    info.final = true;
+    info.index = 0;
+    info.len = strlen(message);
+    info.opcode = WS_TEXT;
+    std::vector<uint8_t> buf(message, message + strlen(message) + 1);
+    ws->simulateDataFrame(client, info, buf.data(), strlen(message));
+}
 }  // namespace
 
 void setUp()
@@ -216,6 +246,14 @@ void setUp()
     CommsTestAccess::resetBroadcastThrottle(Comms::Instance());
     CommsTestAccess::setNowFn(Comms::Instance(), nullptr);
     g_fakeNowMs = 0;
+
+    // Same reasoning as resetBroadcastThrottle() above, for the metrics WS push: clears
+    // subscribers/timers on the shared Comms singleton, and the mock AsyncWebSocket's own
+    // per-test-accumulating state (sentToClient never truncates itself, connectedIds otherwise
+    // carries a previous test's client ids forward).
+    CommsTestAccess::resetMetricsState(Comms::Instance());
+    CommsTestAccess::ws(Comms::Instance()).sentToClient.clear();
+    CommsTestAccess::ws(Comms::Instance()).connectedIds.clear();
 }
 void tearDown() {}
 
@@ -864,6 +902,179 @@ void test_state_broadcast_forces_periodic_resync_even_when_not_dirty()
 }
 
 // ---------------------------------------------------------------------------
+// Metrics WS push (#214)
+// ---------------------------------------------------------------------------
+
+// Deserializes the most recent frame pushMetricsIfDue() sent to `clientId` and asserts it's
+// there at all - shared by several tests below.
+namespace
+{
+StaticJsonDocument<WsMetricsBuilder::JSON_CAPACITY> lastMetricsFrameTo(AsyncWebSocket& ws,
+                                                                       uint32_t clientId)
+{
+    StaticJsonDocument<WsMetricsBuilder::JSON_CAPACITY> doc;
+    for (auto it = ws.sentToClient.rbegin(); it != ws.sentToClient.rend(); ++it)
+    {
+        if (it->first != clientId) continue;
+        TEST_ASSERT_FALSE(deserializeJson(doc, it->second.data(), it->second.size()));
+        return doc;
+    }
+    TEST_FAIL_MESSAGE("no metrics frame was sent to this client");
+    return doc;
+}
+}  // namespace
+
+void test_metrics_subscribe_sends_one_full_frame_to_that_client_only()
+{
+    AsyncWebSocket* ws = CommsTestAccess::server(Comms::Instance()).webSocket;
+
+    AsyncWebSocketClient subscriber;
+    subscriber.setId(101);
+    ws->simulateConnect(&subscriber);
+    AsyncWebSocketClient bystander;
+    bystander.setId(202);
+    ws->simulateConnect(&bystander);
+
+    sendWsMessage(ws, &subscriber, "{\"type\":\"subscribe\",\"topic\":\"metrics\"}");
+    CommsTestAccess::pushMetricsIfDue(Comms::Instance());
+
+    StaticJsonDocument<WsMetricsBuilder::JSON_CAPACITY> doc = lastMetricsFrameTo(*ws, 101);
+    TEST_ASSERT_EQUAL_STRING("metrics", doc["type"]);
+    TEST_ASSERT_TRUE(doc.containsKey("chip"));  // full frame on subscribe
+    TEST_ASSERT_TRUE(doc.containsKey("otaChannel"));
+
+    for (const auto& sent : ws->sentToClient)
+        TEST_ASSERT_NOT_EQUAL(202, sent.first);  // the bystander got nothing
+}
+
+void test_metrics_volatile_tick_omits_static_fields()
+{
+    AsyncWebSocket* ws = CommsTestAccess::server(Comms::Instance()).webSocket;
+    g_fakeNowMs = 5000;
+    CommsTestAccess::setNowFn(Comms::Instance(), &fakeNowMs);
+
+    AsyncWebSocketClient subscriber;
+    subscriber.setId(303);
+    ws->simulateConnect(&subscriber);
+    sendWsMessage(ws, &subscriber, "{\"type\":\"subscribe\",\"topic\":\"metrics\"}");
+    CommsTestAccess::pushMetricsIfDue(Comms::Instance());  // consumes the full frame
+
+    g_fakeNowMs = 5000 + CommsTestAccess::metricsPushIntervalMs();
+    CommsTestAccess::pushMetricsIfDue(Comms::Instance());
+
+    StaticJsonDocument<WsMetricsBuilder::JSON_CAPACITY> doc = lastMetricsFrameTo(*ws, 303);
+    TEST_ASSERT_TRUE(doc.containsKey("uptimeMs"));
+    TEST_ASSERT_FALSE(doc.containsKey("chip"));
+    TEST_ASSERT_FALSE(doc.containsKey("version"));
+}
+
+void test_metrics_ota_tier_reappears_after_its_interval()
+{
+    AsyncWebSocket* ws = CommsTestAccess::server(Comms::Instance()).webSocket;
+    g_fakeNowMs = 9000;
+    CommsTestAccess::setNowFn(Comms::Instance(), &fakeNowMs);
+
+    AsyncWebSocketClient subscriber;
+    subscriber.setId(404);
+    ws->simulateConnect(&subscriber);
+    sendWsMessage(ws, &subscriber, "{\"type\":\"subscribe\",\"topic\":\"metrics\"}");
+    CommsTestAccess::pushMetricsIfDue(Comms::Instance());  // full frame - includes OTA tier once
+
+    // One push interval later, still short of the (longer) OTA tier interval: no OTA keys.
+    g_fakeNowMs = 9000 + CommsTestAccess::metricsPushIntervalMs();
+    CommsTestAccess::pushMetricsIfDue(Comms::Instance());
+    StaticJsonDocument<WsMetricsBuilder::JSON_CAPACITY> midDoc = lastMetricsFrameTo(*ws, 404);
+    TEST_ASSERT_FALSE(midDoc.containsKey("otaChannel"));
+
+    // Once the OTA tier interval has elapsed too, the next push carries it again.
+    g_fakeNowMs = 9000 + CommsTestAccess::metricsOtaTierIntervalMs();
+    CommsTestAccess::pushMetricsIfDue(Comms::Instance());
+    StaticJsonDocument<WsMetricsBuilder::JSON_CAPACITY> laterDoc = lastMetricsFrameTo(*ws, 404);
+    TEST_ASSERT_TRUE(laterDoc.containsKey("otaChannel"));
+}
+
+void test_metrics_unsubscribe_stops_sends()
+{
+    AsyncWebSocket* ws = CommsTestAccess::server(Comms::Instance()).webSocket;
+    g_fakeNowMs = 1000;
+    CommsTestAccess::setNowFn(Comms::Instance(), &fakeNowMs);
+
+    AsyncWebSocketClient subscriber;
+    subscriber.setId(505);
+    ws->simulateConnect(&subscriber);
+    sendWsMessage(ws, &subscriber, "{\"type\":\"subscribe\",\"topic\":\"metrics\"}");
+    CommsTestAccess::pushMetricsIfDue(Comms::Instance());
+    TEST_ASSERT_FALSE(ws->sentToClient.empty());
+
+    sendWsMessage(ws, &subscriber, "{\"type\":\"unsubscribe\",\"topic\":\"metrics\"}");
+    ws->sentToClient.clear();
+    g_fakeNowMs += CommsTestAccess::metricsPushIntervalMs();
+    CommsTestAccess::pushMetricsIfDue(Comms::Instance());
+    TEST_ASSERT_TRUE(ws->sentToClient.empty());
+}
+
+void test_metrics_disconnect_drops_subscriber_without_crashing()
+{
+    AsyncWebSocket* ws = CommsTestAccess::server(Comms::Instance()).webSocket;
+    g_fakeNowMs = 1000;
+    CommsTestAccess::setNowFn(Comms::Instance(), &fakeNowMs);
+
+    AsyncWebSocketClient subscriber;
+    subscriber.setId(606);
+    ws->simulateConnect(&subscriber);
+    sendWsMessage(ws, &subscriber, "{\"type\":\"subscribe\",\"topic\":\"metrics\"}");
+    CommsTestAccess::pushMetricsIfDue(Comms::Instance());
+    TEST_ASSERT_FALSE(ws->sentToClient.empty());
+
+    ws->simulateDisconnect(&subscriber);
+    ws->sentToClient.clear();
+    g_fakeNowMs += CommsTestAccess::metricsPushIntervalMs();
+    CommsTestAccess::pushMetricsIfDue(Comms::Instance());  // must not crash on the gone client
+    TEST_ASSERT_TRUE(ws->sentToClient.empty());
+}
+
+void test_metrics_never_subscribed_client_receives_nothing()
+{
+    AsyncWebSocket* ws = CommsTestAccess::server(Comms::Instance()).webSocket;
+    g_fakeNowMs = 1000;
+    CommsTestAccess::setNowFn(Comms::Instance(), &fakeNowMs);
+
+    AsyncWebSocketClient plainControlsClient;
+    plainControlsClient.setId(707);
+    ws->simulateConnect(&plainControlsClient);  // connects, never subscribes to metrics
+
+    g_fakeNowMs += CommsTestAccess::metricsPushIntervalMs();
+    CommsTestAccess::pushMetricsIfDue(Comms::Instance());
+    TEST_ASSERT_TRUE(ws->sentToClient.empty());
+}
+
+// The HTTP route wasn't touched by the subscription work above beyond sharing its builder -
+// still answers a full payload synchronously, no subscription needed.
+void test_metrics_http_route_still_returns_full_payload()
+{
+    ArRequestHandlerFunction* handler =
+        CommsTestAccess::server(Comms::Instance()).findHandler("/metrics", HTTP_GET);
+    TEST_ASSERT_NOT_NULL(handler);
+
+    AsyncWebServerRequest req;
+    (*handler)(&req);
+
+    TEST_ASSERT_EQUAL(200, req.responseCode);
+
+    // Zero-copy parse (mutable buffer) - same reasoning as
+    // test_ws_connect_pushes_initial_state above: parsing straight from
+    // req.responseBody.c_str() (const char*) forces ArduinoJson to duplicate every
+    // key/value into the pool, which overflows JSON_CAPACITY (sized for the
+    // serialize side, where const-char* literals are stored by reference instead).
+    std::string body(req.responseBody.c_str(), req.responseBody.length());
+    StaticJsonDocument<WsMetricsBuilder::JSON_CAPACITY> doc;
+    TEST_ASSERT_FALSE(deserializeJson(doc, body.data(), body.size()));
+    TEST_ASSERT_TRUE(doc.containsKey("chip"));
+    TEST_ASSERT_TRUE(doc.containsKey("otaChannel"));
+    TEST_ASSERT_TRUE(doc.containsKey("uptimeMs"));
+}
+
+// ---------------------------------------------------------------------------
 // Captive portal
 // ---------------------------------------------------------------------------
 
@@ -1058,6 +1269,14 @@ int main(int argc, char** argv)
     RUN_TEST(test_state_broadcast_skipped_when_not_dirty);
     RUN_TEST(test_state_broadcasts_are_throttled_within_the_interval);
     RUN_TEST(test_state_broadcast_forces_periodic_resync_even_when_not_dirty);
+
+    RUN_TEST(test_metrics_subscribe_sends_one_full_frame_to_that_client_only);
+    RUN_TEST(test_metrics_volatile_tick_omits_static_fields);
+    RUN_TEST(test_metrics_ota_tier_reappears_after_its_interval);
+    RUN_TEST(test_metrics_unsubscribe_stops_sends);
+    RUN_TEST(test_metrics_disconnect_drops_subscriber_without_crashing);
+    RUN_TEST(test_metrics_never_subscribed_client_receives_nothing);
+    RUN_TEST(test_metrics_http_route_still_returns_full_payload);
 
     RUN_TEST(test_not_found_redirects_in_ap_mode);
     RUN_TEST(test_not_found_returns_404_in_station_mode);

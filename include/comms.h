@@ -14,6 +14,7 @@
 #include "utils.h"
 #include "wifi-esp-adapters.h"
 #include "wifi-manager.h"
+#include "ws-metrics-builder.h"
 #include "ws-state-builder.h"
 
 class Comms
@@ -164,6 +165,50 @@ class Comms
     // change happened to trigger the next one - possibly never. Force a full resync at this
     // interval regardless of the dirty flag; see broadcastStateIfDirty().
     static constexpr unsigned long STATE_KEEPALIVE_INTERVAL_MS = 5000;
+
+    // Per-client opt-in "metrics" WS push (#214) - deliberately separate from the "state"
+    // broadcast above: that one goes to every client at up to 10Hz during a live drag, this one
+    // is a much smaller, tiered payload only for clients that asked (the Advanced page). Fixed
+    // array, zero allocation. clientId == 0 is the empty-slot sentinel: AsyncWebSocket's own
+    // _cNextId starts at 1, so no real client is ever assigned id 0.
+    struct MetricsSubscriber
+    {
+        uint32_t clientId = 0;
+        // Set on subscribe (including a re-subscribe of an already-tracked client) and cleared
+        // once pushMetricsIfDue() sends that client its next frame - the mechanism for "send
+        // the one-off full frame immediately, then fall into the regular tiered cadence".
+        bool needsFullFrame = false;
+    };
+    // Matches AsyncWebSocket's own DEFAULT_MAX_WS_CLIENTS default (8 on ESP32 - see
+    // cleanupClients()'s call site in setupRoutes()), so a full house of connected clients can
+    // all subscribe. Kept as our own literal rather than referencing the library's macro
+    // directly: that macro is defined by <ESPAsyncWebServer.h> and has no equivalent in
+    // test/mocks/ESPAsyncWebServer.h, so the native build (which links the mock, not the real
+    // library) would fail to compile against it.
+    static constexpr size_t MAX_METRICS_SUBSCRIBERS = 8;
+    MetricsSubscriber metricsSubscribers[MAX_METRICS_SUBSCRIBERS];
+    // Guards metricsSubscribers - held only across the fixed-array scan/mutate in
+    // addMetricsSubscriber()/removeMetricsSubscriber()/pushMetricsIfDue()'s snapshot step, same
+    // spinlock-over-a-POD-copy discipline as apStateMux (no allocation while held).
+    mutable portMUX_TYPE metricsSubMux = portMUX_INITIALIZER_UNLOCKED;
+
+    unsigned long lastMetricsPushMs = 0;
+    unsigned long lastMetricsOtaTierMs = 0;
+    static constexpr unsigned long METRICS_PUSH_INTERVAL_MS = 1000;
+    static constexpr unsigned long METRICS_OTA_TIER_INTERVAL_MS = 10000;
+
+    void addMetricsSubscriber(uint32_t clientId);
+    void removeMetricsSubscriber(uint32_t clientId);
+    // Called once per webServerTask tick (like broadcastStateIfDirty()). Sends a full frame to
+    // any subscriber with needsFullFrame set, and a volatile(+OTA, when due) frame to the rest
+    // once METRICS_PUSH_INTERVAL_MS has elapsed. No-op, before any sensor read, when there are
+    // no subscribers.
+    void pushMetricsIfDue();
+    // Gathers the live values (PerformanceMonitor/PowerMonitor/OtaUpdater/etc) into `out`.
+    // Shared by pushMetricsIfDue() and the /metrics HTTP route so the two payloads can't drift
+    // apart. `includeStatic`/`includeOta` on `out` select which tiers get filled in.
+    void fillMetricsSnapshot(WsMetricsBuilder::MetricsSnapshot& out, bool includeStatic,
+                             bool includeOta);
 
     // Monotonic millisecond clock used by the broadcast throttle. The
     // indirection exists only so the native comms integration test can advance

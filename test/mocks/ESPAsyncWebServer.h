@@ -3,6 +3,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -130,6 +131,16 @@ class AsyncWebSocketClient
     // (e.g. rejecting a cross-origin WebSocket handshake).
     bool wasClosed = false;
     void close() { wasClosed = true; }
+
+    // Real AsyncWebSocketClient::id() is assigned by the library (its _cNextId starts at 1, so
+    // 0 is never a real client - matches Comms::MetricsSubscriber's empty-slot sentinel). Tests
+    // set this explicitly via setId() before using a client with the metrics-subscription API;
+    // default-constructed clients used by pre-#214 tests are unaffected (they never call it).
+    uint32_t id() const { return id_; }
+    void setId(uint32_t id) { id_ = id; }
+
+   private:
+    uint32_t id_ = 0;
 };
 
 using AwsEventHandler = std::function<void(class AsyncWebSocket*, AsyncWebSocketClient*,
@@ -142,27 +153,64 @@ class AsyncWebSocket
 
     void onEvent(AwsEventHandler handler) { eventHandler = handler; }
 
-    // Test helper: simulate a WS_EVT_DATA frame arriving.
+    // Test helper: simulate a WS_EVT_DATA frame arriving. The nullptr-client overload predates
+    // #214 and stays for the many existing command-parsing tests that don't care which client
+    // sent it; the second overload lets a metrics-subscription test attribute the frame to a
+    // specific (non-zero-id) client.
     void simulateDataFrame(AwsFrameInfo& info, uint8_t* data, size_t len)
     {
         if (eventHandler) eventHandler(this, nullptr, WS_EVT_DATA, &info, data, len);
     }
+    void simulateDataFrame(AsyncWebSocketClient* client, AwsFrameInfo& info, uint8_t* data,
+                           size_t len)
+    {
+        if (eventHandler) eventHandler(this, client, WS_EVT_DATA, &info, data, len);
+    }
 
     // Test helper: simulate a new client connecting. The real library passes
     // the HTTP upgrade request as the event `arg` for WS_EVT_CONNECT, so the
-    // overload taking a request lets tests exercise the origin check.
+    // overload taking a request lets tests exercise the origin check. Also
+    // marks the client's id "connected" for hasClient() below - real
+    // AsyncWebSocket does the equivalent bookkeeping internally on accept.
     void simulateConnect(AsyncWebSocketClient* client)
     {
+        connectedIds.insert(client->id());
         if (eventHandler) eventHandler(this, client, WS_EVT_CONNECT, nullptr, nullptr, 0);
     }
     void simulateConnect(AsyncWebSocketClient* client, AsyncWebServerRequest* request)
     {
+        connectedIds.insert(client->id());
         if (eventHandler) eventHandler(this, client, WS_EVT_CONNECT, request, nullptr, 0);
+    }
+
+    // Test helper: simulate a client disconnecting (clean close) - fires WS_EVT_DISCONNECT and
+    // drops the id from hasClient()'s view, mirroring the real library.
+    void simulateDisconnect(AsyncWebSocketClient* client)
+    {
+        connectedIds.erase(client->id());
+        if (eventHandler) eventHandler(this, client, WS_EVT_DISCONNECT, nullptr, nullptr, 0);
     }
 
     // Test helper: captures what the production code broadcast via textAll(...).
     std::string lastBroadcastText;
     void textAll(const char* msg, size_t len) { lastBroadcastText.assign(msg, len); }
+
+    // Test helper: records every ws.text(id, ...) call in order, so a test can assert exactly
+    // which client(s) got a frame (and what was in it) without a real per-client send queue.
+    std::vector<std::pair<uint32_t, std::string>> sentToClient;
+    bool text(uint32_t id, const char* msg, size_t len)
+    {
+        if (!hasClient(id)) return false;  // Matches the real library: a send to a gone id no-ops.
+        sentToClient.emplace_back(id, std::string(msg, len));
+        return true;
+    }
+
+    // Test helper: mirrors AsyncWebSocket::hasClient(uint32_t) - true once simulateConnect() has
+    // registered the id and until simulateDisconnect() (or a test's own connectedIds.erase())
+    // removes it. Tests can also mutate connectedIds directly to simulate cleanupClients()
+    // pruning a client without either event firing (see pushMetricsIfDue()'s self-prune path).
+    std::set<uint32_t> connectedIds;
+    bool hasClient(uint32_t id) const { return connectedIds.count(id) > 0; }
 
     // Test helper: records the cap comms.cpp asked for, and how many times it asked -
     // there's no simulated client list here to actually prune.
