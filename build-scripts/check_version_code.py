@@ -6,23 +6,22 @@
 Not a PlatformIO extra_script - a plain CLI tool run by
 .github/workflows/release.yml *before* it builds anything.
 
-FIRMWARE_VERSION_CODE is `git rev-list --count` (build-scripts/inject_version.py),
-and the device decides whether an update exists with a bare numeric compare:
+FIRMWARE_VERSION_CODE is the packed-semver number for the git tag
+(build-scripts/version_code.py, #164), and the device decides whether an update
+exists with a bare numeric compare:
 
     latest.versionCode > FIRMWARE_VERSION_CODE      # src/ota-updater.cpp
 
-Commit count is only monotonic along a single line of history. It counts the
-commits *reachable from* a ref, so a tag cut off a side branch - or off an
-older commit, which is exactly what you do to hot-fix a bad release - can
-produce a code the fleet has already exceeded. The device then evaluates that
-compare as false, reports UpToDate, and never offers the update. Nothing errors:
-not the workflow, not the device, not the web UI. The fleet simply sits on the
-broken build with no in-band way out.
+The packing is monotonic by construction, so an accidentally-lower code now
+takes real effort - re-tagging an already-released version, or hand-editing the
+manifest. But when it does happen the device evaluates that compare as false,
+reports UpToDate, and never offers the update. Nothing errors: not the
+workflow, not the device, not the web UI. The fleet simply sits on the broken
+build with no in-band way out.
 
-This turns that silent failure into a loud one at release time. It is a guard,
-not a fix - the underlying scheme should stop being a commit count (tracked as
-its own v1.0 issue); until then, every release has to clear the bar of the
-newest already-published one.
+This turns that silent failure into a loud one at release time: a published
+code must be strictly greater than every code already published, whatever
+scheme produced it.
 """
 
 import argparse
@@ -114,9 +113,9 @@ def main():
             "*** offered, with no error anywhere. Publishing it would strand every device",
             "*** on whatever it is running now.",
             "***",
-            "*** The code is `git rev-list --count`, which only increases along one line of",
-            "*** history. This tag is almost certainly cut off a side branch or an older",
-            "*** commit. Re-cut it from a commit that descends from the newest release.",
+            "*** The code is the packed MAJOR.MINOR.PATCH of this tag (build-scripts/",
+            "*** version_code.py). Bump the version number in the tag so it sorts above the",
+            "*** newest release - a hot-fix of vX.Y.Z ships as vX.Y.(Z+1), not a re-tag.",
             "",
         ])
     )

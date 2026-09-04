@@ -9,9 +9,11 @@
 // ship or perpetuate a bad build, three of them with no error anywhere:
 //
 //   R1  test.yml didn't trigger on tags, so a release ran no tests at all.
-//   R2  version codes are commit counts, which are only monotonic along one
-//       line of history - a tag off a side branch produces a code the fleet
-//       already exceeds, so the update is never offered and nothing errors.
+//   R2  version codes were commit counts, only monotonic along one line of
+//       history - a tag off a side branch produced a code the fleet already
+//       exceeds, so the update was never offered and nothing errored. Now a
+//       packed semver (#164); the release-time guard against a non-increasing
+//       published code stays either way.
 //   R3  the release was published live, relying on dist/*'s alphabetical
 //       ordering to upload manifest.json last. Accidental, not enforced.
 //   R4  the #107 accept-guard returned "pass" when its glob matched no files.
@@ -125,12 +127,13 @@ void test_release_job_is_gated_on_the_test_suite()
 
 // --- R2: version codes must be checked for monotonicity -------------------
 
-// Bad weather: `git rev-list --count` is only monotonic along one line of
-// history. A tag cut off an older commit or a side branch yields a code the
-// fleet already exceeds, so OTA's `latest.versionCode > FIRMWARE_VERSION_CODE`
-// is false and the release is silently never offered - the failure mode that
-// leaves a fleet stranded on a broken build. The release must refuse to
-// publish before it builds anything.
+// Bad weather: the version code is the packed MAJOR.MINOR.PATCH of the tag
+// (build-scripts/version_code.py, #164) - monotonic by construction, but a
+// re-tagged or hand-edited release can still publish a code the fleet already
+// exceeds, so OTA's `latest.versionCode > FIRMWARE_VERSION_CODE` is false and
+// the release is silently never offered - the failure mode that leaves a fleet
+// stranded on a broken build. The release must refuse to publish before it
+// builds anything.
 void test_release_checks_version_code_is_newer_than_the_published_one()
 {
     std::string yaml = stripComments(readFile(".github/workflows/release.yml"));

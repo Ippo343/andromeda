@@ -42,7 +42,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # git rev-list --count needs full history
+          fetch-depth: 0 # inject_version.py's `git describe` needs full history + tags
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
 
       - name: Reject a lightweight tag
         run: |
@@ -69,18 +73,17 @@ jobs:
             echo "channel=stable" >> "$GITHUB_OUTPUT"
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "version_code=$(git rev-list --count "$TAG")" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
+          # Packed-semver code from the tag (#164) - the same function
+          # inject_version.py bakes into the firmware, so the manifest's
+          # versionCode and FIRMWARE_VERSION_CODE always agree for a tag.
+          echo "version_code=$(python build-scripts/version_code.py "$TAG")" >> "$GITHUB_OUTPUT"
 
       # Before anything is built: a version code that isn't strictly greater
       # than the newest published one produces a release the fleet can never
       # see. Devices compare `latest.versionCode > FIRMWARE_VERSION_CODE`, so
       # such a release is reported UpToDate and silently never offered - which
-      # is exactly what a hot-fix cut off an older commit would do. Fail here,
-      # loudly, rather than publish something invisible.
+      # is exactly what a hot-fix that forgot to bump the version number would
+      # do. Fail here, loudly, rather than publish something invisible.
       - name: Version code must be newer than the published one
         env:
           GH_TOKEN: ${{ github.token }}
