@@ -44,7 +44,7 @@ Core pattern: singletons accessed globally. Main loop: `MissionControl::update(m
 
 - **Time:** `milliseconds_t` (uint32_t); effects receive `t` for frame-relative math.
 - **Memory:** LEDs in strips; coordinates in flat arrays. No per-LED allocation.
-- **CPU:** Runs at the default clock except on the C3 (`#if defined(ESP32_C3)` in `main.cpp`), forced to 80MHz for thermal headroom in its small enclosure; frame rate capping per device.
+- **CPU:** Runs at the default clock on every board, including the C3 (a compile-time 80MHz clamp was tried there for thermal headroom, then removed once an A/B soak test - holding a CPU-heavy effect at 80MHz vs. the C3's native 160MHz - measured no meaningful temperature difference); frame rate capping per device.
 - **Brightness:** Global limiter each frame.
 
 ## Conventions
