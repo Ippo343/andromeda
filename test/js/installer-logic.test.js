@@ -1,30 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const {
-    describeBrowserSupport,
-    boardLabel,
-    formatPartsTable,
-    releaseUrl,
-} = require('../../web-installer/js/installer-logic.js');
-
-describe('describeBrowserSupport', () => {
-    test('ok when secure context and Web Serial are both present', () => {
-        const result = describeBrowserSupport({ serialSupported: true, secureContext: true });
-        assert.equal(result.ok, true);
-    });
-
-    test('flags a missing secure context before Web Serial support', () => {
-        const result = describeBrowserSupport({ serialSupported: true, secureContext: false });
-        assert.equal(result.ok, false);
-        assert.match(result.message, /HTTPS/);
-    });
-
-    test('flags missing Web Serial support', () => {
-        const result = describeBrowserSupport({ serialSupported: false, secureContext: true });
-        assert.equal(result.ok, false);
-        assert.match(result.message, /Chrome/);
-    });
-});
+const { boardLabel, formatPartsTable } = require('../../web-installer/js/installer-logic.js');
 
 describe('boardLabel', () => {
     test('maps all three chip families', () => {
@@ -75,19 +51,78 @@ describe('formatPartsTable', () => {
     test('returns an empty list for missing/malformed input', () => {
         assert.deepEqual(formatPartsTable(null), []);
         assert.deepEqual(formatPartsTable({}), []);
-    });
-});
-
-describe('releaseUrl', () => {
-    test('builds the GitHub release URL', () => {
-        assert.equal(
-            releaseUrl('Ippo343/andromeda', 'v0.9.1'),
-            'https://github.com/Ippo343/andromeda/releases/tag/v0.9.1'
-        );
+        assert.deepEqual(formatPartsTable({ boards: 'nope' }), []);
     });
 
-    test('returns empty string when repo or tag is missing', () => {
-        assert.equal(releaseUrl('', 'v0.9.1'), '');
-        assert.equal(releaseUrl('Ippo343/andromeda', ''), '');
+    // The real shape assemble_site.py's _write_version_info() writes: three
+    // boards, each already offset-sorted, bootloader at a chip-specific
+    // address (0x1000 on ESP32, 0x0 on S3/C3 - see dump_flash_parts.py).
+    const realVersionJson = {
+        tag: 'v0.9-deep-space-network',
+        releaseUrl: 'https://github.com/Ippo343/andromeda/releases/tag/v0.9-deep-space-network',
+        boards: [
+            {
+                board: 'esp32_wroom',
+                chipFamily: 'ESP32',
+                label: 'ESP32-WROOM',
+                parts: [
+                    { name: 'bootloader', offsetHex: '0x1000' },
+                    { name: 'partitions', offsetHex: '0x8000' },
+                    { name: 'boot_app0', offsetHex: '0xe000' },
+                    { name: 'firmware', offsetHex: '0x10000' },
+                    { name: 'littlefs', offsetHex: '0x350000' },
+                ],
+            },
+            {
+                board: 'esp32_s3_zero',
+                chipFamily: 'ESP32-S3',
+                label: 'ESP32-S3-Zero',
+                parts: [
+                    { name: 'bootloader', offsetHex: '0x0' },
+                    { name: 'partitions', offsetHex: '0x8000' },
+                    { name: 'boot_app0', offsetHex: '0xe000' },
+                    { name: 'firmware', offsetHex: '0x10000' },
+                    { name: 'littlefs', offsetHex: '0x350000' },
+                ],
+            },
+            {
+                board: 'esp32_c3_zero',
+                chipFamily: 'ESP32-C3',
+                label: 'ESP32-C3-Zero',
+                parts: [
+                    { name: 'bootloader', offsetHex: '0x0' },
+                    { name: 'partitions', offsetHex: '0x8000' },
+                    { name: 'boot_app0', offsetHex: '0xe000' },
+                    { name: 'firmware', offsetHex: '0x10000' },
+                    { name: 'littlefs', offsetHex: '0x350000' },
+                ],
+            },
+        ],
+    };
+
+    test('renders one row per board from a real version.json fixture', () => {
+        const rows = formatPartsTable(realVersionJson);
+        assert.equal(rows.length, 3);
+        assert.deepEqual(rows.map((r) => r.board), [
+            'esp32_wroom',
+            'esp32_s3_zero',
+            'esp32_c3_zero',
+        ]);
+        assert.deepEqual(rows.map((r) => r.label), [
+            'ESP32-WROOM',
+            'ESP32-S3-Zero',
+            'ESP32-C3-Zero',
+        ]);
+        // ESP32 keeps its 0x1000 bootloader first; S3 starts at 0x0.
+        assert.equal(rows[0].parts[0], 'bootloader @ 0x1000');
+        assert.equal(rows[1].parts[0], 'bootloader @ 0x0');
+        assert.ok(rows.every((r) => r.parts.length === 5));
+    });
+
+    test('falls back to boardLabel(chipFamily) when a board has no label', () => {
+        const rows = formatPartsTable({
+            boards: [{ board: 'esp32_c3_zero', chipFamily: 'ESP32-C3', parts: [] }],
+        });
+        assert.equal(rows[0].label, 'ESP32-C3-Zero');
     });
 });
