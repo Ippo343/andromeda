@@ -4,7 +4,7 @@ Shipping OTA freezes partitions/andromeda_4mb.csv for the fleet - it lives at
 flash offset 0x8000, outside every OTA-writable partition, so a device can only
 get a new table via a USB reflash (#63). PARTITION_LAYOUT_VERSION
 (include/board-variant.h) is the deliberate "yes, I know that" switch, and
-test/test_partition_layout pins the CSV's values against it.
+test/test_native_suite/test_partition_layout.cpp pins the CSV's values against it.
 
 The gap this closes: you could still edit the CSV *and* that test's expected
 table together and forget to bump the version, or bump the version without
@@ -16,7 +16,7 @@ that isn't accompanied by a refreshed digest fails the build.
 Deliberate change workflow:
     1. edit partitions/andromeda_4mb.csv and/or bump PARTITION_LAYOUT_VERSION
     2. python build-scripts/check_partition_layout_lock.py --update
-    3. update test/test_partition_layout's expected table + #error guard
+    3. update test/test_native_suite/test_partition_layout.cpp's expected table + #error guard
     4. USB-reflash every deployed unit
 
 Runs as a pre: extra_script on the hardware envs (no-op for native, which has
@@ -86,7 +86,7 @@ def _check(project_dir: Path):
             "  The partition table and PARTITION_LAYOUT_VERSION must change together.\n"
             "  If this change is deliberate: bump PARTITION_LAYOUT_VERSION, run\n"
             "  `python build-scripts/check_partition_layout_lock.py --update`, update\n"
-            "  test/test_partition_layout, and USB-reflash every deployed unit -\n"
+            "  test/test_native_suite/test_partition_layout.cpp, and USB-reflash every deployed unit -\n"
             "  a new table cannot be delivered over OTA.\n"
         )
     print(f"partition layout lock OK: v{version} {actual[:12]}...")

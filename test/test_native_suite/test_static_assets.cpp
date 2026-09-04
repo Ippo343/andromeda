@@ -1,0 +1,114 @@
+// Static-analysis test, not a build/runtime one: comms.cpp only serves files
+// it explicitly registers via STATIC_FILE_ROUTE/server.on (there's no
+// LittleFS catch-all - see comms.cpp), so a <script>/<link>/<a> tag added to
+// data/index.html without a matching route silently 404s in the browser.
+// That exact gap shipped once (the effect-selection-ui branch added
+// controls-logic.js's <script> tag but not its route) with every layer of
+// the real test suite green, because nothing crosses the boundary between
+// "what index.html references" and "what comms.cpp serves" - this test
+// exists purely to close that gap by diffing the two as plain text, without
+// compiling or linking either file.
+#include <unity.h>
+
+#include <cstdio>
+#include <fstream>
+#include <regex>
+#include <set>
+#include <sstream>
+#include <string>
+
+void test_static_assets_setUp() {}
+void test_static_assets_tearDown() {}
+
+namespace
+{
+static std::string readFile(const std::string& path)
+{
+    std::ifstream file(path);
+    TEST_ASSERT_TRUE_MESSAGE(file.is_open(), ("Could not open " + path).c_str());
+    std::ostringstream ss;
+    ss << file.rdbuf();
+    return ss.str();
+}
+
+// Local-asset references (src=/href=) from data/index.html, normalized to
+// the leading-"/" form comms.cpp registers routes with. External links
+// (http(s)://) and in-page anchors (#...) are not server routes, so skip them.
+std::set<std::string> referencedLocalPaths(const std::string& html)
+{
+    std::set<std::string> paths;
+    std::regex attrRe(R"RE((?:src|href)="([^"]+)")RE");
+    for (auto it = std::sregex_iterator(html.begin(), html.end(), attrRe);
+         it != std::sregex_iterator(); ++it)
+    {
+        std::string value = (*it)[1].str();
+        if (value.empty() || value[0] == '#') continue;
+        if (value.rfind("http://", 0) == 0 || value.rfind("https://", 0) == 0) continue;
+        if (value[0] != '/') value = "/" + value;
+        paths.insert(value);
+    }
+    return paths;
+}
+
+// Paths comms.cpp registers a GET handler for, whether through the
+// STATIC_FILE_ROUTE macro or a direct server.on(...) call (e.g. "/", "/wifi").
+std::set<std::string> registeredRoutes(const std::string& commsCpp)
+{
+    std::set<std::string> routes;
+    std::regex routeRe(R"RE((?:STATIC_FILE_ROUTE|server\.on)\(\s*"([^"]+)")RE");
+    for (auto it = std::sregex_iterator(commsCpp.begin(), commsCpp.end(), routeRe);
+         it != std::sregex_iterator(); ++it)
+        routes.insert((*it)[1].str());
+    return routes;
+}
+}  // namespace
+
+// The model dropdown must be populated only from the server's state message.
+// A hard-coded <option> fallback under #modelSelect once had the same length
+// as the firmware's model registry, so advanced.js's length-only rebuild
+// guard never fired and the placeholder labels were what the user saw - and a
+// future model swap that kept the count would have left the page offering an
+// id the firmware no longer knew (a soft-brick). This is the cross-file half
+// a JS-only test can't see: assert the markup ships no options in that select.
+void test_model_select_has_no_hardcoded_options()
+{
+    std::string html = readFile("data/advanced.html");
+
+    std::smatch m;
+    std::regex selectRe(R"RE(<select[^>]*id="modelSelect"[^>]*>([\s\S]*?)</select>)RE");
+    TEST_ASSERT_TRUE_MESSAGE(std::regex_search(html, m, selectRe),
+                             "data/advanced.html has no #modelSelect element");
+
+    std::string body = m[1].str();
+    TEST_ASSERT_TRUE_MESSAGE(
+        body.find("<option") == std::string::npos,
+        "#modelSelect in data/advanced.html contains a hard-coded <option> - it must be "
+        "populated entirely from the server's models list (see shouldRebuildOptions)");
+}
+
+void test_every_html_page_local_asset_has_a_registered_route()
+{
+    std::set<std::string> registered = registeredRoutes(readFile("src/comms.cpp"));
+
+    // Every browser-served page in data/ - each pulls its own <script>/<link>
+    // assets, so index.html isn't the only one that can drift out of sync.
+    const char* pages[] = {"data/index.html", "data/advanced.html", "data/device-name.html",
+                           "data/wifi-setup.html"};
+
+    for (const char* page : pages)
+    {
+        std::set<std::string> referenced = referencedLocalPaths(readFile(page));
+        for (const std::string& path : referenced)
+        {
+            std::string message = path + " is referenced by " + page +
+                                  " but comms.cpp has no route for it - it will 404 in the browser";
+            TEST_ASSERT_TRUE_MESSAGE(registered.count(path) > 0, message.c_str());
+        }
+    }
+}
+
+void run_test_static_assets_tests()
+{
+    RUN_TEST(test_every_html_page_local_asset_has_a_registered_route);
+    RUN_TEST(test_model_select_has_no_hardcoded_options);
+}
