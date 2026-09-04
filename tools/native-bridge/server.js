@@ -92,6 +92,38 @@ function simMetricsJson() {
     });
 }
 
+// WS equivalent of simMetricsJson() above, for the tiered {"type":"metrics"} push (#214) - see
+// the subscribe/unsubscribe interception in the /ws upgrade handler below. `includeStatic`
+// mirrors WsMetricsBuilder::MetricsSnapshot::includeStatic: true only for the one-off frame
+// sent immediately on subscribe, matching the firmware's full-frame-then-tiered cadence.
+function simMetricsFrame(includeStatic) {
+    const frame = {
+        type: 'metrics',
+        uptimeMs: Math.floor(process.uptime() * 1000),
+        heapFree: 190 * 1024,
+        heapMin: 150 * 1024,
+        heapTotal: 320 * 1024,
+        tempC: 41.5,
+        fps: lastFps === null ? null : lastFps,
+        rssi: -55,
+        currentMa: 0,
+    };
+    if (includeStatic) {
+        Object.assign(frame, {
+            cpuMhz: 240,
+            chip: 'native',
+            resetReason: 1,
+            version: 'native-sim',
+            maxMilliamps: 0,
+            updateAvailable: false,
+            latestTag: '',
+            otaChannel: 'stable',
+        });
+    }
+    return JSON.stringify(frame);
+}
+const METRICS_PUSH_MS = 1000;
+
 // The visualizer page lives under tools/native-bridge/web/, not data/ - that
 // directory is bundled verbatim into the LittleFS image uploaded to real
 // hardware, so dev-only visualizer code has no business shipping there.
@@ -259,14 +291,42 @@ server.on('upgrade', (req, socket, head) => {
         if (lastStateLine) ws.send(lastStateLine);
         if (lastGeometryLine) ws.send(lastGeometryLine);
 
+        // Per-connection timer for the simulated metrics push (#214) - null while unsubscribed.
+        let metricsInterval = null;
+
         ws.on('message', (data) => {
+            const text = data.toString();
+
+            // Intercept subscribe/unsubscribe locally rather than forwarding to the native
+            // core's stdin: WsCommandParser::parse() (which processIncomingLine() feeds) has
+            // no subscribe/unsubscribe case, so forwarding it would just log "Unrecognized WS
+            // command message" once per subscribe and the Advanced page would never see a
+            // {"type":"metrics"} frame here (the native core has no LittleFS/real sensors of
+            // its own to push from anyway - this bridge already answers /metrics the same way,
+            // see simMetricsJson() above).
+            let parsed = null;
+            try { parsed = JSON.parse(text); } catch { /* not JSON - fall through below */ }
+            if (parsed && parsed.topic === 'metrics' &&
+                (parsed.type === 'subscribe' || parsed.type === 'unsubscribe')) {
+                if (metricsInterval) { clearInterval(metricsInterval); metricsInterval = null; }
+                if (parsed.type === 'subscribe') {
+                    ws.send(simMetricsFrame(true));  // full frame immediately, then the tier
+                    metricsInterval = setInterval(
+                        () => ws.send(simMetricsFrame(false)), METRICS_PUSH_MS);
+                }
+                return;
+            }
+
             // Forwarded verbatim to the native core's stdin - same wire
             // format WsCommandParser::parse()/parseBrightness() already
             // expect (see native-runtime.cpp's processIncomingLine()).
-            child.stdin.write(data.toString() + '\n');
+            child.stdin.write(text + '\n');
         });
 
-        ws.on('close', () => clients.delete(ws));
+        ws.on('close', () => {
+            clients.delete(ws);
+            if (metricsInterval) clearInterval(metricsInterval);
+        });
     });
 });
 

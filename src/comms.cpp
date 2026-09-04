@@ -66,7 +66,7 @@ size_t currentHostList(const char* out[MdnsHosts::MAX_HOSTS], String& primary, S
 // Silent "does this file exist" check. LittleFSImpl::exists() (and the
 // AsyncFileResponse path behind request->send(LittleFS, ...)) is just
 // open(path, "r"), which logs a VFS error at level E for every miss - and
-// the Advanced page polls the log routes every 2s, so a not-yet-rotated
+// the Logs page polls the log routes every 5s (#212), so a not-yet-rotated
 // /log1.txt would spew "does not exist" lines forever. A bare stat() on the
 // mount path checks without opening. LittleFS.begin() (main.cpp) takes the
 // default "/littlefs" mount point.
@@ -379,6 +379,7 @@ void Comms::webServerTask(void* parameter)
         if (apMode && dns) { dns->processNextRequest(); }
 
         comms->broadcastStateIfDirty();
+        comms->pushMetricsIfDue();
         // Bounds the connected-client list to DEFAULT_MAX_WS_CLIENTS - previously never
         // called anywhere, so nothing pruned stale/excess clients and each one holds its own
         // send queue of multi-KB state JSON on a device with no PSRAM.
@@ -460,7 +461,24 @@ void Comms::setupRoutes()
                     uint8_t brightnessValue;
                     bool brightnessCommit;
                     Command command;
-                    if (WsCommandParser::parseBrightness(json, brightnessValue, brightnessCommit))
+                    bool wantSubscribe;
+                    WsCommandParser::Topic subscriptionTopic;
+                    if (WsCommandParser::parseSubscription(json, wantSubscribe, subscriptionTopic))
+                    {
+                        // Only "metrics" exists today (see ws-command-parser.h's Topic enum),
+                        // but the dispatch is written to fall through to "unrecognized" for any
+                        // future topic parseSubscription() doesn't already reject itself, rather
+                        // than silently doing nothing.
+                        if (subscriptionTopic == WsCommandParser::Topic::Metrics)
+                        {
+                            if (wantSubscribe)
+                                Comms::Instance().addMetricsSubscriber(client->id());
+                            else
+                                Comms::Instance().removeMetricsSubscriber(client->id());
+                        }
+                    }
+                    else if (WsCommandParser::parseBrightness(json, brightnessValue,
+                                                              brightnessCommit))
                     {
                         mc.setMaxBrightness(brightnessValue);
                         if (brightnessCommit) BrightnessConfig::persist(brightnessValue);
@@ -490,7 +508,7 @@ void Comms::setupRoutes()
                         // '%' (no printf-style width/precision - see ArduinoLog.cpp's
                         // printFormat()), so truncating has to happen on the string itself
                         // before logging it, not via the format spec. Bounded because `json`
-                        // is an unvalidated, client-controlled message written into the 32KB
+                        // is an unvalidated, client-controlled message written into the 16KB
                         // rotating log - previously unbounded, so a client (accidentally or
                         // not - no auth on this route) sending large garbage frames could
                         // flush the real diagnostic history in a handful of messages.
@@ -513,6 +531,18 @@ void Comms::setupRoutes()
                         (int)info->final, (unsigned long)info->index, (unsigned long)len,
                         (int)info->opcode);
                 }
+            }
+            else if (type == WS_EVT_DISCONNECT || type == WS_EVT_ERROR)
+            {
+                // Neither event was handled at all before #214's metrics subscription: a
+                // client that disconnects (clean close) or errors out (dead peer, e.g. the
+                // auto-ping above going unacked) must stop being pushed metrics, or
+                // pushMetricsIfDue() keeps calling ws.text() against a dead id forever - not
+                // harmful (AsyncWebSocket no-ops a send to a gone id) but a permanently wasted
+                // slot in the fixed-size subscriber array. Belt-and-braces: pushMetricsIfDue()
+                // also self-prunes via ws.hasClient() for the case a client vanishes without
+                // either event firing (cleanupClients() pruning it directly).
+                Comms::Instance().removeMetricsSubscriber(client->id());
             }
         });
     server.addHandler(&ws);
@@ -566,52 +596,28 @@ void Comms::setupRoutes()
     server.on("/logs", HTTP_GET,
               [](AsyncWebServerRequest* r) { serveTextFileOrEmpty(r, LOG_FILE_CUR); });
 
-    server.on(
-        "/metrics", HTTP_GET,
-        [](AsyncWebServerRequest* r)
-        {
-            // fps() is NaN before the first frame, and temperatureRead() can be
-            // NaN on a bad/early sensor read - both must serialize as JSON null,
-            // not the bare token "nan" which would make the whole payload
-            // unparseable. Self-comparison is the header-free NaN test.
-            float fps = PerformanceMonitor::Instance().fps();
-            char fpsBuf[16];
-            if (fps != fps) { strcpy(fpsBuf, "null"); }
-            else { snprintf(fpsBuf, sizeof(fpsBuf), "%.1f", fps); }
-
-            float tempC = temperatureRead();
-            char tempBuf[16];
-            if (tempC != tempC) { strcpy(tempBuf, "null"); }
-            else { snprintf(tempBuf, sizeof(tempBuf), "%.1f", tempC); }
-
-            // VERSION is the build-time git describe string from generate_version.py
-            // (build-scripts/inject_version.py). It only ever contains chars that are
-            // safe unescaped inside a JSON string (word chars, '.', '-', ' ', '(', ')'
-            // and '/' from a branch name) - no quote or backslash is reachable - so it
-            // is interpolated directly.
-            // latestTag, like VERSION, is a git tag name from our own releases
-            // (v0.9-word-word[-dev]) - no quote/backslash reachable - so it's
-            // interpolated directly too.
-            OtaUpdater::Status ota = OtaUpdater::status();
-
-            char json[700];
-            snprintf(json, sizeof(json),
-                     "{\"uptimeMs\":%lu,\"heapFree\":%u,\"heapMin\":%u,\"heapTotal\":%u,"
-                     "\"tempC\":%s,\"fps\":%s,\"rssi\":%d,\"cpuMhz\":%u,"
-                     "\"chip\":\"%s\",\"resetReason\":%d,\"version\":\"%s\","
-                     "\"updateAvailable\":%s,\"latestTag\":\"%s\",\"otaChannel\":\"%s\","
-                     "\"currentMa\":%u,\"maxMilliamps\":%u}",
-                     static_cast<unsigned long>(millis()), static_cast<unsigned>(ESP.getFreeHeap()),
-                     static_cast<unsigned>(ESP.getMinFreeHeap()),
-                     static_cast<unsigned>(ESP.getHeapSize()), tempBuf, fpsBuf,
-                     static_cast<int>(WiFi.RSSI()), static_cast<unsigned>(ESP.getCpuFreqMHz()),
-                     ESP.getChipModel(), static_cast<int>(esp_reset_reason()), VERSION,
-                     OtaUpdater::updateAvailable() ? "true" : "false", ota.latestTag,
-                     OtaConfig::devChannel() ? "dev" : "stable",
-                     static_cast<unsigned>(PowerMonitor::Instance().currentMa()),
-                     static_cast<unsigned>(GEOMETRY.getConfig()->max_milliamps));
-            r->send(200, "application/json", json);
-        });
+    server.on("/metrics", HTTP_GET,
+              [](AsyncWebServerRequest* r)
+              {
+                  // Same builder pushMetricsIfDue() uses for the WebSocket "metrics" frame (#214) -
+                  // HTTP and WS can't drift apart. Always the full (static+volatile+OTA) shape,
+                  // same as this route always answered before the WS push existed.
+                  WsMetricsBuilder::MetricsSnapshot snapshot{};
+                  Comms::Instance().fillMetricsSnapshot(snapshot, /*includeStatic=*/true,
+                                                        /*includeOta=*/true);
+                  // +1 so buildMetricsJson (which, like ArduinoJson's own serializeJson(doc, char*,
+                  // size_t), writes up to `len` bytes but never NUL-terminates) always has room for
+                  // the terminator send()'s implicit String(const char*) construction needs below.
+                  char json[WsMetricsBuilder::JSON_CAPACITY + 1];
+                  size_t len = WsMetricsBuilder::buildMetricsJson(snapshot, json, sizeof(json) - 1);
+                  if (len)
+                  {
+                      json[len] = '\0';
+                      r->send(200, "application/json", json);
+                  }
+                  else
+                      r->send(500, "text/plain", "metrics serialization failed");
+              });
 
     // Shared Config & Monitoring
     server.on("/fps", HTTP_GET, [](AsyncWebServerRequest* r)
@@ -1018,6 +1024,171 @@ void Comms::broadcastStateIfDirty()
     {
         ws.textAll(buf, len);
         lastBroadcastMs = now;
+    }
+}
+
+void Comms::addMetricsSubscriber(uint32_t clientId)
+{
+    portENTER_CRITICAL(&metricsSubMux);
+    // Dedupe: a re-subscribe of an already-tracked client (the page reconnecting, or a
+    // duplicate subscribe message) re-arms needsFullFrame instead of consuming a second slot.
+    int emptySlot = -1;
+    for (size_t i = 0; i < MAX_METRICS_SUBSCRIBERS; i++)
+    {
+        if (metricsSubscribers[i].clientId == clientId)
+        {
+            metricsSubscribers[i].needsFullFrame = true;
+            portEXIT_CRITICAL(&metricsSubMux);
+            return;
+        }
+        if (emptySlot < 0 && metricsSubscribers[i].clientId == 0) emptySlot = static_cast<int>(i);
+    }
+    if (emptySlot >= 0) { metricsSubscribers[emptySlot] = {clientId, true}; }
+    portEXIT_CRITICAL(&metricsSubMux);
+    // Logged outside the critical section - Log.* isn't safe to call with interrupts disabled.
+    if (emptySlot < 0)
+        Log.warningln("Metrics subscriber list full (%u) - dropping subscribe from client %u",
+                      static_cast<unsigned>(MAX_METRICS_SUBSCRIBERS),
+                      static_cast<unsigned>(clientId));
+}
+
+void Comms::removeMetricsSubscriber(uint32_t clientId)
+{
+    portENTER_CRITICAL(&metricsSubMux);
+    for (size_t i = 0; i < MAX_METRICS_SUBSCRIBERS; i++)
+    {
+        if (metricsSubscribers[i].clientId == clientId)
+        {
+            metricsSubscribers[i] = {};
+            break;
+        }
+    }
+    portEXIT_CRITICAL(&metricsSubMux);
+}
+
+void Comms::fillMetricsSnapshot(WsMetricsBuilder::MetricsSnapshot& out, bool includeStatic,
+                                bool includeOta)
+{
+    // fps()/temperatureRead() NaN handling mirrors the /metrics HTTP route this replaces below -
+    // buildMetricsJson() does the actual NaN->null serialization (see its own comment).
+    out.uptimeMs = millis();
+    out.heapFree = ESP.getFreeHeap();
+    out.heapMin = ESP.getMinFreeHeap();
+    out.heapTotal = ESP.getHeapSize();
+    out.tempC = temperatureRead();
+    out.fps = PerformanceMonitor::Instance().fps();
+    out.rssi = WiFi.RSSI();
+    out.currentMa = PowerMonitor::Instance().currentMa();
+
+    out.includeStatic = includeStatic;
+    if (includeStatic)
+    {
+        out.chip = ESP.getChipModel();
+        out.cpuMhz = ESP.getCpuFreqMHz();
+        out.resetReason = static_cast<int>(esp_reset_reason());
+        out.version = VERSION;
+        out.maxMilliamps = GEOMETRY.getConfig()->max_milliamps;
+    }
+
+    out.includeOta = includeOta;
+    if (includeOta)
+    {
+        OtaUpdater::Status ota = OtaUpdater::status();
+        out.updateAvailable = OtaUpdater::updateAvailable();
+        // Owned copy, not a pointer into `ota` - see MetricsSnapshot::latestTag's own comment;
+        // `ota` is this function's local and is gone the moment fillMetricsSnapshot() returns.
+        strncpy(out.latestTag, ota.latestTag, sizeof(out.latestTag) - 1);
+        out.latestTag[sizeof(out.latestTag) - 1] = '\0';
+        out.otaChannel = OtaConfig::devChannel() ? "dev" : "stable";
+    }
+}
+
+void Comms::pushMetricsIfDue()
+{
+    // Snapshot the subscriber array under the lock, clearing each needsFullFrame as it's
+    // copied - then build/send entirely outside the lock (frame building calls into
+    // PerformanceMonitor/WiFi/OtaUpdater/etc, none of which belong inside a spinlock that
+    // disables interrupts). Same discipline as addMetricsSubscriber()/removeMetricsSubscriber().
+    MetricsSubscriber snapshot[MAX_METRICS_SUBSCRIBERS];
+    portENTER_CRITICAL(&metricsSubMux);
+    for (size_t i = 0; i < MAX_METRICS_SUBSCRIBERS; i++)
+    {
+        snapshot[i] = metricsSubscribers[i];
+        if (metricsSubscribers[i].clientId != 0) metricsSubscribers[i].needsFullFrame = false;
+    }
+    portEXIT_CRITICAL(&metricsSubMux);
+
+    bool anySubscribers = false;
+    bool anyNeedsFullFrame = false;
+    for (const auto& sub : snapshot)
+    {
+        if (sub.clientId == 0) continue;
+        anySubscribers = true;
+        if (sub.needsFullFrame) anyNeedsFullFrame = true;
+    }
+    if (!anySubscribers) return;  // Nothing to do - skip every sensor read below entirely.
+
+    unsigned long now = nowMs();
+    bool intervalDue =
+        lastMetricsPushMs == 0 || (now - lastMetricsPushMs) >= METRICS_PUSH_INTERVAL_MS;
+    if (!anyNeedsFullFrame && !intervalDue) return;
+
+    bool otaTierDue =
+        lastMetricsOtaTierMs == 0 || (now - lastMetricsOtaTierMs) >= METRICS_OTA_TIER_INTERVAL_MS;
+
+    // Full frame (static+volatile+OTA) to any subscriber that just (re)subscribed.
+    if (anyNeedsFullFrame)
+    {
+        WsMetricsBuilder::MetricsSnapshot full{};
+        fillMetricsSnapshot(full, /*includeStatic=*/true, /*includeOta=*/true);
+        char buf[WsMetricsBuilder::JSON_CAPACITY];
+        size_t len = WsMetricsBuilder::buildMetricsJson(full, buf, sizeof(buf));
+        if (len)
+        {
+            for (const auto& sub : snapshot)
+            {
+                if (sub.clientId == 0 || !sub.needsFullFrame) continue;
+                if (!ws.hasClient(sub.clientId))
+                {
+                    removeMetricsSubscriber(sub.clientId);
+                    continue;
+                }
+                // A false return here just means this client's send queue is full - not the
+                // same as "gone". Unsubscribing on a merely-congested client would be a
+                // self-inflicted outage; it just misses this tick's frame.
+                ws.text(sub.clientId, buf, len);
+            }
+        }
+    }
+
+    // Volatile(+OTA, when its own slower tier is due) frame to everyone else on the regular
+    // interval. Deliberately *excludes* a client that just got a full frame above in this same
+    // call (sub.needsFullFrame, from the pre-clear snapshot) - lastMetricsPushMs starts at 0,
+    // so intervalDue is unconditionally true the moment the very first subscriber arrives,
+    // which would otherwise immediately follow that subscriber's full frame with a redundant
+    // volatile-only one the instant it becomes the "last frame sent" (see
+    // test_metrics_subscribe_sends_one_full_frame_to_that_client_only).
+    if (intervalDue)
+    {
+        WsMetricsBuilder::MetricsSnapshot tiered{};
+        fillMetricsSnapshot(tiered, /*includeStatic=*/false, otaTierDue);
+        char buf[WsMetricsBuilder::JSON_CAPACITY];
+        size_t len = WsMetricsBuilder::buildMetricsJson(tiered, buf, sizeof(buf));
+        if (len)
+        {
+            for (const auto& sub : snapshot)
+            {
+                if (sub.clientId == 0 || sub.needsFullFrame) continue;
+                if (!ws.hasClient(sub.clientId))
+                {
+                    removeMetricsSubscriber(sub.clientId);
+                    continue;
+                }
+                ws.text(sub.clientId, buf, len);
+            }
+        }
+        lastMetricsPushMs = now;
+        if (otaTierDue) lastMetricsOtaTierMs = now;
     }
 }
 
