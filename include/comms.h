@@ -40,6 +40,13 @@ class Comms
     SetupOutcome setup();
     void printWifiStatus();
 
+    // The mDNS names this device currently answers to, "andromeda.local" included, as a
+    // JSON array literal (e.g. `["kitchen.local","l70-a1b2.local","andromeda-a1b2.local",
+    // "andromeda.local"]`) - shared by GET /device-info and (once mDNS-aware) the WiFi
+    // setup page (see include/mdns-hosts.h, issue #135). Safe to call before mDNS has
+    // started (AP mode's setup page needs this before any radio work has happened).
+    static String mdnsHostsJson();
+
     // Hot-switches an already-running station-mode device into the setup AP, without
     // restarting the web server (AsyncTCP listens on 0.0.0.0, so it keeps serving once the AP
     // interface is up - only the WiFi mode and the DNS captive-portal server need to change).
@@ -167,6 +174,17 @@ class Comms
 
     // Shared radio/DNS setup for startAPMode() and enterAPFallbackMode() - see comms.cpp.
     void beginAPBroadcast();
+
+    // Starts the mDNS responder (once per boot - see mdnsStarted) and (re)registers the
+    // delegated fallback hostnames (include/mdns-hosts.h) against `ip`. Called from both
+    // startStationMode() and beginAPBroadcast(), and again on every DHCP renewal, since the
+    // delegated address list is static unlike the primary hostname's - see comms.cpp.
+    void startMdns(IPAddress ip);
+    // True once MDNS.begin() has succeeded this boot - startMdns() is idempotent on the
+    // "start the responder" half (beginAPBroadcast() can re-enter it at runtime via the
+    // WiFi-recovery monitor while station mode's MDNS.begin() already ran) but always
+    // re-registers the delegated addresses, since those must track the current IP.
+    bool mdnsStarted = false;
 
     bool startAPMode();
     bool startStationMode();

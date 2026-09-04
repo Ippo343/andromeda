@@ -28,6 +28,7 @@ DeviceState makeState()
     state.deviceUid = "A1B2";
     state.runningDeviceName = "Andromeda-A1B2";
     state.configuredDeviceName = "Andromeda-A1B2";
+    state.defaultDeviceName = "Andromeda-A1B2";
     return state;
 }
 }  // namespace
@@ -198,6 +199,25 @@ void test_device_fields_round_trip()
     TEST_ASSERT_FALSE(doc["device"]["nameRebootRequired"].as<bool>());
 }
 
+void test_default_device_name_survives_a_rename()
+{
+    // defaultDeviceName tracks the permanent "<model>-<uid>" name and must stay put even
+    // when the configured/running names have been changed to something else - it's the
+    // fallback .local address a renamed device is still reachable at (issue #135).
+    DeviceState state = makeState();
+    state.defaultDeviceName = "L70-A1B2";
+    state.runningDeviceName = "Kitchen-Lamp";
+    state.configuredDeviceName = "Kitchen-Lamp";
+    char buf[WsStateBuilder::JSON_CAPACITY];
+    size_t len = WsStateBuilder::buildStateJson(state, buf, sizeof(buf));
+    TEST_ASSERT_GREATER_THAN(0, len);
+
+    StaticJsonDocument<WsStateBuilder::JSON_CAPACITY> doc;
+    TEST_ASSERT_FALSE(deserializeJson(doc, buf, len));
+    TEST_ASSERT_EQUAL_STRING("L70-A1B2", doc["device"]["defaultName"]);
+    TEST_ASSERT_EQUAL_STRING("Kitchen-Lamp", doc["device"]["name"]);
+}
+
 void test_device_name_reboot_required_true_when_names_differ()
 {
     DeviceState state = makeState();
@@ -238,6 +258,7 @@ void run_test_ws_state_builder_tests()
     RUN_TEST(test_models_array_matches_full_registry);
     RUN_TEST(test_effects_array_matches_full_registry);
     RUN_TEST(test_device_fields_round_trip);
+    RUN_TEST(test_default_device_name_survives_a_rename);
     RUN_TEST(test_device_name_reboot_required_true_when_names_differ);
     RUN_TEST(test_fps_serializes_as_number);
 }

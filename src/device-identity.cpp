@@ -68,9 +68,13 @@ String getCustomName()
     return name;
 }
 
-String getMdnsHostname()
+namespace
 {
-    String name = getDeviceName();
+// Shared by getMdnsHostname()/getDefaultMdnsHostname()/getAndromedaMdnsHostname(): copies
+// `name` into a fixed buffer (truncating like the rest of this file does) and lowercases it
+// in place.
+String toMdnsLabel(const String& name)
+{
     char buf[DeviceUid::MAX_NAME_LENGTH + 1];
     size_t i = 0;
     for (; i < sizeof(buf) - 1 && name.c_str()[i] != '\0'; i++) buf[i] = name.c_str()[i];
@@ -78,6 +82,13 @@ String getMdnsHostname()
     DeviceUid::toLowerAscii(buf);
     return String(buf);
 }
+}  // namespace
+
+String getMdnsHostname() { return toMdnsLabel(getDeviceName()); }
+
+String getDefaultMdnsHostname() { return toMdnsLabel(getDefaultName()); }
+
+String getAndromedaMdnsHostname() { return toMdnsLabel(String("Andromeda-") + getUid()); }
 
 void setDeviceName(const String& name)
 {
