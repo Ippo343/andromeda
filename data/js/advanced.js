@@ -1,10 +1,10 @@
 // Advanced page wiring: pulls /metrics + the two rotated log files over plain
-// HTTP every 2s and re-renders, and reuses the existing /ws WebSocket + state
+// HTTP every 1s and re-renders, and reuses the existing /ws WebSocket + state
 // broadcast for the device-model selector (the same {type:'model'} /
 // {type:'reboot'} commands controls.js sends). DOM/network glue only - the
 // parsing and formatting live in advanced-logic.js so they can be unit-tested.
 
-const REFRESH_MS = 2000;
+const REFRESH_MS = 1000;
 let ws = null;
 let reconnectAttempt = 0;
 let reconnectTimer = null;
