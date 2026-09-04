@@ -128,6 +128,20 @@ def main():
     # Ensure include directory exists
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
+    # Skip the write if the content hasn't changed. Not primarily a speed
+    # optimization (the git calls above are ~0.1s total) - it matters because
+    # a parallel multi-env build (build-scripts/build-all.ps1) runs this
+    # script once per env, all writing the same path concurrently. An
+    # unconditional write is a real race between those processes; a
+    # read-compare-skip makes a no-op run genuinely a no-op.
+    try:
+        with open(output_path, 'r', encoding='utf-8') as f:
+            if f.read() == header_content:
+                print(f"{output_path} already up to date")
+                return
+    except FileNotFoundError:
+        pass
+
     # Write the header file
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(header_content)
