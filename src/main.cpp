@@ -150,6 +150,15 @@ void setup()
     MissionControl::Instance().restoreStartupState();
 
 #ifndef NATIVE_RUNTIME
+    // Create the OTA status lock before Comms::Instance().setup() brings up the
+    // async web server: an /ota or /ota-check that lands in the window between
+    // the server starting and the lock existing would hit OtaStartGate with a
+    // null lock and be answered 409 "busy" - a wrong answer at the one moment a
+    // user is most likely poking a fresh device. begin() only creates a mutex;
+    // it has no WiFi/Comms dependency. The background auto-check task stays
+    // below, after the WiFi status animations.
+    OtaUpdater::begin();
+
     WiFiConnectingAnimation connecting;
     connecting.run();
 
@@ -193,7 +202,8 @@ void setup()
     // damaged, where the first pass triggers the self-repair described in
     // fs-health.h (re-flashing the running version's FS image, never new
     // firmware) since there is no web UI left to ask through.
-    OtaUpdater::begin();
+    // (OtaUpdater::begin() already ran above, before the web server started.)
+    //
     // ticksFromMs, not pdMS_TO_TICKS: a 24h delay's ms*1000 intermediate
     // overflows 32-bit TickType_t and the macro would schedule it every
     // ~8m21s instead (see include/utils.h).
