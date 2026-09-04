@@ -21,7 +21,9 @@
 #include "ota-config.h"
 #include "ota-retry-schedule.h"
 #include "ota-updater.h"
+#include "serial-line-buffer.h"
 #include "status-led.h"
+#include "ws-command-parser.h"
 #endif
 
 #ifdef NATIVE_RUNTIME
@@ -258,5 +260,34 @@ int main(int argc, char** argv)
     return 0;
 }
 #else
-void loop() { MissionControl::Instance().update(millis()); }
+// Lets a USB-serial connection send the exact same commands the web UI sends
+// over WebSocket (WsCommandParser::parse() is already transport-agnostic -
+// comms.cpp and native-runtime.cpp's stdin reader both call it identically).
+// Enables the web installer (#105/#187) to set a device's model right after
+// flashing, with no WiFi/web-UI round trip - see web-installer/js/model-select.js.
+// Bounded per tick, mirroring MissionControl::update()'s own non-blocking
+// contract: an unbounded drain here would let a flooding peer stall the
+// render loop.
+static SerialLineBuffer serialLineBuffer;
+static constexpr int MAX_SERIAL_BYTES_PER_TICK = 256;
+
+void processSerialCommands()
+{
+    for (int i = 0; i < MAX_SERIAL_BYTES_PER_TICK && Serial.available() > 0; i++)
+    {
+        char line[256];
+        if (serialLineBuffer.feed((char)Serial.read(), line, sizeof(line)))
+        {
+            Command command;
+            if (WsCommandParser::parse(line, command))
+                MissionControl::Instance().queueWebCommand(command);
+        }
+    }
+}
+
+void loop()
+{
+    MissionControl::Instance().update(millis());
+    processSerialCommands();
+}
 #endif

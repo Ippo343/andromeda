@@ -15,16 +15,14 @@
     // DOM APIs, never innerHTML: board.label/part strings ultimately derive
     // from the build's chipFamily + PlatformIO offsets (safe today), but the
     // same no-markup discipline as the version line below keeps it that way.
+    // No own "What gets flashed" heading here - index.html's <summary> on the
+    // enclosing <details> already labels this drawer.
     function renderParts(versionInfo) {
         const container = document.getElementById('parts');
         if (!container) return;
         const rows = formatPartsTable(versionInfo);
         container.textContent = '';
         if (rows.length === 0) return;
-
-        const heading = document.createElement('h2');
-        heading.textContent = 'What gets flashed';
-        container.append(heading);
 
         for (const row of rows) {
             const section = document.createElement('section');

@@ -28,12 +28,24 @@
 
         <p class="version-line" id="version">Loading the latest release&hellip;</p>
 
+        <!-- Lab pre-flash (#105/#187): required, and placed above the install
+             button so it can't be missed - esp-web-install-button has no hook
+             for a conditional post-install step, so model-select.js instead
+             watches for its <ewt-install-dialog> closing and then sets the
+             already-chosen model automatically, no second action needed. -->
+        <section class="model-select">
+            <label for="model-select">Device model</label>
+            <select id="model-select" required>
+                <option value="">Choose a model&hellip;</option>
+            </select>
+        </section>
+
         <!-- esp-web-install-button already renders its own fallback content
              into the unsupported/not-allowed slots below when Web Serial
              isn't available, so there's no separate browser-support banner
              to keep in sync with it. -->
         <esp-web-install-button manifest="manifest.json">
-            <button slot="activate" title="Connect &amp; install" aria-label="Connect &amp; install">
+            <button slot="activate" title="Connect &amp; install" aria-label="Connect &amp; install" disabled>
                 <svg class="icon" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
             </button>
             <div slot="unsupported" class="info-box">
@@ -45,12 +57,22 @@
             </div>
         </esp-web-install-button>
 
-        <!-- Per-board flash layout, filled in by installer.js from
-             version.json via installer-logic.js's formatPartsTable(). -->
-        <div class="parts" id="parts"></div>
+        <p class="model-status" id="model-status"></p>
+
+        <!-- Collapsed by default - a non-intrusive label, not a wall of
+             offsets most visitors never need to see. Per-board flash layout,
+             filled into #parts by installer.js from version.json via
+             installer-logic.js's formatPartsTable(). -->
+        <details class="parts-drawer">
+            <summary>What gets flashed</summary>
+            <div class="parts" id="parts"></div>
+        </details>
     </div>
     <script src="js/utils.js"></script>
     <script src="js/installer-logic.js"></script>
     <script src="js/installer.js"></script>
+    <script src="js/models.js"></script>
+    <script src="js/model-select-logic.js"></script>
+    <script src="js/model-select.js"></script>
 </body>
 </html>

@@ -6,12 +6,13 @@
 #include "device-uid.h"
 
 // Owns this device's identity on the network: a UID derived from the
-// ESP32's MAC address (the default AP SSID "Andromeda-$UID" and mDNS
-// hostname "andromeda-$uid.local" - see wifi-esp-adapters.cpp/comms.cpp) and
-// an optional user-chosen name that overrides the default entirely. A
-// rename only takes effect after reboot - Comms::setup() reads the name
-// once, at startAPMode()/startStationMode() time - mirroring FactoryConfig's
-// model-ID reboot-required pattern in geometry.cpp.
+// ESP32's MAC address, combined with the running model's name into a default
+// AP SSID/mDNS hostname (e.g. "L70-$UID"; "Andromeda-$UID" for ANDROMEDA_MK0
+// and as the fallback if the model is ever unresolvable - see
+// getDefaultName()), and an optional user-chosen name that overrides the
+// default entirely. A rename only takes effect after reboot - Comms::setup()
+// reads the name once, at startAPMode()/startStationMode() time - mirroring
+// FactoryConfig's model-ID reboot-required pattern in geometry.cpp.
 namespace DeviceIdentity
 {
 
@@ -22,7 +23,9 @@ constexpr const char* NAME_KEY = "dev_name";
 // once and cached for the process lifetime.
 const char* getUid();
 
-// "Andromeda-$UID" - the name used when the user has never set a custom one.
+// The name used when the user has never set a custom one: derived from the
+// running model's name plus the UID (e.g. "L70-$UID"), or "Andromeda-$UID"
+// for ANDROMEDA_MK0 and as the fallback if the model can't be resolved.
 String getDefaultName();
 
 // The name currently persisted by the user, or "" if never customized.
