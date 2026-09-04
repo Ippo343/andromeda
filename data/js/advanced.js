@@ -102,14 +102,37 @@ function handleStateMessage(raw) {
     if (msg.model) setRebootIndicator(msg.model.rebootRequired);
 }
 
+// Cached {labelEl, valueEl} per tile index from the last renderMetrics() call
+// that actually built the DOM, so a same-shaped update (the common case -
+// metricTiles() always returns the same label set) only touches the
+// .metric-value text nodes that changed instead of rebuilding the whole
+// #metrics grid every tick (#214). Rebuilds from scratch only when the tile
+// count itself changes (effectively never - metricTiles()'s label list is
+// static - but cheap insurance if it ever does).
+let metricTileEls = [];
+
 function renderMetrics(metrics) {
     const el = document.getElementById('metrics');
     const tiles = metricTiles(metrics);
-    el.innerHTML = tiles
-        .map((t) => `<div class="metric-tile">` +
-            `<div class="metric-label">${escapeHtml(t.label)}</div>` +
-            `<div class="metric-value">${escapeHtml(t.value)}</div></div>`)
-        .join('');
+
+    if (metricTileEls.length !== tiles.length) {
+        el.innerHTML = tiles
+            .map(() => '<div class="metric-tile">' +
+                '<div class="metric-label"></div>' +
+                '<div class="metric-value"></div></div>')
+            .join('');
+        const nodes = el.children;
+        metricTileEls = tiles.map((_, i) => ({
+            labelEl: nodes[i].querySelector('.metric-label'),
+            valueEl: nodes[i].querySelector('.metric-value'),
+        }));
+    }
+
+    tiles.forEach((t, i) => {
+        const { labelEl, valueEl } = metricTileEls[i];
+        if (labelEl.textContent !== t.label) labelEl.textContent = t.label;
+        if (valueEl.textContent !== t.value) valueEl.textContent = t.value;
+    });
 }
 
 function renderFirmware(metrics) {
