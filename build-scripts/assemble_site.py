@@ -109,7 +109,7 @@ def _copy_shared_ui_assets(site_dir: Path):
     its look - see data/index.html / data/css/common.css / data/js/utils.js.
     A one-way copy out of data/ costs the flashed filesystem nothing; nothing
     is ever added *into* data/ here (that tree is size-gated by
-    check_fs_ceiling.py and route-diffed by test/test_static_assets)."""
+    check_fs_ceiling.py and route-diffed by test/test_native_suite/test_static_assets.cpp)."""
     data_dir = _REPO_ROOT / "data"
     (site_dir / "css").mkdir(parents=True, exist_ok=True)
     (site_dir / "js").mkdir(parents=True, exist_ok=True)
