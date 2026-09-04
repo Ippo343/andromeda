@@ -381,6 +381,35 @@ void test_pages_workflow_resolves_newest_release_by_version_not_date()
         "serves");
 }
 
+// #198: deploy-pages reporting success only means a deployment was created,
+// not that the site answers. A truncated artifact / propagation failure / a
+// wrong output subdirectory would end the run green with an installer that
+// 404s. pages.yml must fetch the live URL and fail if it doesn't serve what
+// it published.
+void test_pages_workflow_verifies_the_deployed_site_answers()
+{
+    std::string yaml = stripComments(readFile(".github/workflows/pages.yml"));
+
+    // Good weather: a step consumes the deployment's live page_url.
+    size_t verifyAt = yaml.find("Verify the deployed site answers");
+    TEST_ASSERT_TRUE_MESSAGE(verifyAt != std::string::npos,
+                             "pages.yml must have a post-deploy step that checks the live site");
+    std::string verifyStep = yaml.substr(verifyAt);
+    TEST_ASSERT_TRUE_MESSAGE(
+        verifyStep.find("steps.deployment.outputs.page_url") != std::string::npos,
+        "the post-deploy check must fetch steps.deployment.outputs.page_url, not a guessed URL");
+
+    // Bad weather: it must run *after* deploy-pages, and be able to fail the
+    // job (a curl -f against the live URL), so green can't mean unreachable.
+    const size_t deployAt = yaml.find("actions/deploy-pages");
+    TEST_ASSERT_TRUE_MESSAGE(deployAt != std::string::npos && deployAt < verifyAt,
+                             "the live-site check must come after actions/deploy-pages");
+    TEST_ASSERT_TRUE_MESSAGE(
+        contains(verifyStep, R"(curl\s+-f)"),
+        "the live-site check must use curl -f (or equivalent) so a 404/unreachable site exits "
+        "non-zero instead of passing silently");
+}
+
 void test_release_workflow_chains_pages_on_stable_only()
 {
     std::string yaml = stripComments(readFile(".github/workflows/release.yml"));
@@ -637,6 +666,7 @@ int main(int, char**)
     RUN_TEST(test_pages_workflow_is_a_reusable_artifact_deploy);
     RUN_TEST(test_pages_workflow_verifies_downloaded_binaries_against_manifest_md5);
     RUN_TEST(test_pages_workflow_resolves_newest_release_by_version_not_date);
+    RUN_TEST(test_pages_workflow_verifies_the_deployed_site_answers);
     RUN_TEST(test_release_workflow_chains_pages_on_stable_only);
     RUN_TEST(test_hardware_build_stages_flashparts_after_buildfs);
     RUN_TEST(test_release_reuses_test_jobs_build_artifacts_instead_of_rebuilding);
