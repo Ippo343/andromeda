@@ -300,6 +300,70 @@ void test_rejects_model_with_unregistered_id()
     TEST_ASSERT_EQUAL(65000, out.modelId);
 }
 
+// --- parseSubscription (#214) ---------------------------------------------
+
+void test_parses_subscribe_metrics()
+{
+    bool subscribe = false;
+    WsCommandParser::Topic topic = WsCommandParser::Topic::None;
+    TEST_ASSERT_TRUE(WsCommandParser::parseSubscription(
+        "{\"type\":\"subscribe\",\"topic\":\"metrics\"}", subscribe, topic));
+    TEST_ASSERT_TRUE(subscribe);
+    TEST_ASSERT_EQUAL(static_cast<int>(WsCommandParser::Topic::Metrics), static_cast<int>(topic));
+}
+
+void test_parses_unsubscribe_metrics()
+{
+    bool subscribe = true;
+    WsCommandParser::Topic topic = WsCommandParser::Topic::None;
+    TEST_ASSERT_TRUE(WsCommandParser::parseSubscription(
+        "{\"type\":\"unsubscribe\",\"topic\":\"metrics\"}", subscribe, topic));
+    TEST_ASSERT_FALSE(subscribe);
+    TEST_ASSERT_EQUAL(static_cast<int>(WsCommandParser::Topic::Metrics), static_cast<int>(topic));
+}
+
+void test_rejects_subscription_with_unknown_topic()
+{
+    bool subscribe = false;
+    WsCommandParser::Topic topic = WsCommandParser::Topic::None;
+    TEST_ASSERT_FALSE(WsCommandParser::parseSubscription(
+        "{\"type\":\"subscribe\",\"topic\":\"logs\"}", subscribe, topic));
+}
+
+void test_rejects_subscription_with_missing_topic()
+{
+    bool subscribe = false;
+    WsCommandParser::Topic topic = WsCommandParser::Topic::None;
+    TEST_ASSERT_FALSE(
+        WsCommandParser::parseSubscription("{\"type\":\"subscribe\"}", subscribe, topic));
+}
+
+void test_rejects_subscription_with_unrecognized_type()
+{
+    bool subscribe = false;
+    WsCommandParser::Topic topic = WsCommandParser::Topic::None;
+    TEST_ASSERT_FALSE(WsCommandParser::parseSubscription(
+        "{\"type\":\"subscribeme\",\"topic\":\"metrics\"}", subscribe, topic));
+}
+
+void test_parse_subscription_null_json_is_rejected_not_ub()
+{
+    bool subscribe = false;
+    WsCommandParser::Topic topic = WsCommandParser::Topic::None;
+    TEST_ASSERT_FALSE(WsCommandParser::parseSubscription(nullptr, subscribe, topic));
+}
+
+// Guards the routing split: a subscribe/unsubscribe message must never be
+// misinterpreted by the generic Command parser - it isn't one of parse()'s
+// known "type":"..." values, so it should fall through to the final `return
+// false`, not get silently matched by an unrelated branch.
+void test_generic_parse_rejects_subscribe_message()
+{
+    Command out;
+    TEST_ASSERT_FALSE(
+        WsCommandParser::parse("{\"type\":\"subscribe\",\"topic\":\"metrics\"}", out));
+}
+
 void run_test_ws_command_parser_tests()
 {
     RUN_TEST(test_parses_next);
@@ -339,4 +403,11 @@ void run_test_ws_command_parser_tests()
     RUN_TEST(test_parse_tolerates_whitespace_after_colon_for_numeric_fields);
     RUN_TEST(test_parses_negative_color_value_after_whitespace);
     RUN_TEST(test_rejects_model_with_unregistered_id);
+    RUN_TEST(test_parses_subscribe_metrics);
+    RUN_TEST(test_parses_unsubscribe_metrics);
+    RUN_TEST(test_rejects_subscription_with_unknown_topic);
+    RUN_TEST(test_rejects_subscription_with_missing_topic);
+    RUN_TEST(test_rejects_subscription_with_unrecognized_type);
+    RUN_TEST(test_parse_subscription_null_json_is_rejected_not_ub);
+    RUN_TEST(test_generic_parse_rejects_subscribe_message);
 }
