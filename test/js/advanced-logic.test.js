@@ -7,6 +7,7 @@ const {
     formatBytes,
     resetReasonLabel,
     formatTemp,
+    formatCurrentDraw,
     metricTiles,
     firmwareLabel,
     isNewer,
@@ -110,6 +111,20 @@ describe('formatTemp', () => {
     });
 });
 
+describe('formatCurrentDraw', () => {
+    test('renders "<draw> / <budget> mA"', () => {
+        assert.equal(formatCurrentDraw(234, 9000), '234 / 9000 mA');
+    });
+    test('rounds fractional values', () => {
+        assert.equal(formatCurrentDraw(233.6, 9000), '234 / 9000 mA');
+    });
+    test('either value non-finite -> "-"', () => {
+        assert.equal(formatCurrentDraw(null, 9000), '-');
+        assert.equal(formatCurrentDraw(234, null), '-');
+        assert.equal(formatCurrentDraw(NaN, NaN), '-');
+    });
+});
+
 describe('metricTiles', () => {
     const sample = {
         uptimeMs: 65000,
@@ -120,6 +135,8 @@ describe('metricTiles', () => {
         fps: 61.7,
         rssi: -58,
         cpuMhz: 240,
+        currentMa: 234,
+        maxMilliamps: 9000,
         chip: 'ESP32-S3',
         resetReason: 1,
     };
@@ -133,22 +150,26 @@ describe('metricTiles', () => {
         const tiles = metricTiles(sample);
         assert.deepEqual(tiles.map((t) => t.label), [
             'Uptime', 'Free heap', 'Min free heap', 'Heap total', 'Temperature',
-            'FPS', 'WiFi RSSI', 'CPU', 'Chip', 'Last reset',
+            'FPS', 'WiFi RSSI', 'CPU', 'Current draw', 'Chip', 'Last reset',
         ]);
         assert.equal(tiles[0].value, '00h 01m 05s');
         assert.equal(tiles[1].value, '120.0 KB');
         assert.equal(tiles[4].value, '44.1 °C (approx)');
         assert.equal(tiles[5].value, '62');
         assert.equal(tiles[6].value, '-58 dBm');
-        assert.equal(tiles[8].value, 'ESP32-S3');
-        assert.equal(tiles[9].value, 'power-on');
+        assert.equal(tiles[8].value, '234 / 9000 mA');
+        assert.equal(tiles[9].value, 'ESP32-S3');
+        assert.equal(tiles[10].value, 'power-on');
     });
 
-    test('null fps / rssi / cpu render as "-"', () => {
-        const tiles = metricTiles({ ...sample, fps: null, rssi: null, cpuMhz: null });
+    test('null fps / rssi / cpu / current draw render as "-"', () => {
+        const tiles = metricTiles({
+            ...sample, fps: null, rssi: null, cpuMhz: null, currentMa: null, maxMilliamps: null,
+        });
         assert.equal(tiles[5].value, '-');
         assert.equal(tiles[6].value, '-');
         assert.equal(tiles[7].value, '-');
+        assert.equal(tiles[8].value, '-');
     });
 });
 

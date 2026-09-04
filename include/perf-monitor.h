@@ -5,6 +5,7 @@
 
 #include <limits>
 
+#include "power-monitor.h"
 #include "utils.h"
 
 // Optional per-frame callback, set only by the native runtime
@@ -23,6 +24,7 @@ inline FrameCaptureHook g_frameCaptureHook = nullptr;
     do {                                              \
         FastLED.show();                               \
         PerformanceMonitor::Instance().tick();        \
+        PowerMonitor::Instance().tick();              \
         if (g_frameCaptureHook) g_frameCaptureHook(); \
     } while (0)
 

@@ -81,6 +81,14 @@ function formatTemp(c) {
     return Number.isFinite(c) ? `${c.toFixed(1)} °C (approx)` : '-';
 }
 
+// Estimated current draw vs. the configured budget (ModelConfig::max_milliamps)
+// -> "234 / 9000 mA". Either value missing/non-finite -> '-' (matches the
+// other tiles' null-guard style).
+function formatCurrentDraw(currentMa, maxMilliamps) {
+    if (!Number.isFinite(currentMa) || !Number.isFinite(maxMilliamps)) return '-';
+    return `${Math.round(currentMa)} / ${Math.round(maxMilliamps)} mA`;
+}
+
 // Turns the /metrics JSON payload into the ordered [{ label, value }] list the
 // Advanced page renders as tiles. Keeping it here (not in the DOM code) makes
 // the formatting testable. A missing payload yields an empty list.
@@ -95,6 +103,7 @@ function metricTiles(m) {
         { label: 'FPS', value: m.fps == null ? '-' : String(Math.round(m.fps)) },
         { label: 'WiFi RSSI', value: m.rssi == null ? '-' : `${m.rssi} dBm` },
         { label: 'CPU', value: m.cpuMhz == null ? '-' : `${m.cpuMhz} MHz` },
+        { label: 'Current draw', value: formatCurrentDraw(m.currentMa, m.maxMilliamps) },
         { label: 'Chip', value: m.chip || '-' },
         { label: 'Last reset', value: resetReasonLabel(m.resetReason) },
     ];
@@ -178,6 +187,7 @@ if (typeof module !== 'undefined' && module.exports) {
         formatBytes,
         resetReasonLabel,
         formatTemp,
+        formatCurrentDraw,
         metricTiles,
         firmwareLabel,
         isNewer,

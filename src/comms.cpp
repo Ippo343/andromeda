@@ -465,19 +465,22 @@ void Comms::setupRoutes()
             // interpolated directly too.
             OtaUpdater::Status ota = OtaUpdater::status();
 
-            char json[640];
+            char json[700];
             snprintf(json, sizeof(json),
                      "{\"uptimeMs\":%lu,\"heapFree\":%u,\"heapMin\":%u,\"heapTotal\":%u,"
                      "\"tempC\":%s,\"fps\":%s,\"rssi\":%d,\"cpuMhz\":%u,"
                      "\"chip\":\"%s\",\"resetReason\":%d,\"version\":\"%s\","
-                     "\"updateAvailable\":%s,\"latestTag\":\"%s\",\"otaChannel\":\"%s\"}",
+                     "\"updateAvailable\":%s,\"latestTag\":\"%s\",\"otaChannel\":\"%s\","
+                     "\"currentMa\":%u,\"maxMilliamps\":%u}",
                      static_cast<unsigned long>(millis()), static_cast<unsigned>(ESP.getFreeHeap()),
                      static_cast<unsigned>(ESP.getMinFreeHeap()),
                      static_cast<unsigned>(ESP.getHeapSize()), tempBuf, fpsBuf,
                      static_cast<int>(WiFi.RSSI()), static_cast<unsigned>(ESP.getCpuFreqMHz()),
                      ESP.getChipModel(), static_cast<int>(esp_reset_reason()), VERSION,
                      OtaUpdater::updateAvailable() ? "true" : "false", ota.latestTag,
-                     OtaConfig::devChannel() ? "dev" : "stable");
+                     OtaConfig::devChannel() ? "dev" : "stable",
+                     static_cast<unsigned>(PowerMonitor::Instance().currentMa()),
+                     static_cast<unsigned>(GEOMETRY.getConfig()->max_milliamps));
             r->send(200, "application/json", json);
         });
 
