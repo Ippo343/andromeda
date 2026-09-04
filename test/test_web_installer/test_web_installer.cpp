@@ -601,6 +601,24 @@ void test_ci_builds_flashparts_and_assembles_the_site_on_every_push()
         "pages.yml relies on for a real deploy runs on every push/PR too");
 }
 
+// #196: assemble_site.py validates its inputs but nothing inspected the
+// manifest.json / version.json it wrote. check_site.py does, and must run in
+// both the CI assemble job and the real deploy - right after assemble_site.py,
+// so a green assembly can no longer mean an unchecked site.
+void test_both_workflows_check_the_assembled_site()
+{
+    for (const char* wf : {".github/workflows/test.yml", ".github/workflows/pages.yml"})
+    {
+        std::string yaml = stripComments(readFile(wf));
+        const size_t assembleAt = yaml.find("assemble_site.py");
+        const size_t checkAt = yaml.find("check_site.py");
+        TEST_ASSERT_TRUE_MESSAGE(
+            assembleAt != std::string::npos && checkAt != std::string::npos && assembleAt < checkAt,
+            (std::string(wf) + " must run build-scripts/check_site.py after assemble_site.py")
+                .c_str());
+    }
+}
+
 int main(int, char**)
 {
     UNITY_BEGIN();
@@ -629,5 +647,6 @@ int main(int, char**)
     RUN_TEST(test_pages_workflow_never_interpolates_the_tag_directly_into_a_script);
     RUN_TEST(test_installer_js_never_assigns_version_info_via_innerhtml);
     RUN_TEST(test_ci_builds_flashparts_and_assembles_the_site_on_every_push);
+    RUN_TEST(test_both_workflows_check_the_assembled_site);
     return UNITY_END();
 }
