@@ -274,9 +274,13 @@ function pollSaveStatus(ssid) {
                 const s = (state || '').trim();
 
                 if (s === 'connected') {
+                    // The addresses panel above (loadDeviceAddresses(), filled before this
+                    // submit even happened) is the reliable place this was already shown -
+                    // this message is a bonus for whichever platforms' setup connections
+                    // survive long enough to read it (see issue #135).
                     showStatus('Connected to "' + escapeHtml(ssid) + '"! The device is restarting to join '
-                        + 'that network - reconnect your phone or laptop to your normal WiFi to '
-                        + 'reach it again.', 'success');
+                        + 'that network - reconnect your phone or laptop to your normal WiFi, then use '
+                        + 'one of the addresses above to reach it again.', 'success');
                     return;
                 }
 
@@ -331,6 +335,51 @@ function resetCredentials() {
     }
 }
 
+// Fills #deviceAddresses from GET /device-info, and leaves it there for the rest of the
+// page's life - see wifi-setup.html's comment on why this can't wait until /save-status
+// resolves. formatDeviceAddresses (wifi-logic.js) already tolerates a missing/malformed
+// payload; a network failure here just leaves the panel hidden rather than blocking setup.
+function loadDeviceAddresses() {
+    const panel = document.getElementById('deviceAddresses');
+    if (!panel) return;
+
+    fetch('/device-info')
+        .then(response => (response.ok ? response.json() : null))
+        .then(info => {
+            const addresses = formatDeviceAddresses(info);
+            if (addresses.length === 0) return;
+
+            const items = addresses
+                .map((addr, i) => `
+                    <li>
+                        <code>${escapeHtml(addr)}</code>
+                        <button type="button" class="copy-btn" data-addr="${escapeHtml(addr)}">Copy</button>
+                    </li>
+                `)
+                .join('');
+
+            panel.innerHTML = `
+                <p>Once connected, this device will be reachable at:</p>
+                <ul>${items}</ul>
+            `;
+            panel.classList.remove('hidden');
+
+            panel.querySelectorAll('.copy-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    navigator.clipboard.writeText(btn.dataset.addr).then(() => {
+                        const original = btn.textContent;
+                        btn.textContent = 'Copied!';
+                        setTimeout(() => { btn.textContent = original; }, 1500);
+                    }).catch(() => {});
+                });
+            });
+        })
+        .catch(() => {
+            // No addresses shown is a worse UX than none, but not a broken page - the
+            // reset-and-try-again path (or the eventual success message) still works.
+        });
+}
+
 function showStatus(message, type) {
     const status = document.getElementById('status');
     const spinner = type === 'loading' ? '<span class="spinner"></span>' : '';
@@ -343,6 +392,7 @@ function initWifiPage() {
     h1.style.setProperty('--grad', randomGradient());
 
     setTimeout(scanNetworks, 500);
+    loadDeviceAddresses();
 }
 
 // If the page is restored from the bfcache (user navigated away mid-submit and
