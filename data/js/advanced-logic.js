@@ -149,6 +149,49 @@ function isOtaPollDone(state, duringUpdate) {
     return isOtaTerminalState(state);
 }
 
+// --- Metrics over /ws (#214) -----------------------------------------------
+
+// Exact strings WsCommandParser::parseSubscription() (ws-command-parser.h) matches - kept as
+// functions (not a shared constant) so a test can assert on the literal wire text without
+// reaching into advanced.js's WebSocket plumbing.
+function subscribeMetricsMessage() {
+    return JSON.stringify({ type: 'subscribe', topic: 'metrics' });
+}
+function unsubscribeMetricsMessage() {
+    return JSON.stringify({ type: 'unsubscribe', topic: 'metrics' });
+}
+
+// Folds one {"type":"metrics",...} WS frame into the running cache. Frames are tiered
+// (WsMetricsBuilder - see ws-metrics-builder.h): a volatile-only frame must not blank the
+// static (chip/version/...) or OTA fields a previous full frame already populated, so this is
+// a shallow merge, not a replace. `type` itself is dropped - the merged object is meant to be
+// handed straight to metricTiles()/firmwareLabel()/otaBadgeText(), which know nothing about
+// WS framing and expect the same flat shape /metrics returns. A null/non-object frame (a
+// malformed message JSON.parse still let through) is a no-op, returning `prev` unchanged.
+function mergeMetrics(prev, frame) {
+    if (!frame || typeof frame !== 'object') return prev || {};
+    const merged = Object.assign({}, prev || {}, frame);
+    delete merged.type;
+    return merged;
+}
+
+// How long to wait for the first/next WS metrics frame before falling back to polling
+// /metrics over HTTP - covers a device that hasn't (yet) rebooted into WS-push-capable
+// firmware, or a subscription that silently didn't take.
+const WS_METRICS_GRACE_MS = 3000;
+// Fallback HTTP poll cadence once the grace window has been missed - far slower than the old
+// unconditional 1s poll, since on a healthy device this path is never taken at all.
+const METRICS_HTTP_FALLBACK_MS = 5000;
+
+// True when advanced.js's fallback timer should fire a one-shot HTTP /metrics fetch this tick:
+// the socket isn't open at all, or it is open but no metrics frame has arrived within the
+// grace window (a stale subscription, or older firmware with no WS metrics push).
+function shouldPollMetricsHttp(wsOpen, lastFrameAtMs, nowMs) {
+    if (!wsOpen) return true;
+    if (lastFrameAtMs == null) return true;
+    return (nowMs - lastFrameAtMs) >= WS_METRICS_GRACE_MS;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         formatUptime,
@@ -164,5 +207,11 @@ if (typeof module !== 'undefined' && module.exports) {
         otaStartRejectionLabel,
         isOtaTerminalState,
         isOtaPollDone,
+        subscribeMetricsMessage,
+        unsubscribeMetricsMessage,
+        mergeMetrics,
+        shouldPollMetricsHttp,
+        WS_METRICS_GRACE_MS,
+        METRICS_HTTP_FALLBACK_MS,
     };
 }
