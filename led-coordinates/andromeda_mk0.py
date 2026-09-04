@@ -2,7 +2,7 @@
 # -*- coding: utf8 -*-
 
 """
-This is a utility that estimates the physical coordinates of each LED in the structure of Andromeda MK1.
+This is a utility that estimates the physical coordinates of each LED in the structure of Andromeda MK0.
 
 Knowing the position is required to write 2D effects that use the whole structure.
 Since there are (7 * 23) LEDs in total, obviously I wasn't going to measure each of them individually

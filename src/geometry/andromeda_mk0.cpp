@@ -3,7 +3,7 @@
 #include "geometry/geometry.h"
 #include "geometry/model_config.h"
 
-namespace AndromedaMk1
+namespace AndromedaMk0
 {
 
 // Number of strips and LEDs per strip
@@ -40,8 +40,8 @@ const PROGMEM CartesianCoordinates CARTESIAN_COORDS[161] = {
 
 // Model configuration
 extern const ModelConfig CONFIG = {
-    .id = ModelId::ANDROMEDA_MK1,
-    .name = "Andromeda Mk1",
+    .id = ModelId::ANDROMEDA_MK0,
+    .name = "Andromeda MK0",
 
     .num_strips = NUM_STRIPS,
     .strip_lengths = STRIP_LENGTHS,
@@ -53,4 +53,4 @@ extern const ModelConfig CONFIG = {
     .cartesian_data = (const CartesianCoordinates*)CARTESIAN_COORDS,
 };
 
-}  // namespace AndromedaMk1
+}  // namespace AndromedaMk0

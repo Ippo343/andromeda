@@ -300,7 +300,7 @@ void installProtocol()
     // a console) on Windows, splitting each fwrite() of a multi-KB frame
     // line into many small WriteFile() syscalls - each one individually
     // cheap, but their sheer number was the entire native-vs-bridge FPS gap
-    // (measured: ~37fps -> ~57fps on Andromeda Mk1's 161-LED frame line just
+    // (measured: ~37fps -> ~57fps on Andromeda MK0's 161-LED frame line just
     // from this one change). Forcing a real block buffer makes each
     // writeLine() a single memcpy-then-one-syscall instead.
     static char stdoutIoBuf[1 << 16];

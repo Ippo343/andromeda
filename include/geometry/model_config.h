@@ -35,12 +35,19 @@ enum class ModelId : uint16_t
     GRID_TEST_DEVICE = MODEL_ID(TEST_DEVICES, 1),
 
     // The first prototype Andromeda model that started this whole madness
-    ANDROMEDA_MK1 = MODEL_ID(ANDROMEDA, 0),
+    ANDROMEDA_MK0 = MODEL_ID(ANDROMEDA, 0),
 
-    // The actually "commercially" "viable" products
+    // The actually "commercially" "viable" products.
+    //
+    // The MODEL_ID model numbers below are frozen: they are the values already
+    // persisted as `model_id` in deployed devices' NVS. The MK labels were
+    // renumbered down one (#190 - the earlier builds were prototypes that will
+    // never be sold, so "MK1" is reserved for the first sellable design), which
+    // is why L10_MK0 keeps model number 1 and L10_MK1 keeps model number 2. Do
+    // not "fix" that mismatch without an accompanying NVS migration.
     L70_MK1 = MODEL_ID(L_SERIES, 0),
-    L10_MK1 = MODEL_ID(L_SERIES, 1),
-    L10_MK2 = MODEL_ID(L_SERIES, 2),
+    L10_MK0 = MODEL_ID(L_SERIES, 1),
+    L10_MK1 = MODEL_ID(L_SERIES, 2),
 };
 
 // Configuration for a specific LED model

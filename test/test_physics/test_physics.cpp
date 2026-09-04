@@ -17,7 +17,7 @@
 // Realistic square-ish model, unlike the degenerate 10x934mm strip test_effects.cpp
 // uses - needed here because bounds-containment tests (added in later commits) care
 // about a sane aspect ratio.
-void setUp() { GEOMETRY.initializeForTest(ModelId::ANDROMEDA_MK1); }
+void setUp() { GEOMETRY.initializeForTest(ModelId::ANDROMEDA_MK0); }
 void tearDown() {}
 
 // ---------------------------------------------------------------------------
@@ -646,7 +646,7 @@ void test_ring_field_laplacian_is_periodic()
 
 void test_ring_field_diffuses_and_conserves_total_on_a_ring()
 {
-    GEOMETRY.initializeForTest(ModelId::L10_MK2);
+    GEOMETRY.initializeForTest(ModelId::L10_MK1);
     DiffuseRing fx;
     size_t n = GEOMETRY.getStrip(0).num_leds;
     size_t mid = n / 2;
@@ -671,7 +671,7 @@ void test_ring_field_diffuses_and_conserves_total_on_a_ring()
 
 void test_ring_field_evaluate_uses_palette_lookup()
 {
-    GEOMETRY.initializeForTest(ModelId::L10_MK2);
+    GEOMETRY.initializeForTest(ModelId::L10_MK1);
     DiffuseRing fx;
     fx.precompute(1000);
 
@@ -684,10 +684,10 @@ void test_ring_field_evaluate_uses_palette_lookup()
 
 void test_ring_field_skips_strips_shorter_than_three_cells()
 {
-    // Andromeda MK1's centre strip is the real short-strip case: stepping it
+    // Andromeda MK0's centre strip is the real short-strip case: stepping it
     // through the periodic Laplacian would be meaningless, so the base must
     // leave sub-3-LED strips untouched instead of reading out of bounds.
-    GEOMETRY.initializeForTest(ModelId::ANDROMEDA_MK1);
+    GEOMETRY.initializeForTest(ModelId::ANDROMEDA_MK0);
     DiffuseRing fx;
     for (int frame = 0; frame < 10; frame++) fx.precompute(1000 + frame * 16);
     // Reaching here without an ASan/UBSan trip is the assertion; also sanity

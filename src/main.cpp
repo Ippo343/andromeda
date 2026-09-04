@@ -81,7 +81,7 @@ void setup()
     // NativeRuntime::init(), called before setup() in main() below.
     model = NativeRuntime::model();
 #else
-    // Never "unconfigured" - getModelId() self-persists a safe default (L10_MK2) the
+    // Never "unconfigured" - getModelId() self-persists a safe default (L10_MK1) the
     // first time it's ever asked, so this always resolves to a real, working model.
     model = FactoryConfig::getModelId();
     Log.noticeln("Loading factory configuration: %s", getModelName(model));

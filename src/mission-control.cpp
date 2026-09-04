@@ -608,7 +608,7 @@ void MissionControl::update(milliseconds_t t)
 
     milliseconds_t frameEnd = millis();
 
-    // On models with no explicit cap (MIN_FRAME_DURATION_MS == 0 - Andromeda Mk1, L70, the
+    // On models with no explicit cap (MIN_FRAME_DURATION_MS == 0 - Andromeda MK0, L70, the
     // test rig) the loop previously had no unconditional yield at all: whether the idle task
     // (and with it WiFi/lwIP background work, and the CPU0 idle-task watchdog check) ever
     // got scheduled depended entirely on FASTLED_SHOW() blocking via a real task delay -

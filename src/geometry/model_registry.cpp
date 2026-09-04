@@ -4,7 +4,7 @@
 
 // External model configurations
 // Each model's namespace exposes a CONFIG constant
-namespace AndromedaMk1
+namespace AndromedaMk0
 {
 extern const ModelConfig CONFIG;
 }
@@ -25,23 +25,23 @@ namespace L70_MK1
 {
 extern const ModelConfig CONFIG;
 }
-namespace L10_MK1
+namespace L10_MK0
 {
 extern const ModelConfig CONFIG;
 }
-namespace L10_MK2
+namespace L10_MK1
 {
 extern const ModelConfig CONFIG;
 }
 
 // Global registry of all available models
 const ModelConfig* MODEL_REGISTRY[] = {
-    &AndromedaMk1::CONFIG,   &SingleStripTestDevice::CONFIG,
+    &AndromedaMk0::CONFIG,   &SingleStripTestDevice::CONFIG,
 #if defined(NATIVE_BUILD)
     &GridTestDevice::CONFIG,
 #endif
-    &L70_MK1::CONFIG,        &L10_MK1::CONFIG,
-    &L10_MK2::CONFIG,
+    &L70_MK1::CONFIG,        &L10_MK0::CONFIG,
+    &L10_MK1::CONFIG,
 };
 
 const size_t NUM_MODELS = sizeof(MODEL_REGISTRY) / sizeof(MODEL_REGISTRY[0]);

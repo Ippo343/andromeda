@@ -20,7 +20,7 @@
 // created the first time it's opened for write), but a *readonly* open on a
 // namespace that has never been opened for write fails, matching
 // ESP_ERR_NVS_NOT_FOUND. This is what FactoryConfig::getModelId() (#162's
-// L10_MK2-default work) depends on to detect "never configured" and
+// L10_MK1-default work) depends on to detect "never configured" and
 // self-persist a default on first access.
 
 class Preferences

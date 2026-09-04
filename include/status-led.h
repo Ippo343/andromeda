@@ -12,7 +12,7 @@
 //   - esp32-c3-devkitm-1's RGB_BUILTIN is GPIO8;  the C3-Zero's is GPIO10
 // so the pin is hard-coded to the actual Zero hardware here rather than taken
 // from the variant header. The classic WROOM build is deliberately skipped: its
-// only candidate pin (GPIO2) is a strip output on AndromedaMk1.
+// only candidate pin (GPIO2) is a strip output on AndromedaMk0.
 //
 // Bit-banged over one RMT TX channel that is released again (rmtDeinit) as soon
 // as the 24 bits are out. The WS2812 latches its last value, so the LED stays

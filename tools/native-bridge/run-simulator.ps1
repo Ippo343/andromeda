@@ -42,7 +42,7 @@ if (-not (Test-Path $PioExe)) {
 # hardcoding names that could drift from src/geometry/*.cpp. Only falls back
 # to a hardcoded list on the very first-ever run, before program.exe exists;
 # every run after that first build shows the live registry.
-$Models = @("Andromeda Mk1", "L70 MK1", "L10 MK1", "L10 MK2", "Single Strip Test Rig", "Grid Test Rig")
+$Models = @("Andromeda MK0", "L70 MK1", "L10 MK0", "L10 MK1", "Single Strip Test Rig", "Grid Test Rig")
 if (Test-Path $BinaryPath) {
     $liveModels = & $BinaryPath --list-models 2>$null
     if ($LASTEXITCODE -eq 0 -and $liveModels) { $Models = @($liveModels) }
@@ -142,8 +142,8 @@ $startButton.Add_Click({
     Write-Log "Starting bridge server for model '$model'..."
     # Start-Process -ArgumentList joins array elements with a bare space and
     # does NOT quote elements containing whitespace (PS 5.1) - a model name
-    # like "Andromeda Mk1" would otherwise arrive at node as two separate
-    # argv entries ("--model=Andromeda", "Mk1"), silently falling back to
+    # like "Andromeda MK0" would otherwise arrive at node as two separate
+    # argv entries ("--model=Andromeda", "MK0"), silently falling back to
     # the default model. Wrapping the whole flag in its own quotes keeps it
     # one token, same fix as the CLI-quoting note in the plan doc.
     $script:ServerProcess = Start-Process -FilePath $NodeExe `

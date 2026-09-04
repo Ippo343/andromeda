@@ -36,9 +36,9 @@ describe('nextReconnectDelayMs', () => {
 
 describe('shouldRebuildOptions', () => {
     const models = [
-        { id: 512, name: 'Andromeda Mk1' },
+        { id: 512, name: 'Andromeda MK0' },
         { id: 768, name: 'L70 MK1' },
-        { id: 770, name: 'L10 MK2' },
+        { id: 770, name: 'L10 MK1' },
     ];
 
     test('no rebuild when the rendered options already match id and label', () => {
@@ -50,18 +50,18 @@ describe('shouldRebuildOptions', () => {
         // The exact Advanced-page bug: 5 placeholder options, 5 real models,
         // wrong names. Same length, different content.
         const stale = [
-            opt(512, 'Andromeda'),   // firmware name is "Andromeda Mk1"
+            opt(512, 'Andromeda'),   // firmware name is "Andromeda MK0"
             opt(768, 'L70 MK1'),
-            opt(770, 'L10 MK2'),
+            opt(770, 'L10 MK1'),
         ];
         assert.equal(shouldRebuildOptions(stale, models), true);
     });
 
     test('rebuild when an id was swapped out (count unchanged)', () => {
         const swapped = [
-            opt(512, 'Andromeda Mk1'),
+            opt(512, 'Andromeda MK0'),
             opt(999, 'H1 Prototype'),  // 768 replaced
-            opt(770, 'L10 MK2'),
+            opt(770, 'L10 MK1'),
         ];
         assert.equal(shouldRebuildOptions(swapped, models), true);
     });
@@ -76,7 +76,7 @@ describe('shouldRebuildOptions', () => {
     });
 
     test('numeric server ids and string option values compare equal', () => {
-        assert.equal(shouldRebuildOptions([opt('770', 'L10 MK2')],
-            [{ id: 770, name: 'L10 MK2' }]), false);
+        assert.equal(shouldRebuildOptions([opt('770', 'L10 MK1')],
+            [{ id: 770, name: 'L10 MK1' }]), false);
     });
 });
