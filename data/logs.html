@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Andromeda Logs</title>
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="css/logs.css">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+    <div class="container logs-container">
+        <h1 class="logo" id="logo">A</h1>
+
+        <a href="/advanced.html" class="btn back-link">← Back to Advanced</a>
+
+        <!-- No WebSocket on this page (unlike advanced.html) - it only ever
+             does plain HTTP fetches of /log1.txt + /log0.txt, so there's no
+             ws-disconnected state to reflect and no ws-client-utils.js. -->
+        <div class="logs-toolbar">
+            <button id="logRefreshBtn" class="btn scan-btn">Refresh</button>
+            <label class="auto-toggle">
+                <input type="checkbox" id="logAutoToggle"> Auto-refresh (5s)
+            </label>
+            <span id="logStatus"></span>
+        </div>
+
+        <div class="logbox" id="logbox"></div>
+    </div>
+
+    <!-- External JavaScript -->
+    <script src="js/utils.js"></script>
+    <script src="js/logs-logic.js"></script>
+    <script src="js/logs.js"></script>
+</body>
+</html>

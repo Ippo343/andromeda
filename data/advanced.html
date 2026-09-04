@@ -14,21 +14,16 @@
 
         <a href="/" class="btn back-link">← Back to Controls</a>
 
-        <!-- Stacked on mobile, in this same DOM order (Diagnostics, Log,
-             Device Model/Firmware/OTA) - identical to the old flat markup.
-             Once there's room, advanced.css's grid-template-areas rearranges
-             these three into a dashboard: Diagnostics + the controls side by
-             side on top, Log spanning the full width underneath (it wants
-             more room than either column alone gives it). -->
+        <!-- Stacked on mobile, in this same DOM order (Diagnostics, Device
+             Model/Firmware/OTA) - identical to the old flat markup. Once
+             there's room, advanced.css's grid-template-areas rearranges
+             these two side by side. The log viewer lives on its own page now
+             (#212) - the "View logs" link below leads there. -->
         <div class="adv-grid">
             <section class="adv-diag">
                 <span class="section-label">Diagnostics</span>
                 <div class="metrics-grid" id="metrics"></div>
-            </section>
-
-            <section class="adv-log">
-                <span class="section-label">Log</span>
-                <div class="logbox" id="logbox"></div>
+                <a href="/logs.html" class="btn scan-btn">View logs</a>
             </section>
 
             <section class="adv-ctrl">

@@ -1,8 +1,9 @@
-// Advanced page wiring: pulls /metrics + the two rotated log files over plain
-// HTTP every 1s and re-renders, and reuses the existing /ws WebSocket + state
-// broadcast for the device-model selector (the same {type:'model'} /
-// {type:'reboot'} commands controls.js sends). DOM/network glue only - the
-// parsing and formatting live in advanced-logic.js so they can be unit-tested.
+// Advanced page wiring: pulls /metrics over plain HTTP every 1s and
+// re-renders, and reuses the existing /ws WebSocket + state broadcast for the
+// device-model selector (the same {type:'model'} / {type:'reboot'} commands
+// controls.js sends). DOM/network glue only - the parsing and formatting
+// live in advanced-logic.js so they can be unit-tested. The log viewer moved
+// to its own page (data/logs.html, #212) - see that page's logs.js instead.
 
 const REFRESH_MS = 1000;
 let ws = null;
@@ -189,39 +190,11 @@ function pollOtaStatus(duringUpdate) {
     poll();
 }
 
-function renderLogs(text) {
-    const box = document.getElementById('logbox');
-    const atBottom =
-        box.scrollHeight - box.scrollTop - box.clientHeight < 40;
-
-    const rows = text.split('\n').reduce((acc, line) => {
-        if (line === '') return acc;
-        const parsed = parseLogLine(line);
-        if (parsed.raw !== undefined) {
-            acc.push(`<div class="log-line log-raw">${escapeHtml(parsed.raw)}</div>`);
-        } else {
-            acc.push(`<div class="log-line ${parsed.levelClass}">` +
-                `<span class="log-ts">${parsed.ts}</span>` +
-                `<span class="log-pill">${escapeHtml(parsed.level)}</span>` +
-                `${escapeHtml(parsed.message)}</div>`);
-        }
-        return acc;
-    }, []);
-
-    box.innerHTML = rows.length
-        ? rows.join('')
-        : '<div class="logbox-note">(log is empty)</div>';
-
-    if (atBottom) box.scrollTop = box.scrollHeight;
-}
-
-// In-flight guards + timeouts for both polls below: without them, a device that's gone dark
-// leaves each fetch queued behind the browser's own (much longer) connection timeout, and the
-// next REFRESH_MS tick was free to fire another overlapping request on top - piling up
-// exactly when the link is already struggling. Logs are the bigger cost here (re-fetching two
-// full files every tick), so this also stops that pile-up from compounding.
+// In-flight guard + timeout: without it, a device that's gone dark leaves the fetch queued
+// behind the browser's own (much longer) connection timeout, and the next REFRESH_MS tick was
+// free to fire another overlapping request on top - piling up exactly when the link is already
+// struggling.
 let metricsRequestInFlight = false;
-let logsRequestInFlight = false;
 const FETCH_TIMEOUT_MS = 2000;
 
 function fetchWithTimeout(url) {
@@ -231,42 +204,22 @@ function fetchWithTimeout(url) {
 }
 
 function refresh() {
-    if (!metricsRequestInFlight) {
-        metricsRequestInFlight = true;
-        fetchWithTimeout('/metrics')
-            .then((r) => (r.ok ? r.json() : Promise.reject(new Error('not ok'))))
-            .then((m) => {
-                renderMetrics(m);
-                renderFirmware(m);
-                renderOta(m);
-            })
-            .catch(() => {
-                const el = document.getElementById('metrics');
-                if (!el.children.length) {
-                    el.innerHTML = '<div class="logbox-note">metrics unavailable</div>';
-                }
-            })
-            .finally(() => { metricsRequestInFlight = false; });
-    }
-
-    if (!logsRequestInFlight) {
-        logsRequestInFlight = true;
-        // /log1.txt (rotated, older) then /log0.txt (current). Either can 404 -
-        // before the first rotation there is no log1.txt, and log0.txt may not
-        // exist for a moment at boot - treat a non-OK response as empty text.
-        Promise.all([
-            fetchWithTimeout('/log1.txt').then((r) => (r.ok ? r.text() : '')),
-            fetchWithTimeout('/log0.txt').then((r) => (r.ok ? r.text() : '')),
-        ])
-            .then(([older, current]) => renderLogs(`${older}\n${current}`.trim()))
-            .catch(() => {
-                const box = document.getElementById('logbox');
-                if (!box.textContent.trim()) {
-                    box.innerHTML = '<div class="logbox-note">log unavailable</div>';
-                }
-            })
-            .finally(() => { logsRequestInFlight = false; });
-    }
+    if (metricsRequestInFlight) return;
+    metricsRequestInFlight = true;
+    fetchWithTimeout('/metrics')
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error('not ok'))))
+        .then((m) => {
+            renderMetrics(m);
+            renderFirmware(m);
+            renderOta(m);
+        })
+        .catch(() => {
+            const el = document.getElementById('metrics');
+            if (!el.children.length) {
+                el.innerHTML = '<div class="metrics-note">metrics unavailable</div>';
+            }
+        })
+        .finally(() => { metricsRequestInFlight = false; });
 }
 
 document.addEventListener('DOMContentLoaded', () => {

@@ -1,40 +1,10 @@
-// Pure, DOM-free logic for the Advanced page (metrics + log viewer), pulled
-// out of advanced.js so it's testable under Node (node --test test/js)
+// Pure, DOM-free logic for the Advanced page (metrics + model/firmware/OTA),
+// pulled out of advanced.js so it's testable under Node (node --test test/js)
 // without a browser - same pattern as controls-logic.js / ws-state-builder.h.
 // Loaded via a plain <script> before advanced.js (global scope, no bundler),
 // and required directly by tests via the module.exports guard at the bottom.
-
-// A firmware log line is "<millis> | <LVL> | <message>" (see the Log.setPrefix
-// lambda in include/loggers.h). Parse one line into its parts; anything that
-// doesn't match that shape (blank lines, wrapped continuations) comes back as
-// { raw } so the caller can still render it, just without a level pill.
-function parseLogLine(line) {
-    const m = /^(\d+)\s*\|\s*([A-Za-z]{2,4})\s*\|\s*([\s\S]*)$/.exec(line);
-    if (!m) {
-        return { raw: line, levelClass: 'log-raw' };
-    }
-    const level = m[2].toUpperCase();
-    return {
-        ts: Number(m[1]),
-        level: level,
-        levelClass: levelClass(level),
-        message: m[3],
-    };
-}
-
-// Maps a 3-letter ArduinoLog level tag (FTL/ERR/WRN/INF/TRC/VRB, plus the
-// prefix lambda's "UNK" fallback) to the CSS class advanced.css colours.
-function levelClass(level) {
-    switch ((level || '').toUpperCase()) {
-        case 'FTL': return 'log-ftl';
-        case 'ERR': return 'log-err';
-        case 'WRN': return 'log-wrn';
-        case 'INF': return 'log-inf';
-        case 'TRC': return 'log-trc';
-        case 'VRB': return 'log-vrb';
-        default: return 'log-raw';
-    }
-}
+// The log viewer's own logic (parseLogLine/levelClass) moved to
+// logs-logic.js with the page itself (#212).
 
 // millis-since-boot -> "1d 03h 12m 05s" (the "Nd " part is dropped when the
 // device has been up less than a day). Non-finite / negative input -> "-".
@@ -181,8 +151,6 @@ function isOtaPollDone(state, duringUpdate) {
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
-        parseLogLine,
-        levelClass,
         formatUptime,
         formatBytes,
         resetReasonLabel,

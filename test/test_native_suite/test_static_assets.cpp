@@ -93,7 +93,7 @@ void test_every_html_page_local_asset_has_a_registered_route()
     // Every browser-served page in data/ - each pulls its own <script>/<link>
     // assets, so index.html isn't the only one that can drift out of sync.
     const char* pages[] = {"data/index.html", "data/advanced.html", "data/device-name.html",
-                           "data/wifi-setup.html"};
+                           "data/wifi-setup.html", "data/logs.html"};
 
     for (const char* page : pages)
     {
