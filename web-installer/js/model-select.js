@@ -1,6 +1,8 @@
 // Thin DOM + Web Serial glue over model-select-logic.js - see that file's
 // header for the "why" of this whole step. Untested, mirroring
 // installer.js/controls.js - the DOM-free logic it calls is what's tested.
+// getTargetPort()/waitForLine() live in serial.js, shared with console.js
+// (issue #135) - loaded before this script, see index.html.
 //
 // No separate "set model" button: the model picker is required *before*
 // "Connect & install" is even clickable, and once flashing finishes this
@@ -51,54 +53,11 @@
         statusEl.textContent = text;
     }
 
-    // Reads lines until `predicate` matches one, or timeoutMs elapses.
-    // reader.read() has no built-in timeout - a device that never sends
-    // anything would otherwise hang this forever - so a timer forces it to
-    // resolve via reader.cancel(), which makes the pending read() resolve
-    // with done:true. That renders the reader unusable for any further
-    // read() (the whole point: a real timeout is a terminal, not a
-    // recoverable, condition here), which is why this function is only ever
-    // called once per port session - see the single call site below.
-    async function waitForLine(reader, predicate, timeoutMs) {
-        const decoder = new TextDecoder();
-        let buffer = '';
-        const timer = setTimeout(() => {
-            reader.cancel().catch(() => {});
-        }, timeoutMs);
-        try {
-            while (true) {
-                const { value, done } = await reader.read();
-                if (done) return false;
-                buffer += decoder.decode(value, { stream: true });
-                let newlineAt;
-                while ((newlineAt = buffer.indexOf('\n')) !== -1) {
-                    const line = buffer.slice(0, newlineAt);
-                    buffer = buffer.slice(newlineAt + 1);
-                    if (predicate(line)) return true;
-                }
-            }
-        } finally {
-            clearTimeout(timer);
-        }
-    }
-
-    // The port used for flashing is opened and closed entirely inside
-    // <esp-web-install-button>'s own closure - it isn't exposed anywhere.
-    // navigator.serial.getPorts() returns previously-authorized SerialPort
-    // objects without prompting again, so if exactly one is already
-    // authorized (the normal case: one board, just flashed) this reconnects
-    // silently. Anything else (none yet, or more than one from an earlier
-    // visit) falls back to requestPort(), which does prompt - safer than
-    // guessing at which physical port to write to. That fallback can itself
-    // throw SecurityError here: requestPort() needs an active user gesture,
-    // and the page's only one was already spent on the button's own click,
-    // long before this MutationObserver callback runs - see the catch below
-    // for how that's surfaced instead of the flow just breaking silently.
-    async function getTargetPort() {
-        const authorized = await navigator.serial.getPorts();
-        if (authorized.length === 1) return authorized[0];
-        return navigator.serial.requestPort();
-    }
+    // getTargetPort()/waitForLine(): serial.js. Note for this call site specifically:
+    // getTargetPort()'s requestPort() fallback can throw SecurityError here - it needs an
+    // active user gesture, and the page's only one was already spent on the button's own
+    // click, long before this MutationObserver callback runs - see the catch below for how
+    // that's surfaced instead of the flow just breaking silently.
 
     let inProgress = false;
 

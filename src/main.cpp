@@ -1,6 +1,8 @@
 #include <LittleFS.h>
 #include <esp_system.h>  // esp_reset_reason()
 
+#include <cstring>
+
 #include "animations.h"
 #include "comms.h"
 #include "effects.h"
@@ -276,6 +278,20 @@ void processSerialCommands()
         char line[256];
         if (serialLineBuffer.feed((char)Serial.read(), line, sizeof(line)))
         {
+            // Serial-only diagnostic, not a WsCommandParser::Command: it's a recovery
+            // affordance for the web-installer's console (web-installer/js/console.js,
+            // issue #135) to reprint the boot log's network line - "which .local names is
+            // this device reachable at" - on demand, without a reboot. WsCommandParser stays
+            // WiFi-free by design (it maps text to a Command for MissionControl, which knows
+            // nothing about networking), so this is handled here instead, mirroring this
+            // function's own transport-specific role rather than being squeezed into that
+            // shared parser.
+            if (strstr(line, "\"type\":\"netinfo\""))
+            {
+                Comms::Instance().printWifiStatus();
+                continue;
+            }
+
             Command command;
             if (WsCommandParser::parse(line, command))
                 MissionControl::Instance().queueWebCommand(command);

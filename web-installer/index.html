@@ -67,12 +67,28 @@
             <summary>What gets flashed</summary>
             <div class="parts" id="parts"></div>
         </details>
+
+        <!-- Recovery console (#135): reads the boot/live log a device already prints over
+             USB, with one-click Reboot / Network info. Collapsed by default, same as the
+             drawer above. -->
+        <details class="parts-drawer" id="console-drawer">
+            <summary>Device console (recovery)</summary>
+            <div class="console-controls">
+                <button type="button" id="console-connect" class="btn">Connect</button>
+                <button type="button" id="console-reboot" class="btn" disabled>Reboot</button>
+                <button type="button" id="console-netinfo" class="btn" disabled>Network info</button>
+            </div>
+            <pre class="console-log" id="console-log"></pre>
+        </details>
     </div>
     <script src="js/utils.js"></script>
     <script src="js/installer-logic.js"></script>
     <script src="js/installer.js"></script>
     <script src="js/models.js"></script>
     <script src="js/model-select-logic.js"></script>
+    <script src="js/serial.js"></script>
     <script src="js/model-select.js"></script>
+    <script src="js/console-logic.js"></script>
+    <script src="js/console.js"></script>
 </body>
 </html>
