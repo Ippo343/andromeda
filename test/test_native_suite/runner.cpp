@@ -68,6 +68,7 @@ DECLARE_SUITE(test_utils);
 DECLARE_SUITE(test_web_installer);
 DECLARE_SUITE(test_wifi_recovery);
 DECLARE_SUITE(test_ws_command_parser);
+DECLARE_SUITE(test_ws_metrics_builder);
 DECLARE_SUITE(test_ws_state_builder);
 
 int main(int, char**)
@@ -102,6 +103,7 @@ int main(int, char**)
     RUN_SUITE(test_web_installer);
     RUN_SUITE(test_wifi_recovery);
     RUN_SUITE(test_ws_command_parser);
+    RUN_SUITE(test_ws_metrics_builder);
     RUN_SUITE(test_ws_state_builder);
 
     return UNITY_END();

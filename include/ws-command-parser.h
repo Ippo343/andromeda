@@ -162,4 +162,45 @@ inline bool parseBrightness(const char* json, uint8_t& outValue, bool& outCommit
     return true;
 }
 
+// Topics a client can subscribe to via {"type":"subscribe"/"unsubscribe","topic":"..."}
+// (#214) - just "metrics" for now (Comms::pushMetricsIfDue()). Kept as its
+// own enum rather than folding into Command/CommandType: a subscription
+// toggles per-connection push state on the WebServer task, it never goes
+// through MissionControl's command queue like every Command does.
+enum class Topic
+{
+    None,
+    Metrics,
+};
+
+// Fast-path parser for the subscribe/unsubscribe messages the Advanced/Logs
+// pages send to opt in/out of the tiered "metrics" WS push (see
+// ws-metrics-builder.h). Deliberately a separate entry point from parse(),
+// not a new Command: a subscription mutates Comms's own per-client
+// subscriber list directly (see WS_EVT_DATA in comms.cpp), not
+// MissionControl's render-task state, so it has no business flowing through
+// the Command/CommandType queue path at all. parse() itself is unaffected -
+// none of its "type":"..." checks match "subscribe"/"unsubscribe", so a
+// subscription message reaching it (native-runtime.cpp's stdin reader,
+// main.cpp's SerialLineBuffer) is correctly rejected there rather than
+// silently misrouted.
+inline bool parseSubscription(const char* json, bool& outSubscribe, Topic& outTopic)
+{
+    if (!json) return false;
+
+    bool subscribe;
+    if (strstr(json, "\"type\":\"subscribe\""))
+        subscribe = true;
+    else if (strstr(json, "\"type\":\"unsubscribe\""))
+        subscribe = false;
+    else
+        return false;
+
+    if (!strstr(json, "\"topic\":\"metrics\"")) return false;
+
+    outSubscribe = subscribe;
+    outTopic = Topic::Metrics;
+    return true;
+}
+
 }  // namespace WsCommandParser
