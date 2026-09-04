@@ -50,6 +50,7 @@ const STATIC_ROUTES = {
     '/js/controls-logic.js': { file: 'js/controls-logic.js', type: 'application/javascript' },
     '/js/controls.js': { file: 'js/controls.js', type: 'application/javascript' },
     '/js/wifi.js': { file: 'js/wifi.js', type: 'application/javascript' },
+    '/js/wifi-logic.js': { file: 'js/wifi-logic.js', type: 'application/javascript' },
     '/js/advanced-logic.js': { file: 'js/advanced-logic.js', type: 'application/javascript' },
     '/js/advanced.js': { file: 'js/advanced.js', type: 'application/javascript' },
     '/js/device-name.js': { file: 'js/device-name.js', type: 'application/javascript' },

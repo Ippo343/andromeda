@@ -16,6 +16,12 @@
             ← Back to Controls
         </a>
 
+        <!-- Filled from GET /device-info on load (wifi.js) - shown before the user ever
+             submits credentials, since the setup AP can drop (and on iOS, its captive-portal
+             sheet close) the moment a candidate network is joined, possibly before /save-status
+             ever resolves. See issue #135. -->
+        <div id="deviceAddresses" class="device-addresses hidden"></div>
+
         <button type="button" class="btn scan-btn" onclick="scanNetworks()" id="scanBtn">
             Scan for Networks
         </button>
@@ -55,6 +61,7 @@
 
     <!-- External JavaScript -->
     <script src="js/utils.js"></script>
+    <script src="js/wifi-logic.js"></script>
     <script src="js/wifi.js"></script>
 </body>
 </html>

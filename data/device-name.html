@@ -23,6 +23,11 @@
             <button id="deviceNameRebootBtn" class="reboot-btn" title="Reboot Device">Reboot</button>
         </div>
         <div class="device-uid-hint" id="deviceUidHint"></div>
+
+        <!-- Filled from the WS "state" message's device.defaultName field once connected -
+             the permanent .local address that survives any rename, so a user renaming the
+             device right here can still find it afterwards. See issue #135. -->
+        <div class="device-uid-hint" id="deviceAddressHint"></div>
     </div>
 
     <!-- External JavaScript -->

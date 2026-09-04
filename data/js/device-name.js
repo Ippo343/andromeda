@@ -83,6 +83,16 @@ function handleStateMessage(raw) {
     const hint = document.getElementById('deviceUidHint');
     if (hint && typeof msg.device.uid === 'string') hint.textContent = `Device ID: ${msg.device.uid}`;
 
+    // The permanent names (issue #135) - always shown, renamed or not, since they're the
+    // addresses that still work after this page's own rename takes effect. andromeda.local
+    // is always registered too (include/mdns-hosts.h), so it's safe to name unconditionally
+    // here alongside the model-specific one.
+    const addressHint = document.getElementById('deviceAddressHint');
+    if (addressHint && typeof msg.device.defaultName === 'string') {
+        addressHint.textContent = 'Always reachable at: http://andromeda.local or ' +
+            `http://${msg.device.defaultName.toLowerCase()}.local`;
+    }
+
     setRebootIndicator(msg.device.nameRebootRequired);
 }
 
