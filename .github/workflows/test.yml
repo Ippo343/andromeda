@@ -30,8 +30,11 @@ jobs:
       - name: Install lcov
         run: sudo apt-get update && sudo apt-get install -y lcov
 
+      # native_coverage extends env:native with --coverage/-lgcov added; the local dev-loop
+      # `pio test -e native` skips those (they slow every run ~27% for a report nobody reads
+      # locally), but CI wants the report every time, so it builds the coverage env directly.
       - name: Run native unit tests
-        run: pio test -e native
+        run: pio test -e native_coverage
 
       - name: Generate coverage report
         run: |
@@ -41,7 +44,7 @@ jobs:
           # --ignore-errors mismatch: newer geninfo on the runner treats gcov "mismatched
           # exception tag" noise from libstdc++ template code as fatal; it's not our code
           # (the very next lcov --remove strips /usr/*), so downgrade it to a warning.
-          lcov --capture --directory .pio/build/native --output-file coverage.info \
+          lcov --capture --directory .pio/build/native_coverage --output-file coverage.info \
             --rc lcov_branch_coverage=1 --ignore-errors mismatch
           lcov --remove coverage.info '/usr/*' '*/FastLED/*' '*/Unity/*' '*/test/*' \
             --output-file coverage.info --rc lcov_branch_coverage=1
