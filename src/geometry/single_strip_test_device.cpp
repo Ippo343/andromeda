@@ -30,6 +30,19 @@ extern const ModelConfig CONFIG = {
     .screen_height_mm = 10,
     .screen_width_mm = 934,
     .cartesian_data = (const CartesianCoordinates*)STRIP_CARTESIAN,
+
+    // This rig has no PSU: the strip is soldered straight onto the ESP32-C3's 3.3V
+    // pin, fed by whatever the board's onboard LDO (typically an AP2112K-3.3, rated
+    // 600mA) can supply off a laptop USB port - not the 5V every shipped model's
+    // strip runs from, so this is the one model that overrides rail_millivolts.
+    .rail_millivolts = 3300,
+
+    // 250mA (a conservative guess derived from the LDO's datasheet rating) turned out
+    // to be way under what this rig can actually sustain - hands-on testing at full
+    // white with the corrected rail_millivolts in place showed no flicker/brownout
+    // well above that. Raised to 1250mA based on that observed headroom, not a
+    // measured PSU spec like #159 - this is still a lash-up test rig.
+    .max_milliamps = 1250,
 };
 
 }  // namespace SingleStripTestDevice
