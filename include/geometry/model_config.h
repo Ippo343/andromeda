@@ -69,11 +69,18 @@ struct ModelConfig
     // Minimum frame duration in milliseconds (for fps capping)
     uint8_t min_frame_duration_ms = 0;
 
-    // 5V rail budget in milliamps, fed to FastLED.setMaxPowerInVoltsAndMilliamps() at
-    // boot (main.cpp). FastLED estimates the actual per-frame draw from the rendered
-    // colors and globally dims to stay under this, on top of (not instead of) the
-    // user-facing brightness slider - the safety net for a customer sliding to 255 and
-    // picking white on a PSU that can't deliver it.
+    // LED rail voltage, in millivolts. Paired with max_milliamps to derive the actual
+    // power (mW) budget - see main.cpp's setup() and power-monitor.h's
+    // estimateCurrentMa(). Defaults to the 5V rail every shipped model runs its LEDs
+    // from; only single_strip_test_device.cpp overrides this (its strip is soldered
+    // straight onto the ESP32-C3's 3.3V pin, no boost converter).
+    uint16_t rail_millivolts = 5000;
+
+    // Rail current budget in milliamps, at rail_millivolts, fed to FastLED at boot
+    // (main.cpp) as a power (mW) limit. FastLED estimates the actual per-frame draw
+    // from the rendered colors and globally dims to stay under this, on top of (not
+    // instead of) the user-facing brightness slider - the safety net for a customer
+    // sliding to 255 and picking white on a PSU that can't deliver it.
     //
     // 2000mA default is a conservative placeholder for models that don't override
     // it (test devices only - every shipped model sets a real measured value, see

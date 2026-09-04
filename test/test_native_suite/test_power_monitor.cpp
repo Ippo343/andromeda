@@ -32,7 +32,14 @@ void test_estimate_current_ma_scales_with_applied_brightness()
 {
     // brightness 128/255 of full -> ~half the current (integer math, not exactly
     // half since 128/255 != 0.5): 5000mW * 128/255 = 2509mW -> /5V = 501mA.
-    TEST_ASSERT_EQUAL_UINT32(501, estimateCurrentMa(5000, 128, 5));
+    TEST_ASSERT_EQUAL_UINT32(501, estimateCurrentMa(5000, 128, 5000));
+}
+
+void test_estimate_current_ma_at_a_non_default_rail_voltage()
+{
+    // Same 5000mW/255 brightness as the full-brightness case, but on a 3.3V rail:
+    // more current for the same power. 5000mW * 1000 / 3300mV =~ 1515mA.
+    TEST_ASSERT_EQUAL_UINT32(1515, estimateCurrentMa(5000, 255, 3300));
 }
 
 void test_estimate_current_ma_zero_brightness_is_zero()
@@ -88,6 +95,7 @@ void run_test_power_monitor_tests()
 {
     RUN_TEST(test_estimate_current_ma_at_full_brightness);
     RUN_TEST(test_estimate_current_ma_scales_with_applied_brightness);
+    RUN_TEST(test_estimate_current_ma_at_a_non_default_rail_voltage);
     RUN_TEST(test_estimate_current_ma_zero_brightness_is_zero);
     RUN_TEST(test_estimate_current_ma_zero_power_is_zero);
     RUN_TEST(test_estimate_current_ma_does_not_overflow_on_a_large_panel);

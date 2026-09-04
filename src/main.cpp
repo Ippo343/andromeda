@@ -113,7 +113,11 @@ void setup()
     // dims globally to stay under this budget, so a customer sliding to 255 and picking
     // white can't pull more current than the rail is rated for. See ModelConfig's
     // max_milliamps for why this is a placeholder value pending real PSU specs.
-    FastLED.setMaxPowerInVoltsAndMilliamps(5, config->max_milliamps);
+    //
+    // Computed from rail_millivolts rather than FastLED's own setMaxPowerInVoltsAndMilliamps()
+    // - that helper takes an integer volts argument, which can't represent a 3.3V rail.
+    FastLED.setMaxPowerInMilliWatts((uint32_t)config->max_milliamps * config->rail_millivolts /
+                                    1000);
 
     seedRNGs();
 

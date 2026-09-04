@@ -13,15 +13,18 @@
 // Pure, natively-testable arithmetic: FastLED's calculate_unscaled_power_mW()
 // returns milliwatts the buffer would draw at brightness 255; scale that down
 // to the brightness actually applied this frame (FastLED.getBrightness()) and
-// convert to milliamps at the fixed 5V rail every ModelConfig::max_milliamps
-// budget assumes (see src/main.cpp's FastLED.setMaxPowerInVoltsAndMilliamps
-// call). uint64_t intermediate avoids overflow: unscaledMilliwattsAt255 can
-// already approach UINT32_MAX's headroom on a large panel at full white.
+// convert to milliamps at the model's actual rail voltage (ModelConfig::rail_millivolts
+// - see src/main.cpp's FastLED.setMaxPowerInMilliWatts call, which budgets against
+// the same rail). uint64_t intermediates avoid overflow: unscaledMilliwattsAt255 can
+// already approach UINT32_MAX's headroom on a large panel at full white, and scaling
+// by 1000 before the final divide (to keep the mV-denominated division exact rather
+// than losing precision to an early integer divide-by-volts) would overflow a 32-bit
+// intermediate on its own.
 inline uint32_t estimateCurrentMa(uint32_t unscaledMilliwattsAt255, uint8_t appliedBrightness,
-                                  uint8_t volts = 5)
+                                  uint16_t railMillivolts = 5000)
 {
     uint64_t scaledMilliwatts = (uint64_t)unscaledMilliwattsAt255 * appliedBrightness / 255;
-    return (uint32_t)(scaledMilliwatts / volts);
+    return (uint32_t)(scaledMilliwatts * 1000 / railMillivolts);
 }
 
 // Per-frame draw swings wildly with content (a single white pixel vs. a full
@@ -48,7 +51,8 @@ class PowerMonitor
             LedStrip& strip = GEOMETRY.getStrip(i);
             unscaledMw += calculate_unscaled_power_mW(strip.buffer, strip.num_leds);
         }
-        samples[sampleIndex] = estimateCurrentMa(unscaledMw, FastLED.getBrightness());
+        samples[sampleIndex] = estimateCurrentMa(unscaledMw, FastLED.getBrightness(),
+                                                 GEOMETRY.getConfig()->rail_millivolts);
         sampleIndex = (sampleIndex + 1) & INDEX_MASK;  // Fast power-of-2 modulo
     }
 
