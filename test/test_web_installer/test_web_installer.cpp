@@ -251,6 +251,30 @@ void test_installer_page_sets_the_logo_gradient()
         "renders invisible (background-clip: text with nothing to clip)");
 }
 
+// Bad weather (#192): installer-logic.js ships to the browser and is
+// unit-tested (test/js/installer-logic.test.js), but for a long time
+// installer.js never called any of it - the tested logic wasn't the shipped
+// logic, and the parts table version.json carries had nowhere to render.
+// A module in that state is worse than none: the tests read as coverage the
+// page doesn't actually have. Assert installer.js calls into it.
+void test_installer_js_actually_calls_installer_logic()
+{
+    std::string installerJs = readFile("web-installer/js/installer.js");
+    std::string installerLogicJs = readFile("web-installer/js/installer-logic.js");
+
+    TEST_ASSERT_TRUE_MESSAGE(
+        installerLogicJs.find("function formatPartsTable") != std::string::npos,
+        "installer-logic.js must still export formatPartsTable - installer.js and its "
+        "test both depend on it");
+    TEST_ASSERT_TRUE_MESSAGE(
+        installerJs.find("formatPartsTable(") != std::string::npos,
+        "installer.js must call formatPartsTable() from installer-logic.js - a shipped, "
+        "unit-tested module the page never executes is dead code masquerading as coverage");
+    TEST_ASSERT_TRUE_MESSAGE(
+        readFile("web-installer/index.html").find("id=\"parts\"") != std::string::npos,
+        "index.html must have the #parts container installer.js renders the flash layout into");
+}
+
 // Good weather: the source files this rewrite depends on still look the way
 // the rewrite assumes - if either changes shape, the rewrite silently
 // becomes a no-op (a wrong assumption fails loudly here, not on the live site).
@@ -525,6 +549,7 @@ int main(int, char**)
     RUN_TEST(test_assemble_site_boards_list_matches_ota_manifest_and_board_variant);
     RUN_TEST(test_assemble_site_reuses_the_on_device_ui_assets);
     RUN_TEST(test_installer_page_sets_the_logo_gradient);
+    RUN_TEST(test_installer_js_actually_calls_installer_logic);
     RUN_TEST(test_assemble_site_does_not_ship_the_on_device_font_subset);
     RUN_TEST(test_shared_ui_assets_still_match_what_assemble_site_expects);
     RUN_TEST(test_pages_workflow_is_a_reusable_artifact_deploy);

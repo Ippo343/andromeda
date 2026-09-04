@@ -44,6 +44,10 @@
                 This page needs to be loaded over HTTPS for Web Serial to work.
             </div>
         </esp-web-install-button>
+
+        <!-- Per-board flash layout, filled in by installer.js from
+             version.json via installer-logic.js's formatPartsTable(). -->
+        <div class="parts" id="parts"></div>
     </div>
     <script src="js/utils.js"></script>
     <script src="js/installer-logic.js"></script>

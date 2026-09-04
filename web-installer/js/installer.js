@@ -10,6 +10,39 @@
     // .logo's background-clip: text has nothing to clip and renders invisible.
     document.getElementById('logo').style.setProperty('--grad', randomGradient());
 
+    // Renders formatPartsTable()'s rows into #parts as one <section> per board,
+    // each with a heading and a <ul> of "<part> @ <offset>" lines. Built with
+    // DOM APIs, never innerHTML: board.label/part strings ultimately derive
+    // from the build's chipFamily + PlatformIO offsets (safe today), but the
+    // same no-markup discipline as the version line below keeps it that way.
+    function renderParts(versionInfo) {
+        const container = document.getElementById('parts');
+        if (!container) return;
+        const rows = formatPartsTable(versionInfo);
+        container.textContent = '';
+        if (rows.length === 0) return;
+
+        const heading = document.createElement('h2');
+        heading.textContent = 'What gets flashed';
+        container.append(heading);
+
+        for (const row of rows) {
+            const section = document.createElement('section');
+            const title = document.createElement('h3');
+            title.textContent = row.label;
+            section.append(title);
+
+            const list = document.createElement('ul');
+            for (const part of row.parts) {
+                const item = document.createElement('li');
+                item.textContent = part;
+                list.append(item);
+            }
+            section.append(list);
+            container.append(section);
+        }
+    }
+
     fetch('version.json')
         .then((res) => res.json())
         .then((versionInfo) => {
@@ -35,6 +68,8 @@
                 link.textContent = 'release notes';
                 versionEl.append(link);
             }
+
+            renderParts(versionInfo);
         })
         .catch(() => {
             document.getElementById('version').textContent =

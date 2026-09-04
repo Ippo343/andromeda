@@ -2,24 +2,13 @@
 // own module the same way data/js/controls-logic.js is - see
 // test/js/installer-logic.test.js. installer.js does the actual DOM wiring
 // and stays untested, mirroring controls.js/comms.cpp.
-
-function describeBrowserSupport({ serialSupported, secureContext }) {
-    if (!secureContext) {
-        return {
-            ok: false,
-            message: 'This page needs to be loaded over HTTPS for Web Serial to work.',
-        };
-    }
-    if (!serialSupported) {
-        return {
-            ok: false,
-            message:
-                "This browser can't talk to USB serial devices. Use desktop Chrome, Edge, " +
-                'or Opera - Web Serial isn’t available in Firefox, Safari, or on iOS/Android.',
-        };
-    }
-    return { ok: true, message: '' };
-}
+//
+// Everything exported here is called by installer.js (#192 - a shipped,
+// unit-tested module that the page never executed is worse than no module):
+// formatPartsTable() renders the per-board flash layout from version.json,
+// and boardLabel() names each board. Browser-support messaging is left to
+// <esp-web-install-button>'s own unsupported/not-allowed slots in
+// index.html - the single source of truth, not duplicated here.
 
 const BOARD_LABELS = {
     ESP32: 'ESP32-WROOM',
@@ -31,6 +20,10 @@ function boardLabel(chipFamily) {
     return BOARD_LABELS[chipFamily] || chipFamily || 'Unknown board';
 }
 
+// version.json (build-scripts/assemble_site.py's _write_version_info) ships a
+// boards[] array with each board's chipFamily, label and flash parts. Turn it
+// into rows ready for the page: one per board, parts sorted low offset first
+// (bootloader -> ... -> filesystem), each formatted "<name> @ <offsetHex>".
 function formatPartsTable(versionInfo) {
     if (!versionInfo || !Array.isArray(versionInfo.boards)) return [];
     return versionInfo.boards.map((board) => ({
@@ -42,11 +35,6 @@ function formatPartsTable(versionInfo) {
     }));
 }
 
-function releaseUrl(repo, tag) {
-    if (!repo || !tag) return '';
-    return `https://github.com/${repo}/releases/tag/${tag}`;
-}
-
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { describeBrowserSupport, boardLabel, formatPartsTable, releaseUrl };
+    module.exports = { boardLabel, formatPartsTable };
 }
