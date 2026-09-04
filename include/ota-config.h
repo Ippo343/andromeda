@@ -28,4 +28,20 @@ uint32_t lastAppliedCode();
 // and re-flashes it).
 bool appliedFsMd5(char* out, size_t outCap);
 
+// Partial-failure flag. When an OTA writes the firmware slot but then fails
+// the filesystem half, the device still reboots (the fw slot is bootable) -
+// which throws away the Failed state, so /ota-status shows "rebooting" and
+// the owner never learns the FS didn't take, possibly with no web UI left to
+// find out from. persistPartialFailure() records it durably so the *next*
+// boot's /ota-status can surface it; a later clean apply (persistApplied with
+// a real fs md5) clears it, as does clearPartialFailure().
+void persistPartialFailure(const char* reason);
+void clearPartialFailure();
+bool partialFailurePending();
+
+// Writes the stored partial-failure reason into out[outCap] (always
+// NUL-terminated). Returns false if no partial failure is pending or the
+// reason doesn't fit.
+bool partialFailureReason(char* out, size_t outCap);
+
 }  // namespace OtaConfig

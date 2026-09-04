@@ -577,15 +577,24 @@ void Comms::setupRoutes()
               [](AsyncWebServerRequest* r)
               {
                   OtaUpdater::Status s = OtaUpdater::status();
-                  // Worst case is ~250 B (error[96] + latestTag[48] both full);
-                  // 320 keeps a rare long Update error string from truncating the JSON.
-                  char json[320];
+                  // partialFailure/partialFailureReason survive the reboot that
+                  // an FS-half OTA failure forces (OtaConfig), so a fresh boot
+                  // still tells the owner the filesystem didn't take. The flag
+                  // is authoritative on its own; the reason is best-effort.
+                  bool pfPending = OtaConfig::partialFailurePending();
+                  char pfReason[96] = "";
+                  OtaConfig::partialFailureReason(pfReason, sizeof(pfReason));
+                  // Worst case ~380 B (error[96] + latestTag[48] + pfReason[96]
+                  // all full); 512 keeps a rare long string from truncating.
+                  char json[512];
                   snprintf(json, sizeof(json),
                            "{\"state\":\"%s\",\"progress\":%u,\"latestCode\":%u,"
-                           "\"latestTag\":\"%s\",\"channel\":\"%s\",\"error\":\"%s\"}",
+                           "\"latestTag\":\"%s\",\"channel\":\"%s\",\"error\":\"%s\","
+                           "\"partialFailure\":%s,\"partialFailureReason\":\"%s\"}",
                            otaStateToken(s.state), static_cast<unsigned>(s.progressPct),
                            static_cast<unsigned>(s.latestVersionCode), s.latestTag,
-                           OtaConfig::devChannel() ? "dev" : "stable", s.error);
+                           OtaConfig::devChannel() ? "dev" : "stable", s.error,
+                           pfPending ? "true" : "false", pfReason);
                   r->send(200, "application/json", json);
               });
 

@@ -413,6 +413,12 @@ void updateTask(void*)
             // will come up on the new firmware with the old filesystem. Acceptable
             // (see above), so record the version and let it reboot rather than
             // leaving it half-applied forever.
+            //
+            // But the reboot throws away this Failed state before the owner's
+            // /ota-status poll can show it - and they may have no web UI left
+            // afterwards. Persist the specific cause so the *next* boot's
+            // /ota-status surfaces "the filesystem half didn't take".
+            OtaConfig::persistPartialFailure(status().error);
             OtaConfig::persistApplied(e.versionCode, "");
             setState(State::Rebooting);
             vTaskDelay(pdMS_TO_TICKS(1500));
