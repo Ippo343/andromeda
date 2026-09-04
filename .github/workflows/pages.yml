@@ -64,15 +64,33 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 50 \
-                 --json tagName,isDraft,isPrerelease,publishedAt \
-                 --jq 'map(select(.isDraft==false and .isPrerelease==false))
-                       | sort_by(.publishedAt) | last | .tagName // empty')
-          if [ -z "$TAG" ]; then
-            echo "::error::no published stable release to publish a web installer for"
+          # Resolve by versionCode, not publish date. `sort_by(.publishedAt)
+          # | last` would serve OLDER firmware to every new device if an older
+          # stable release were re-published, or a hotfix cut from an older
+          # tag were un-drafted. This is the same bar
+          # build-scripts/check_version_code.py enforces for OTA: the highest
+          # versionCode any published manifest.json advertises wins;
+          # publishedAt only breaks a tie between equal codes.
+          stable=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 50 \
+                     --json tagName,isDraft,isPrerelease,publishedAt \
+                     --jq 'map(select(.isDraft==false and .isPrerelease==false))
+                           | sort_by(.publishedAt) | reverse | .[].tagName')
+          best_tag=""; best_code=-1
+          for tag in $stable; do
+            code=$(gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
+                     --pattern 'manifest.json' --output - 2>/dev/null \
+                   | jq -r '[.boards[].versionCode] | max // 0' 2>/dev/null || echo "")
+            case "$code" in
+              ''|*[!0-9]*) continue ;;
+            esac
+            if [ "$code" -gt "$best_code" ]; then best_code="$code"; best_tag="$tag"; fi
+          done
+          if [ -z "$best_tag" ]; then
+            echo "::error::no published stable release with a manifest.json to publish a web installer for"
             exit 1
           fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "resolved $best_tag (versionCode $best_code)"
+          echo "tag=$best_tag" >> "$GITHUB_OUTPUT"
 
       - name: Download the released assets
         env:
@@ -87,7 +105,39 @@ jobs:
           REL_TAG: ${{ steps.rel.outputs.tag }}
         run: |
           gh release download "$REL_TAG" --repo "$GITHUB_REPOSITORY" --dir dl \
+            --pattern 'manifest.json' \
             --pattern 'flashparts-*.zip' --pattern 'firmware-*.bin' --pattern 'littlefs-*.bin'
+
+      # build-scripts/make_manifest.py records the size + md5 of exactly these
+      # bytes in manifest.json. Nothing downstream re-checks them, so a
+      # truncated or corrupted release-asset download would be assembled into
+      # _site and served as the image a stranger flashes onto a bare board -
+      # bricking it, with no error anywhere. Verify before assemble_site.py
+      # runs; a mismatch is a hard failure.
+      - name: Verify the downloaded binaries against the manifest md5
+        env:
+          REL_TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          test -f dl/manifest.json || { echo "::error::manifest.json is not a release asset"; exit 1; }
+          fail=0
+          for env in esp32_wroom esp32_s3_zero esp32_c3_zero; do
+            for pair in "fw:firmware" "fs:littlefs"; do
+              key=${pair%%:*}; name=${pair##*:}
+              file="dl/$name-$env-$REL_TAG.bin"
+              want=$(jq -r --arg b "$env" --arg k "$key" \
+                     '.boards[] | select(.board==$b) | .[$k].md5' dl/manifest.json)
+              if [ -z "$want" ] || [ "$want" = "null" ]; then
+                echo "::error::$env: manifest.json has no $key.md5"; fail=1; continue
+              fi
+              got=$(md5sum "$file" | cut -d' ' -f1)
+              if [ "$got" != "$want" ]; then
+                echo "::error::$file md5 $got does not match manifest $want"; fail=1
+              else
+                echo "ok  $file  $got"
+              fi
+            done
+          done
+          [ "$fail" -eq 0 ]
 
       - name: Unpack each board's parts
         env:
