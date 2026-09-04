@@ -48,16 +48,8 @@ esp-web-install-button [slot="activate"] .icon {
 }
 
 .parts {
-    margin-top: 1.5rem;
     font-size: 0.85rem;
     color: rgba(255, 255, 255, 0.7);
-}
-
-.parts h2 {
-    font-size: 0.95rem;
-    font-weight: 600;
-    margin: 0 0 0.75rem;
-    color: rgba(255, 255, 255, 0.85);
 }
 
 .parts h3 {
@@ -71,4 +63,47 @@ esp-web-install-button [slot="activate"] .icon {
     margin: 0;
     padding-left: 1.2rem;
     font-family: 'Consolas', ui-monospace, monospace;
+}
+
+/* Required, above the install button so it can't be missed. */
+.model-select {
+    margin-bottom: 1rem;
+}
+
+.model-select label {
+    display: block;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 0.4rem;
+}
+
+.model-select select {
+    width: 100%;
+    padding: 0.6rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.model-status {
+    min-height: 1.2em;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.7);
+    text-align: center;
+    margin: 0.75rem 0;
+}
+
+/* A single non-intrusive label, closed by default - not a wall of offsets
+   most visitors never need to see. */
+.parts-drawer {
+    margin-top: 1.5rem;
+}
+
+.parts-drawer summary {
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.parts-drawer[open] summary {
+    margin-bottom: 0.75rem;
 }
