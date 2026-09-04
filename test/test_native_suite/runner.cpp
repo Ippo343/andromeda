@@ -50,6 +50,7 @@ DECLARE_SUITE(test_effects);
 DECLARE_SUITE(test_geometry);
 DECLARE_SUITE(test_installer_model_list);
 DECLARE_SUITE(test_log_suspend);
+DECLARE_SUITE(test_mdns_hosts);
 DECLARE_SUITE(test_ota_config);
 DECLARE_SUITE(test_ota_eligibility);
 DECLARE_SUITE(test_ota_manifest);
@@ -83,6 +84,7 @@ int main(int, char**)
     RUN_SUITE(test_geometry);
     RUN_SUITE(test_installer_model_list);
     RUN_SUITE(test_log_suspend);
+    RUN_SUITE(test_mdns_hosts);
     RUN_SUITE(test_ota_config);
     RUN_SUITE(test_ota_eligibility);
     RUN_SUITE(test_ota_manifest);

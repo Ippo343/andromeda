@@ -45,6 +45,19 @@ inline String getDeviceName()
 // (SSIDs preserve case; mDNS hostnames are conventionally lowercase).
 String getMdnsHostname();
 
+// Lowercased form of getDefaultName(), regardless of whether a custom name
+// is currently set - the "<model-token>-<uid>" mDNS label that survives any
+// rename (e.g. "l70-a1b2"). Comms::startMdns() registers this as a delegated
+// hostname alongside the primary (see include/mdns-hosts.h), so the device
+// stays reachable at its factory name even after the custom one changes.
+String getDefaultMdnsHostname();
+
+// Lowercased "andromeda-<uid>" mDNS label - model-independent, so
+// docs/stickers can give one formula for every board regardless of which
+// model it is ("your device answers to andromeda-" + the 4-character UID on
+// its label). Also registered as a delegated hostname by Comms::startMdns().
+String getAndromedaMdnsHostname();
+
 // Persists a new device name (NVS), sanitized to safe SSID/hostname
 // characters (see DeviceUid::sanitize) and truncated to
 // DeviceUid::MAX_NAME_LENGTH. Passing an empty/all-invalid name clears back

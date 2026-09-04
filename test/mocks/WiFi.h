@@ -52,6 +52,15 @@ class IPAddress
                       std::to_string(d));
     }
 
+    // Matches the real ESP32 core's IPAddress: the four octets packed little-endian into a
+    // uint32_t (network byte order for IPv4). comms.cpp's mDNS delegate registration
+    // (include/mdns-hosts.h, issue #135) needs this to build an mdns_ip_addr_t.
+    operator uint32_t() const
+    {
+        return static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8) |
+               (static_cast<uint32_t>(c) << 16) | (static_cast<uint32_t>(d) << 24);
+    }
+
    private:
     uint8_t a = 0, b = 0, c = 0, d = 0;
 };

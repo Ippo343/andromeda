@@ -41,6 +41,10 @@ struct DeviceState
     const char* deviceUid;
     const char* runningDeviceName;
     const char* configuredDeviceName;
+    // The permanent "<model>-<uid>" name (DeviceIdentity::getDefaultName()) - unlike
+    // configuredDeviceName, this doesn't change on rename, so the UI can always offer it as
+    // a fallback .local address (see include/mdns-hosts.h, issue #135).
+    const char* defaultDeviceName;
 };
 
 // StaticJsonDocument capacity for the schema below plus the full model and
@@ -107,6 +111,7 @@ inline size_t buildStateJson(const DeviceState& state, char* outBuffer, size_t o
     device["uid"] = state.deviceUid;
     device["name"] = state.configuredDeviceName;
     device["runningName"] = state.runningDeviceName;
+    device["defaultName"] = state.defaultDeviceName;
     device["nameRebootRequired"] =
         (strcmp(state.runningDeviceName, state.configuredDeviceName) != 0);
 

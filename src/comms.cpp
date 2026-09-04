@@ -2,16 +2,66 @@
 
 #include <DNSServer.h>
 #include <esp_system.h>
+#include <mdns.h>
 #include <sys/stat.h>
 
 #include <cstring>
 
+#include "mdns-hosts.h"
 #include "ota-config.h"
 #include "ota-updater.h"
 #include "version.h"
 #include "ws-command-parser.h"
 
 constexpr int DNS_PORT = 53;
+
+namespace
+{
+// Builds a single-entry mdns_ip_addr_t list for `ip` - the shape
+// mdns_delegate_hostname_add() takes for a delegated host's address (see
+// framework-arduinoespressif32's mdns.h). IPv4 only: the device has no IPv6
+// story anywhere else in the firmware either.
+mdns_ip_addr_t makeMdnsIp(IPAddress ip)
+{
+    mdns_ip_addr_t addr{};
+    addr.addr.type = ESP_IPADDR_TYPE_V4;
+    addr.addr.u_addr.ip4.addr = static_cast<uint32_t>(ip);
+    addr.next = nullptr;
+    return addr;
+}
+
+// (Re)points every delegated hostname in `hosts[1..n)` at `ip` - hosts[0] is always the
+// primary name, which MDNS.begin() already owns and probes for itself. A delegate that's
+// already registered from an earlier call must be removed before it can be re-added with a
+// new address; mdns_delegate_hostname_add() on an existing name just fails
+// (ESP_ERR_INVALID_ARG), it doesn't update it in place.
+void registerMdnsDelegates(const char* hosts[], size_t n, IPAddress ip)
+{
+    mdns_ip_addr_t addr = makeMdnsIp(ip);
+    for (size_t i = 1; i < n; i++)
+    {
+        if (mdns_hostname_exists(hosts[i])) mdns_delegate_hostname_remove(hosts[i]);
+        esp_err_t err = mdns_delegate_hostname_add(hosts[i], &addr);
+        if (err != ESP_OK)
+            Log.warningln("mDNS: could not delegate hostname '%s' (err %d)", hosts[i],
+                          static_cast<int>(err));
+    }
+}
+
+// The current deduped host list (include/mdns-hosts.h) - shared by Comms::startMdns() and
+// Comms::mdnsHostsJson() so the two can't independently drift on how it's derived. Returns
+// the same String objects the `out` pointers alias into, so the caller must keep them alive
+// for as long as `out` is used (mirrors buildHostList()'s own no-copy contract).
+size_t currentHostList(const char* out[MdnsHosts::MAX_HOSTS], String& primary, String& defaultHost,
+                       String& andromedaHost)
+{
+    primary = DeviceIdentity::getMdnsHostname();
+    defaultHost = DeviceIdentity::getDefaultMdnsHostname();
+    andromedaHost = DeviceIdentity::getAndromedaMdnsHostname();
+    return MdnsHosts::buildHostList(primary.c_str(), defaultHost.c_str(), andromedaHost.c_str(),
+                                    out);
+}
+}  // namespace
 
 // Silent "does this file exist" check. LittleFSImpl::exists() (and the
 // AsyncFileResponse path behind request->send(LittleFS, ...)) is just
@@ -120,6 +170,81 @@ Comms::SetupOutcome Comms::setup()
                                                                  : SetupOutcome::ConnectFailed;
 }
 
+String Comms::mdnsHostsJson()
+{
+    String primary, defaultHost, andromedaHost;
+    const char* hosts[MdnsHosts::MAX_HOSTS];
+    size_t n = currentHostList(hosts, primary, defaultHost, andromedaHost);
+
+    String json = "[";
+    for (size_t i = 0; i < n; i++)
+    {
+        if (i > 0) json += ",";
+        json += "\"" + String(hosts[i]) + ".local\"";
+    }
+    json += "]";
+    return json;
+}
+
+// Starts the mDNS responder (idempotent - MDNS.begin() only ever runs once per boot) and
+// (re)registers the delegated fallback hostnames against `ip`. Called from
+// startStationMode(), from beginAPBroadcast() (so the same names work on the setup AP), and
+// again on every ARDUINO_EVENT_WIFI_STA_GOT_IP once station mode is up, since a DHCP renewal
+// can hand back a different address and the delegated list (unlike the primary hostname) is
+// static until explicitly refreshed.
+void Comms::startMdns(IPAddress ip)
+{
+    if (!mdnsStarted)
+    {
+        // Worth a couple of retries rather than giving up on the first transient failure and
+        // leaving the device unreachable by name for the rest of the boot. Runs before the web
+        // server task exists in the station-mode path, so blocking briefly here is harmless
+        // (same reasoning as WifiManager's connect()); in the AP-mode path it can also run at
+        // runtime from the WiFi-recovery monitor task, off the render loop.
+        bool ok = false;
+        for (int attempt = 0; !ok && attempt < 3; attempt++)
+        {
+            if (attempt > 0) delay(200);
+            ok = MDNS.begin(DeviceIdentity::getMdnsHostname().c_str());
+        }
+        if (!ok)
+        {
+            Log.errorln("MDNS failed to start after retries");
+            return;
+        }
+        mdnsStarted = true;
+
+        // _http._tcp only on the primary hostname - see registerMdnsDelegates()'s comment for
+        // why the delegated fallback names don't each get their own service record (a browse
+        // listing should show this device once, not once per name it also answers to).
+        MDNS.addService("http", "tcp", 80);
+        MDNS.addServiceTxt("http", "tcp", "uid", DeviceIdentity::getUid());
+        const ModelConfig* config = GEOMETRY.getConfig();
+        MDNS.addServiceTxt("http", "tcp", "model", config ? config->name : "Unknown");
+
+        // Registered once, mirroring startAsyncScan()'s handlerRegistered guard just below -
+        // WiFi.onEvent() appends rather than replaces, so registering this on every
+        // startMdns() call (itself re-entrant via beginAPBroadcast()) would fire once per
+        // past call on every future renewal.
+        static bool gotIpHandlerRegistered = false;
+        if (!gotIpHandlerRegistered)
+        {
+            gotIpHandlerRegistered = true;
+            WiFi.onEvent(
+                [](WiFiEvent_t e, WiFiEventInfo_t)
+                {
+                    if (e != ARDUINO_EVENT_WIFI_STA_GOT_IP) return;
+                    Comms::Instance().startMdns(WiFi.localIP());
+                });
+        }
+    }
+
+    String primary, defaultHost, andromedaHost;
+    const char* hosts[MdnsHosts::MAX_HOSTS];
+    size_t n = currentHostList(hosts, primary, defaultHost, andromedaHost);
+    registerMdnsDelegates(hosts, n, ip);
+}
+
 // Shared by startAPMode() (boot-time fallback) and enterAPFallbackMode() (runtime fallback
 // after a mid-run disconnect): flips the radio into AP mode and (re)starts the captive-portal
 // DNS server. Does not touch the web server task - see enterAPFallbackMode()'s comment.
@@ -132,6 +257,10 @@ void Comms::beginAPBroadcast()
 
     IPAddress apIP = WiFi.softAPIP();
     Log.noticeln("AP Mode started. IP: %s", apIP.toString().c_str());
+
+    // So the device's permanent names (include/mdns-hosts.h) also resolve while parked on
+    // its own setup AP, not just once it's joined a real network.
+    startMdns(apIP);
 
     DNSServer* newDns = new DNSServer();
     newDns->start(DNS_PORT, "*", apIP);
@@ -215,17 +344,10 @@ bool Comms::startStationMode()
     runningDeviceName[sizeof(runningDeviceName) - 1] = '\0';
 
     // mDNS is the primary way to reach the device now that station mode uses DHCP instead of
-    // a fixed IP (see EspWiFiConnector::connect()) - worth a couple of retries rather than
-    // giving up on the first transient failure and leaving the device unreachable by name for
-    // the rest of the boot. Runs before the web server task exists, so blocking briefly here
-    // is harmless (same reasoning as WifiManager's connect()).
-    bool mdnsStarted = false;
-    for (int attempt = 0; !mdnsStarted && attempt < 3; attempt++)
-    {
-        if (attempt > 0) delay(200);
-        mdnsStarted = MDNS.begin(DeviceIdentity::getMdnsHostname().c_str());
-    }
-    if (!mdnsStarted) Log.errorln("MDNS failed to start after retries");
+    // a fixed IP (see EspWiFiConnector::connect()) - see startMdns() for the retry/delegate
+    // logic. Runs before the web server task exists, so blocking briefly here is harmless
+    // (same reasoning as WifiManager's connect()).
+    startMdns(WiFi.localIP());
 
     createWebServerTask();
     printWifiStatus();
@@ -411,6 +533,7 @@ void Comms::setupRoutes()
     STATIC_FILE_ROUTE("/js/controls-logic.js", "application/javascript");
     STATIC_FILE_ROUTE("/js/controls.js", "application/javascript");
     STATIC_FILE_ROUTE("/js/wifi.js", "application/javascript");
+    STATIC_FILE_ROUTE("/js/wifi-logic.js", "application/javascript");
     STATIC_FILE_ROUTE("/js/advanced-logic.js", "application/javascript");
     STATIC_FILE_ROUTE("/js/advanced.js", "application/javascript");
     STATIC_FILE_ROUTE("/js/device-name.js", "application/javascript");
@@ -487,6 +610,20 @@ void Comms::setupRoutes()
     // Shared Config & Monitoring
     server.on("/fps", HTTP_GET, [](AsyncWebServerRequest* r)
               { r->send(200, "text/plain", String(PerformanceMonitor::Instance().fps())); });
+    // Read before the WiFi setup page ever submits credentials (issue #135) - the WS state
+    // feed isn't available yet in AP mode, and by the time /save-status resolves the setup
+    // AP may already be gone (on iOS, immediately - see data/js/wifi.js). Answers the same
+    // in both AP and station mode: DeviceIdentity's derivations don't depend on which one is
+    // currently active.
+    server.on("/device-info", HTTP_GET,
+              [](AsyncWebServerRequest* r)
+              {
+                  String json = "{\"name\":\"" + DeviceIdentity::getDeviceName() +
+                                "\",\"defaultName\":\"" + DeviceIdentity::getDefaultName() +
+                                "\",\"uid\":\"" + String(DeviceIdentity::getUid()) +
+                                "\",\"hosts\":" + Comms::mdnsHostsJson() + "}";
+                  r->send(200, "application/json", json);
+              });
     server.on(
         "/brightness", HTTP_GET, [](AsyncWebServerRequest* r)
         { r->send(200, "text/plain", String(MissionControl::Instance().getMaxBrightness())); });
@@ -818,6 +955,7 @@ size_t Comms::buildCurrentStateJson(char* outBuffer, size_t outBufferSize)
     ModelId configuredId = FactoryConfig::getModelId();
     const ModelConfig* configuredConfig = getModelConfig(configuredId);
     String configuredDeviceName = DeviceIdentity::getDeviceName();
+    String defaultDeviceName = DeviceIdentity::getDefaultName();
 
     // Snapshot under the lock rather than reading runningDeviceName directly - it can be
     // rewritten mid-copy by beginAPBroadcast() on another core (see apStateMux's comment
@@ -843,6 +981,7 @@ size_t Comms::buildCurrentStateJson(char* outBuffer, size_t outBufferSize)
         .deviceUid = DeviceIdentity::getUid(),
         .runningDeviceName = runningNameSnapshot,
         .configuredDeviceName = configuredDeviceName.c_str(),
+        .defaultDeviceName = defaultDeviceName.c_str(),
     };
     return WsStateBuilder::buildStateJson(state, outBuffer, outBufferSize);
 }
@@ -878,6 +1017,21 @@ void Comms::broadcastStateIfDirty()
 
 void Comms::printWifiStatus()
 {
-    Log.noticeln("Connected to %s | IP: %s", WiFi.SSID().c_str(),
-                 WiFi.localIP().toString().c_str());
+    // Every name this device answers to (issue #135) - the boot log is the recovery path for
+    // anyone with a USB cable and no other way back in, and it's what the web-installer's
+    // serial console (web-installer/js/console.js) surfaces on demand via the "netinfo"
+    // command (main.cpp's processSerialCommands()). Branches on AP-vs-station because the
+    // "netinfo" path can land here from either state - most usefully AP mode, a freshly
+    // unboxed or reset device someone is trying to find on their setup network.
+    if (isInAPMode())
+    {
+        Log.noticeln("AP mode | SSID: %s | IP: %s | UID: %s | mDNS: %s",
+                     DeviceIdentity::getDeviceName().c_str(), WiFi.softAPIP().toString().c_str(),
+                     DeviceIdentity::getUid(), mdnsHostsJson().c_str());
+        return;
+    }
+
+    Log.noticeln("Connected to %s | IP: %s | UID: %s | mDNS: %s", WiFi.SSID().c_str(),
+                 WiFi.localIP().toString().c_str(), DeviceIdentity::getUid(),
+                 mdnsHostsJson().c_str());
 }
