@@ -537,12 +537,16 @@ void Comms::setupRoutes()
     STATIC_FILE_ROUTE("/js/advanced-logic.js", "application/javascript");
     STATIC_FILE_ROUTE("/js/advanced.js", "application/javascript");
     STATIC_FILE_ROUTE("/js/device-name.js", "application/javascript");
+    STATIC_FILE_ROUTE("/js/logs-logic.js", "application/javascript");
+    STATIC_FILE_ROUTE("/js/logs.js", "application/javascript");
     STATIC_FILE_ROUTE("/css/common.css", "text/css");
     STATIC_FILE_ROUTE("/css/controls.css", "text/css");
     STATIC_FILE_ROUTE("/css/wifi.css", "text/css");
     STATIC_FILE_ROUTE("/css/advanced.css", "text/css");
+    STATIC_FILE_ROUTE("/css/logs.css", "text/css");
     STATIC_FILE_ROUTE("/advanced.html", "text/html");
     STATIC_FILE_ROUTE("/device-name.html", "text/html");
+    STATIC_FILE_ROUTE("/logs.html", "text/html");
 
     server.on("/wifi", HTTP_GET,
               [](AsyncWebServerRequest* r) { r->send(LittleFS, "/wifi-setup.html", "text/html"); });
@@ -551,8 +555,10 @@ void Comms::setupRoutes()
     // not-yet-created file returns an empty 200 instead of letting the FS
     // layer log a VFS error on the miss (see fileExistsQuiet above). The
     // logger keeps the log as these two rotating files; /log1.txt has no
-    // content until the first 32 KB rotation. Keep the literals in sync with
-    // LOG_FILE_CUR / LOG_FILE_OLD (utils.h).
+    // content until the first 16 KB rotation (SimpleFileLog::DEFAULT_MAX_LOG_BYTES,
+    // loggers.h). Keep the literals in sync with LOG_FILE_CUR / LOG_FILE_OLD
+    // (utils.h). "/logs" here is the raw current-file alias fetched by curl/etc -
+    // it's distinct from "/logs.html" above, the browsable log viewer page (#212).
     server.on("/log0.txt", HTTP_GET,
               [](AsyncWebServerRequest* r) { serveTextFileOrEmpty(r, LOG_FILE_CUR); });
     server.on("/log1.txt", HTTP_GET,

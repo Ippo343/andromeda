@@ -1,0 +1,110 @@
+/* Standalone Logs page (#212). Reuses common.css for the container / logo /
+   .btn shell; this file just owns the toolbar and the log viewer itself -
+   cut verbatim (styling-wise) from advanced.css's old .adv-log section, now
+   free to use the full page instead of squeezing into the Advanced grid. */
+
+.back-link {
+    text-decoration: none;
+    margin-bottom: 1.5rem;
+}
+
+.logs-container {
+    max-width: min(1400px, 95vw);
+}
+
+.logs-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.8rem;
+}
+
+.logs-toolbar .btn {
+    display: inline-block;
+    width: auto;
+    margin-bottom: 0;
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
+}
+
+.logs-toolbar .auto-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.logs-toolbar .auto-toggle input {
+    width: auto;
+    margin: 0;
+}
+
+#logStatus {
+    flex: 1 1 auto;
+    text-align: left;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.logbox {
+    margin-top: 0.4rem;
+    padding: 1rem 1.2rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    text-align: left;
+    max-height: 70vh;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.log-line {
+    padding: 0.05rem 0;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.log-line .log-ts {
+    color: rgba(255, 255, 255, 0.3);
+    margin-right: 0.5rem;
+}
+
+.log-line .log-pill {
+    display: inline-block;
+    min-width: 2.4em;
+    margin-right: 0.5rem;
+    text-align: center;
+    border-radius: 4px;
+    padding: 0 0.3em;
+    font-size: 0.72rem;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.log-line.log-inf .log-pill { background: rgba(33, 150, 243, 0.18); color: #64b5f6; }
+.log-line.log-wrn .log-pill { background: rgba(255, 193, 7, 0.2); color: #ffc107; }
+.log-line.log-err .log-pill,
+.log-line.log-ftl .log-pill { background: rgba(244, 67, 54, 0.22); color: #f44336; }
+
+.log-line.log-wrn { color: #ffd95e; }
+.log-line.log-err,
+.log-line.log-ftl { color: #ff8a80; }
+.log-line.log-trc,
+.log-line.log-vrb,
+.log-line.log-raw { color: rgba(255, 255, 255, 0.45); }
+
+.logbox-note {
+    color: rgba(255, 255, 255, 0.4);
+    font-style: italic;
+}
+
+@media (max-width: 480px) {
+    .logbox { max-height: 55vh; }
+    .logs-toolbar { flex-direction: column; align-items: stretch; }
+    #logStatus { order: 3; }
+}

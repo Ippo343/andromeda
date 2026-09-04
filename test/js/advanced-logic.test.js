@@ -1,8 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const {
-    parseLogLine,
-    levelClass,
     formatUptime,
     formatBytes,
     resetReasonLabel,
@@ -17,51 +15,6 @@ const {
     isOtaTerminalState,
     isOtaPollDone,
 } = require('../../data/js/advanced-logic.js');
-
-describe('parseLogLine', () => {
-    test('splits a well-formed line into ts / level / message', () => {
-        const r = parseLogLine('123456 | INF | WiFi connected, IP 192.168.1.42');
-        assert.deepEqual(r, {
-            ts: 123456,
-            level: 'INF',
-            levelClass: 'log-inf',
-            message: 'WiFi connected, IP 192.168.1.42',
-        });
-    });
-
-    test('maps every known level tag to its class', () => {
-        const cls = (tag) => parseLogLine(`1 | ${tag} | x`).levelClass;
-        assert.equal(cls('FTL'), 'log-ftl');
-        assert.equal(cls('ERR'), 'log-err');
-        assert.equal(cls('WRN'), 'log-wrn');
-        assert.equal(cls('INF'), 'log-inf');
-        assert.equal(cls('TRC'), 'log-trc');
-        assert.equal(cls('VRB'), 'log-vrb');
-        assert.equal(cls('UNK'), 'log-raw');
-    });
-
-    test('keeps a pipe in the message intact', () => {
-        assert.equal(parseLogLine('7 | WRN | a | b | c').message, 'a | b | c');
-    });
-
-    test('falls back to { raw } for a blank or non-matching line', () => {
-        assert.deepEqual(parseLogLine(''), { raw: '', levelClass: 'log-raw' });
-        assert.deepEqual(
-            parseLogLine('    ...continuation without a prefix'),
-            { raw: '    ...continuation without a prefix', levelClass: 'log-raw' });
-    });
-});
-
-describe('levelClass', () => {
-    test('is case-insensitive', () => {
-        assert.equal(levelClass('err'), 'log-err');
-    });
-    test('unknown / empty -> log-raw', () => {
-        assert.equal(levelClass('zzz'), 'log-raw');
-        assert.equal(levelClass(''), 'log-raw');
-        assert.equal(levelClass(undefined), 'log-raw');
-    });
-});
 
 describe('formatUptime', () => {
     test('sub-hour uptime has no day part', () => {

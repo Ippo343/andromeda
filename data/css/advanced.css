@@ -8,15 +8,15 @@
 
 /* --- Wide (desktop) layout (#136) -------------------------------------------
    common.css caps every page's .container at 400px. The Advanced page carries
-   a lot of read-only data (metrics, a scrolling log) that a narrow column
-   wastes desktop space on, so once there's genuinely room it rearranges into a
-   dashboard: Diagnostics and the controls (which don't want to be stretched
-   wide) side by side, Log spanning the full width below them - it's the one
-   section that benefits from more room than either column alone gives it.
+   enough read-only data (metrics, model/firmware/OTA controls) that a narrow
+   column wastes desktop space on, so once there's genuinely room it
+   rearranges Diagnostics and the controls side by side. The log viewer lived
+   here too until #212 moved it to its own page (data/logs.html), which is
+   why the grid only has two areas now instead of three.
 
-   .adv-diag / .adv-log / .adv-ctrl sit in that exact order in the markup, so
-   the default (mobile) grid - one column, no template-areas - stacks them
-   Diagnostics/Log/Controls, byte for byte the old flat layout's order.
+   .adv-diag / .adv-ctrl sit in that exact order in the markup, so the
+   default (mobile) grid - one column, no template-areas - stacks them
+   Diagnostics/Controls, byte for byte the old flat layout's order.
    Everything past that is behind a single min-width query scoped to
    .adv-container / .adv-grid, so below it - every phone and the shared
    device-name page, which also loads this file - nothing changes. */
@@ -27,14 +27,12 @@
 }
 
 .adv-diag,
-.adv-log,
 .adv-ctrl {
     min-width: 0;
 }
 
 /* Stacked, each section's first .section-label has its top margin zeroed by
    :first-of-type; restore the separation the single flat list used to have. */
-.adv-log,
 .adv-ctrl {
     margin-top: 1.5rem;
 }
@@ -46,9 +44,7 @@
 
     .adv-grid {
         grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-        grid-template-areas:
-            "diag ctrl"
-            "log  log";
+        grid-template-areas: "diag ctrl";
         column-gap: 2.5rem;
         row-gap: 1.5rem;
         align-items: start;
@@ -56,10 +52,8 @@
 
     .adv-diag { grid-area: diag; }
     .adv-ctrl { grid-area: ctrl; }
-    .adv-log { grid-area: log; }
 
-    /* The grid's row-gap now provides the separation instead. */
-    .adv-log,
+    /* The grid's column-gap now provides the separation instead. */
     .adv-ctrl {
         margin-top: 0;
     }
@@ -68,11 +62,6 @@
        stretching two. */
     .metrics-grid {
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    }
-
-    /* The log now spans the full dashboard width - give it more height too. */
-    .logbox {
-        max-height: 65vh;
     }
 
     /* .btn (common.css) is display:block/width:100% - fine at 400px, but at
@@ -127,59 +116,10 @@
     word-break: break-word;
 }
 
-/* --- Log viewer ------------------------------------------------------------ */
-
-.logbox {
-    margin-top: 0.4rem;
-    padding: 1rem 1.2rem;
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    font-family: 'Courier New', monospace;
-    font-size: 0.78rem;
-    line-height: 1.5;
-    text-align: left;
-    max-height: 45vh;
-    overflow-y: auto;
-    white-space: pre-wrap;
-    word-break: break-word;
-}
-
-.log-line {
-    padding: 0.05rem 0;
-    color: rgba(255, 255, 255, 0.75);
-}
-
-.log-line .log-ts {
-    color: rgba(255, 255, 255, 0.3);
-    margin-right: 0.5rem;
-}
-
-.log-line .log-pill {
-    display: inline-block;
-    min-width: 2.4em;
-    margin-right: 0.5rem;
-    text-align: center;
-    border-radius: 4px;
-    padding: 0 0.3em;
-    font-size: 0.72rem;
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.6);
-}
-
-.log-line.log-inf .log-pill { background: rgba(33, 150, 243, 0.18); color: #64b5f6; }
-.log-line.log-wrn .log-pill { background: rgba(255, 193, 7, 0.2); color: #ffc107; }
-.log-line.log-err .log-pill,
-.log-line.log-ftl .log-pill { background: rgba(244, 67, 54, 0.22); color: #f44336; }
-
-.log-line.log-wrn { color: #ffd95e; }
-.log-line.log-err,
-.log-line.log-ftl { color: #ff8a80; }
-.log-line.log-trc,
-.log-line.log-vrb,
-.log-line.log-raw { color: rgba(255, 255, 255, 0.45); }
-
-.logbox-note {
+/* The log viewer (and its .logbox/.log-line rules) moved to data/css/logs.css
+   with the page itself (#212). This page only shows a one-line fallback in
+   #metrics when /metrics fails, styled the same way .logbox-note was. */
+.metrics-note {
     color: rgba(255, 255, 255, 0.4);
     font-style: italic;
 }
@@ -315,5 +255,4 @@
 
 @media (max-width: 480px) {
     .metrics-grid { grid-template-columns: 1fr 1fr; }
-    .logbox { max-height: 55vh; }
 }

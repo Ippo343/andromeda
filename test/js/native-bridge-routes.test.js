@@ -40,7 +40,8 @@ function staticRouteKeys(serverJsSource) {
 
 // Every browser-served HTML page in data/ (each needs its <script>/<link>
 // assets routed too, not just index.html).
-const HTML_PAGES = ['index.html', 'advanced.html', 'device-name.html', 'wifi-setup.html'];
+const HTML_PAGES = ['index.html', 'advanced.html', 'device-name.html', 'wifi-setup.html',
+    'logs.html'];
 
 test('every data/ HTML page local asset has a route in the native bridge', () => {
     const serverJs = fs.readFileSync(

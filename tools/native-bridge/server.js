@@ -54,12 +54,16 @@ const STATIC_ROUTES = {
     '/js/advanced-logic.js': { file: 'js/advanced-logic.js', type: 'application/javascript' },
     '/js/advanced.js': { file: 'js/advanced.js', type: 'application/javascript' },
     '/js/device-name.js': { file: 'js/device-name.js', type: 'application/javascript' },
+    '/js/logs-logic.js': { file: 'js/logs-logic.js', type: 'application/javascript' },
+    '/js/logs.js': { file: 'js/logs.js', type: 'application/javascript' },
     '/css/common.css': { file: 'css/common.css', type: 'text/css' },
     '/css/controls.css': { file: 'css/controls.css', type: 'text/css' },
     '/css/wifi.css': { file: 'css/wifi.css', type: 'text/css' },
     '/css/advanced.css': { file: 'css/advanced.css', type: 'text/css' },
+    '/css/logs.css': { file: 'css/logs.css', type: 'text/css' },
     '/advanced.html': { file: 'advanced.html', type: 'text/html' },
     '/device-name.html': { file: 'device-name.html', type: 'text/html' },
+    '/logs.html': { file: 'logs.html', type: 'text/html' },
 };
 
 // Canned log + diagnostics payloads for the Advanced page. The native core has
