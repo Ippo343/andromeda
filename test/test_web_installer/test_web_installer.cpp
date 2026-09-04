@@ -30,6 +30,12 @@
 //     be `uses:`-chained from release.yml, not `on: release` alone.
 //   - the CORS constraint that shapes the whole design: no code path may try
 //     to fetch a releases/download URL from the browser.
+//   - the release the installer serves is chosen by version code (not publish
+//     date) and its bytes are md5-checked against the manifest before
+//     assembly; the assembled manifest and the live deployed site are both
+//     verified - a green run can't mean an unchecked or unreachable installer.
+//   - installer-logic.js (shipped + unit-tested) is actually called by
+//     installer.js - a tested module the page never runs is worse than none.
 #include <unity.h>
 
 #include <fstream>
@@ -317,6 +323,64 @@ void test_pages_workflow_is_a_reusable_artifact_deploy()
                               "the deploy must never push to a branch");
 }
 
+// #193: pages.yml downloads firmware-*/littlefs-* release assets and serves
+// them as the exact bytes a stranger flashes onto a bare board, but never
+// checked them against anything. make_manifest.py ships an md5 for exactly
+// those bytes in manifest.json.
+void test_pages_workflow_verifies_downloaded_binaries_against_manifest_md5()
+{
+    std::string yaml = stripComments(readFile(".github/workflows/pages.yml"));
+
+    // Good weather: manifest.json is pulled alongside the binaries and its md5
+    // is what the check compares against.
+    TEST_ASSERT_TRUE_MESSAGE(
+        contains(yaml, R"(--pattern 'manifest\.json')"),
+        "pages.yml must download manifest.json with the release binaries so it can verify them");
+    TEST_ASSERT_TRUE_MESSAGE(
+        yaml.find("md5sum") != std::string::npos && yaml.find(".md5") != std::string::npos,
+        "pages.yml must md5sum each downloaded firmware/littlefs binary against the manifest's "
+        "md5");
+
+    // Bad weather: verifying *after* assemble_site.py has already built _site
+    // from the bytes would be pointless - the check must gate the assembly.
+    const size_t verifyAt = yaml.find("md5sum");
+    const size_t assembleAt = yaml.find("assemble_site.py");
+    TEST_ASSERT_TRUE_MESSAGE(
+        verifyAt != std::string::npos && assembleAt != std::string::npos && verifyAt < assembleAt,
+        "the md5 verification must run before assemble_site.py, not after");
+}
+
+// #195: "newest stable" was `sort_by(.publishedAt) | last` - re-publishing an
+// older release, or un-drafting a hotfix cut from an older tag, would serve
+// that older firmware to every brand-new device. check_version_code.py guards
+// this for OTA; the web installer had no equivalent, and here a wrong choice
+// directly determines what a bare board gets flashed with.
+void test_pages_workflow_resolves_newest_release_by_version_not_date()
+{
+    std::string yaml = stripComments(readFile(".github/workflows/pages.yml"));
+
+    // Good weather: the resolve step consults a version code / manifest, not
+    // only publishedAt.
+    size_t resolveAt = yaml.find("Resolve the newest stable release");
+    size_t downloadAt = yaml.find("Download the released assets");
+    TEST_ASSERT_TRUE_MESSAGE(
+        resolveAt != std::string::npos && downloadAt != std::string::npos && resolveAt < downloadAt,
+        "expected the Resolve step to still precede the Download step");
+    std::string resolveStep = yaml.substr(resolveAt, downloadAt - resolveAt);
+    TEST_ASSERT_TRUE_MESSAGE(
+        resolveStep.find("versionCode") != std::string::npos &&
+            resolveStep.find("manifest.json") != std::string::npos,
+        "the resolve step must pick by the manifest's versionCode, like check_version_code.py, "
+        "not by publish date alone");
+
+    // Bad weather: `sort_by(.publishedAt) | last` must not be the whole
+    // selector any more (a plain `| reverse` for tie-breaking is fine).
+    TEST_ASSERT_FALSE_MESSAGE(
+        contains(resolveStep, R"(sort_by\(\.publishedAt\)\s*\|\s*last\b)"),
+        "`sort_by(.publishedAt) | last` alone must no longer choose the release the installer "
+        "serves");
+}
+
 void test_release_workflow_chains_pages_on_stable_only()
 {
     std::string yaml = stripComments(readFile(".github/workflows/release.yml"));
@@ -553,6 +617,8 @@ int main(int, char**)
     RUN_TEST(test_assemble_site_does_not_ship_the_on_device_font_subset);
     RUN_TEST(test_shared_ui_assets_still_match_what_assemble_site_expects);
     RUN_TEST(test_pages_workflow_is_a_reusable_artifact_deploy);
+    RUN_TEST(test_pages_workflow_verifies_downloaded_binaries_against_manifest_md5);
+    RUN_TEST(test_pages_workflow_resolves_newest_release_by_version_not_date);
     RUN_TEST(test_release_workflow_chains_pages_on_stable_only);
     RUN_TEST(test_hardware_build_stages_flashparts_after_buildfs);
     RUN_TEST(test_release_reuses_test_jobs_build_artifacts_instead_of_rebuilding);
