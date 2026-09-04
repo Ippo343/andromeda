@@ -1002,11 +1002,15 @@ void test_ota_status_returns_parseable_json()
 
     TEST_ASSERT_EQUAL_INT(200, req.responseCode);
 
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<512> doc;
     TEST_ASSERT_TRUE(deserializeJson(doc, req.responseBody.c_str()) == DeserializationError::Ok);
     TEST_ASSERT_TRUE(doc.containsKey("state"));
     TEST_ASSERT_TRUE(doc.containsKey("progress"));
     TEST_ASSERT_TRUE(doc.containsKey("channel"));
+    // #194: a partial FS-write failure is persisted and surfaced here so a
+    // fresh boot still reports it after the reboot that hid the Failed state.
+    TEST_ASSERT_TRUE(doc.containsKey("partialFailure"));
+    TEST_ASSERT_FALSE(doc["partialFailure"].as<bool>());
 }
 
 int main(int argc, char** argv)
