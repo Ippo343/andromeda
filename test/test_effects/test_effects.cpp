@@ -311,7 +311,7 @@ void test_heat_diffusion_ring_cools_a_saturated_strip_over_time()
 // out of bounds.
 void test_heat_diffusion_ring_evaluates_on_l10_and_multi_strip_models()
 {
-    for (ModelId model : {ModelId::L10_MK2, ModelId::ANDROMEDA_MK1})
+    for (ModelId model : {ModelId::L10_MK1, ModelId::ANDROMEDA_MK0})
     {
         GEOMETRY.initializeForTest(model);
         HeatDiffusionRing fx;
@@ -398,7 +398,7 @@ void test_jelly_frame_color_index_clamps_extreme_displacement()
 
 void test_jelly_frame_evaluates_on_l10_and_multi_strip_models()
 {
-    for (ModelId model : {ModelId::L10_MK2, ModelId::ANDROMEDA_MK1})
+    for (ModelId model : {ModelId::L10_MK1, ModelId::ANDROMEDA_MK0})
     {
         GEOMETRY.initializeForTest(model);
         JellyFrame fx;
@@ -465,7 +465,7 @@ void test_standing_wave_ring_stays_bounded_over_long_run()
 
 void test_standing_wave_ring_evaluates_on_l10_and_multi_strip_models()
 {
-    for (ModelId model : {ModelId::L10_MK2, ModelId::ANDROMEDA_MK1})
+    for (ModelId model : {ModelId::L10_MK1, ModelId::ANDROMEDA_MK0})
     {
         GEOMETRY.initializeForTest(model);
         StandingWaveRing fx;
@@ -605,7 +605,7 @@ void test_angular_palette_rotation_sweeps_over_time()
 
 void test_angular_palette_rotation_evaluates_on_l10_and_multi_strip_models()
 {
-    for (ModelId model : {ModelId::L10_MK2, ModelId::ANDROMEDA_MK1})
+    for (ModelId model : {ModelId::L10_MK1, ModelId::ANDROMEDA_MK0})
     {
         GEOMETRY.initializeForTest(model);
         AngularPaletteRotation fx;
@@ -679,14 +679,14 @@ void test_ninja_star_evaluate_blends_from_inner_to_outer_by_radius()
     TEST_ASSERT_TRUE(far == (fx.outerColor % v));
 }
 
-// Bad weather for the getScreenRadius() -> getMaxLedRadius() fix. On L10 MK2
+// Bad weather for the getScreenRadius() -> getMaxLedRadius() fix. On L10 MK1
 // the corner LEDs sit at radius ~66 while getScreenRadius() is 51, so
 // map(radius, 0, 51, 0, 255) extrapolated past 255 and the uint8_t cache
 // wrapped: a radius-66 LED cached as ~74, right next to a radius-51 LED cached
 // as 255. The cache must be monotone non-decreasing in true radius.
 void test_ninja_star_radius_cache_is_monotone_on_a_panel_with_far_corners()
 {
-    GEOMETRY.initializeForTest(ModelId::L10_MK2);
+    GEOMETRY.initializeForTest(ModelId::L10_MK1);
 
     NinjaStar fx;
     fx.ensurePerLedCache();
@@ -807,7 +807,7 @@ void test_polar_swipe_evaluate_matches_color_scaled_by_brightness()
 // branch had zero coverage of any kind before.
 void test_polar_swipe_andromeda_strip0_is_always_black()
 {
-    GEOMETRY.initializeForTest(ModelId::ANDROMEDA_MK1);
+    GEOMETRY.initializeForTest(ModelId::ANDROMEDA_MK0);
     PolarSwipe fx;
     fx.bandCenter = 100;
     fx.color = CRGB::White;
@@ -1090,7 +1090,7 @@ void test_bouncing_ball_glow_balls_stay_inside_the_render_area()
 
 void test_bouncing_ball_glow_evaluates_on_l10_and_multi_strip_models()
 {
-    for (ModelId model : {ModelId::L10_MK2, ModelId::ANDROMEDA_MK1})
+    for (ModelId model : {ModelId::L10_MK1, ModelId::ANDROMEDA_MK0})
     {
         GEOMETRY.initializeForTest(model);
         BouncingBallGlow fx;

@@ -9,7 +9,7 @@
 // static files unmodified, and forwards newline-delimited JSON both ways
 // between connected browsers and the native core's stdio.
 //
-// Usage: node tools/native-bridge/server.js [--model="Andromeda Mk1"]
+// Usage: node tools/native-bridge/server.js [--model="Andromeda MK0"]
 //   PORT env var overrides the default HTTP port (8080).
 
 const http = require('http');

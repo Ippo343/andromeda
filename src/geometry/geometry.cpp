@@ -342,7 +342,7 @@ const char* MODEL_ID_KEY = "model_id";
 // getModelId() below persists this the first time it's asked, so from that
 // point on the device genuinely *is* configured, as this model, same as if
 // someone had picked it by hand.
-constexpr ModelId DEFAULT_MODEL_ID = ModelId::L10_MK2;
+constexpr ModelId DEFAULT_MODEL_ID = ModelId::L10_MK1;
 
 void setModelId(ModelId model_id)
 {

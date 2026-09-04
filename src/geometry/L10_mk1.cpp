@@ -5,18 +5,24 @@
 
 namespace L10_MK1
 {
-// TODO: these is all tentative right now
+// Single 56-LED strip: a chamfered square, 13 LEDs per side plus one corner
+// LED at each of the four corners. Coordinates in whole mm, origin at centre
+// (rounded from the supplied CSV; panel spans +-51.455 mm on both axes).
 
 const uint8_t NUM_STRIPS = 1;
-const PROGMEM size_t STRIP_LENGTHS[NUM_STRIPS] = {52};
+const PROGMEM size_t STRIP_LENGTHS[NUM_STRIPS] = {56};
 const PROGMEM uint8_t PIN_MAP[NUM_STRIPS] = {1};
 
 // clang-format off
-const PROGMEM CartesianCoordinates coords_L10[52] = {
-  {   42,   42 }, {   35,   42 }, {   28,   42 }, {   21,   42 }, {   14,   42 }, {    7,   42 }, {    0,   42 }, {   -7,   42 }, {  -14,   42 }, {  -21,   42 }, {  -28,   42 }, {  -35,   42 }, {  -42,   42 },
-  {  -42,   42 }, {  -42,   35 }, {  -42,   28 }, {  -42,   21 }, {  -42,   14 }, {  -42,    7 }, {  -42,    0 }, {  -42,   -7 }, {  -42,  -14 }, {  -42,  -21 }, {  -42,  -28 }, {  -42,  -35 }, {  -42,  -42 },
-  {  -42,  -42 }, {  -35,  -42 }, {  -28,  -42 }, {  -21,  -42 }, {  -14,  -42 }, {   -7,  -42 }, {    0,  -42 }, {    7,  -42 }, {   14,  -42 }, {   21,  -42 }, {   28,  -42 }, {   35,  -42 }, {   42,  -42 },
-  {   42,  -42 }, {   42,  -35 }, {   42,  -28 }, {   42,  -21 }, {   42,  -14 }, {   42,   -7 }, {   42,    0 }, {   42,    7 }, {   42,   14 }, {   42,   21 }, {   42,   28 }, {   42,   35 }, {   42,   42 }
+const PROGMEM CartesianCoordinates coords_L10_MK1[56] = {
+  { -42, -51 }, { -35, -51 }, { -28, -51 }, { -21, -51 }, { -14, -51 }, {  -7, -51 }, {   0, -51 }, {   7, -51 }, {  14, -51 }, {  21, -51 }, {  28, -51 }, {  35, -51 }, {  42, -51 },
+  {  47, -47 },
+  {  51, -42 }, {  51, -35 }, {  51, -28 }, {  51, -21 }, {  51, -14 }, {  51,  -7 }, {  51,   0 }, {  51,   7 }, {  51,  14 }, {  51,  21 }, {  51,  28 }, {  51,  35 }, {  51,  42 },
+  {  47,  47 },
+  {  42,  51 }, {  35,  51 }, {  28,  51 }, {  21,  51 }, {  14,  51 }, {   7,  51 }, {   0,  51 }, {  -7,  51 }, { -14,  51 }, { -21,  51 }, { -28,  51 }, { -35,  51 }, { -42,  51 },
+  { -47,  47 },
+  { -51,  42 }, { -51,  35 }, { -51,  28 }, { -51,  21 }, { -51,  14 }, { -51,   7 }, { -51,   0 }, { -51,  -7 }, { -51, -14 }, { -51, -21 }, { -51, -28 }, { -51, -35 }, { -51, -42 },
+  { -47, -47 }
 };
 // clang-format on
 
@@ -28,9 +34,9 @@ extern const ModelConfig CONFIG = {
     .strip_lengths = STRIP_LENGTHS,
     .pin_map = PIN_MAP,
 
-    .screen_height_mm = 84,
-    .screen_width_mm = 84,
-    .cartesian_data = (const CartesianCoordinates*)coords_L10,
+    .screen_height_mm = 103,
+    .screen_width_mm = 103,
+    .cartesian_data = (const CartesianCoordinates*)coords_L10_MK1,
 
     .min_frame_duration_ms = 7,  // 7ms = ~142fps
 };

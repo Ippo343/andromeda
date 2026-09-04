@@ -152,17 +152,17 @@ void test_geometry_initialize_for_test_loads_single_strip_device()
     TEST_ASSERT_EQUAL_INT16(-458, last.cartesian.x);
 }
 
-// L10 MK2: a real single-strip production model (56 LEDs, chamfered square,
+// L10 MK1: a real single-strip production model (56 LEDs, chamfered square,
 // real coordinate table) loaded through the same ModelId -> Geometry path.
-void test_geometry_initialize_for_test_loads_l10_mk2_model()
+void test_geometry_initialize_for_test_loads_l10_mk1_model()
 {
-    GEOMETRY.initializeForTest(ModelId::L10_MK2);
+    GEOMETRY.initializeForTest(ModelId::L10_MK1);
 
     TEST_ASSERT_EQUAL_INT(1, GEOMETRY.getNumStrips());
     TEST_ASSERT_EQUAL_INT(56, GEOMETRY.getStrip(0).num_leds);
 
-    // First LED of coords_L10_MK2 is {-42, -51}, last is the {-47, -47} corner
-    // per src/geometry/L10_mk2.cpp.
+    // First LED of coords_L10_MK1 is {-42, -51}, last is the {-47, -47} corner
+    // per src/geometry/L10_mk1.cpp.
     const Led& first = GEOMETRY.getStrip(0).leds[0];
     TEST_ASSERT_EQUAL_INT16(-42, first.cartesian.x);
     TEST_ASSERT_EQUAL_INT16(-51, first.cartesian.y);
@@ -273,8 +273,8 @@ void test_geometry_screen_radius_updates_on_reinitialize_with_different_model()
 // maximum over the loaded coordinate table.
 void test_geometry_max_led_radius_matches_the_loaded_coordinates()
 {
-    for (ModelId id : {ModelId::SINGLE_STRIP_TEST_DEVICE, ModelId::L70_MK1, ModelId::L10_MK1,
-                       ModelId::L10_MK2, ModelId::ANDROMEDA_MK1})
+    for (ModelId id : {ModelId::SINGLE_STRIP_TEST_DEVICE, ModelId::L70_MK1, ModelId::L10_MK0,
+                       ModelId::L10_MK1, ModelId::ANDROMEDA_MK0})
     {
         Geometry local;
         local.initializeForTest(id);
@@ -295,7 +295,7 @@ void test_geometry_max_led_radius_matches_the_loaded_coordinates()
 // scaling polar.radius against getScreenRadius() clips or wraps them.
 void test_geometry_corner_leds_exceed_screen_radius_on_the_2d_panels()
 {
-    for (ModelId id : {ModelId::L10_MK1, ModelId::L10_MK2, ModelId::L70_MK1})
+    for (ModelId id : {ModelId::L10_MK0, ModelId::L10_MK1, ModelId::L70_MK1})
     {
         Geometry local;
         local.initializeForTest(id);
@@ -306,7 +306,7 @@ void test_geometry_corner_leds_exceed_screen_radius_on_the_2d_panels()
 void test_geometry_max_led_radius_updates_on_reinitialize()
 {
     Geometry local;
-    local.initializeForTest(ModelId::L10_MK1);
+    local.initializeForTest(ModelId::L10_MK0);
     uint16_t l10 = local.getMaxLedRadius();
 
     local.initializeForTest(ModelId::L70_MK1);
@@ -411,18 +411,18 @@ void test_model_config_is_in_family()
 
 // A never-touched "device" NVS namespace (Preferences::resetAllForTests() in
 // setUp() guarantees that here) means a genuinely fresh device - getModelId()
-// must self-persist L10_MK2 rather than returning some transient/recomputed
+// must self-persist L10_MK1 rather than returning some transient/recomputed
 // default, so the device is durably configured from its very first read.
-void test_factory_config_defaults_to_l10_mk2_on_a_never_configured_device()
+void test_factory_config_defaults_to_l10_mk1_on_a_never_configured_device()
 {
-    TEST_ASSERT_TRUE(ModelId::L10_MK2 == FactoryConfig::getModelId());
+    TEST_ASSERT_TRUE(ModelId::L10_MK1 == FactoryConfig::getModelId());
 
     // Persisted, not just returned: a second, completely independent
     // Preferences handle must see it too.
     Preferences prefs;
     TEST_ASSERT_TRUE(prefs.begin("device", true));
     TEST_ASSERT_TRUE(prefs.isKey("model_id"));
-    TEST_ASSERT_EQUAL((uint16_t)ModelId::L10_MK2, prefs.getUShort("model_id"));
+    TEST_ASSERT_EQUAL((uint16_t)ModelId::L10_MK1, prefs.getUShort("model_id"));
     prefs.end();
 }
 
@@ -443,7 +443,7 @@ void test_factory_config_get_model_id_falls_back_to_default_on_unregistered_stor
     prefs.putUShort("model_id", 12345);  // no registry entry for this id
     prefs.end();
 
-    TEST_ASSERT_TRUE(FactoryConfig::getModelId() == ModelId::L10_MK2);
+    TEST_ASSERT_TRUE(FactoryConfig::getModelId() == ModelId::L10_MK1);
 }
 
 // Comms::buildCurrentStateJson calls getModelId() on every state-keepalive tick (a few
@@ -459,11 +459,11 @@ void test_factory_config_get_model_id_persists_the_fallback_so_corruption_self_h
     prefs.putUShort("model_id", 12345);  // no registry entry for this id
     prefs.end();
 
-    TEST_ASSERT_TRUE(FactoryConfig::getModelId() == ModelId::L10_MK2);
+    TEST_ASSERT_TRUE(FactoryConfig::getModelId() == ModelId::L10_MK1);
 
     Preferences verify;
     TEST_ASSERT_TRUE(verify.begin("device", true));
-    TEST_ASSERT_EQUAL((uint16_t)ModelId::L10_MK2, verify.getUShort("model_id"));
+    TEST_ASSERT_EQUAL((uint16_t)ModelId::L10_MK1, verify.getUShort("model_id"));
     verify.end();
 }
 
@@ -544,7 +544,7 @@ int main(int argc, char** argv)
 
     RUN_TEST(test_geometry_initialize_for_test_loads_single_strip_device);
     RUN_TEST(test_geometry_initialize_for_test_loads_multi_strip_l70_mk1_model);
-    RUN_TEST(test_geometry_initialize_for_test_loads_l10_mk2_model);
+    RUN_TEST(test_geometry_initialize_for_test_loads_l10_mk1_model);
     RUN_TEST(test_geometry_initialize_for_test_with_unknown_model_falls_back_to_test_device);
     RUN_TEST(test_geometry_fallback_target_does_not_recurse);
     RUN_TEST(test_geometry_reinitialize_frees_previous_allocation);
@@ -562,7 +562,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_get_model_name_known_and_unknown);
     RUN_TEST(test_model_config_is_in_family);
 
-    RUN_TEST(test_factory_config_defaults_to_l10_mk2_on_a_never_configured_device);
+    RUN_TEST(test_factory_config_defaults_to_l10_mk1_on_a_never_configured_device);
     RUN_TEST(test_factory_config_get_model_id_returns_an_explicitly_saved_value);
     RUN_TEST(test_factory_config_get_model_id_falls_back_to_default_on_unregistered_stored_value);
     RUN_TEST(test_factory_config_get_model_id_persists_the_fallback_so_corruption_self_heals);
