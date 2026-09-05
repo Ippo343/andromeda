@@ -4,6 +4,7 @@
 #include <LittleFS.h>
 
 #include "log-suspend.h"
+#include "log-writer-lock.h"
 #include "utils.h"
 
 // Suspends SimpleFileLog before OtaUpdater overwrites the LittleFS partition
@@ -38,6 +39,11 @@ class SimpleFileLog : public Print
     File _logFile;
     size_t _maxSize;
 
+    // Serializes every write() body (including checkRotation()) against the other 5+
+    // FreeRTOS tasks that also log - see log-writer-lock.h for why. Distinct from
+    // LogSuspend above, which only drains writers once for the OTA handoff.
+    LogWriterLock _lock;
+
     void checkRotation()
     {
         if (_logFile.size() > _maxSize)
@@ -64,6 +70,12 @@ class SimpleFileLog : public Print
         // suspend path waits for this to return before LittleFS.end() (see
         // log-suspend.h). Returns false once a suspend is in progress.
         if (!LogSuspend::beginWrite()) return 0;
+
+        // Held for the rest of this function, including checkRotation() - that's what
+        // stops another task's write() from being mid-`_logFile.write(c)` while this one
+        // closes/renames/reopens the shared File out from under it.
+        LogWriterLockGuard guard(_lock);
+
         if (!_logFile)
         {
             LogSuspend::endWrite();

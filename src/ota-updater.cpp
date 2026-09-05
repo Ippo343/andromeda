@@ -405,6 +405,12 @@ void updateTask(void*)
         // pair", failed mount on the next boot). No LittleFS access of any
         // kind is safe again until the reboot below.
         suspendFileLogging([] { vTaskDelay(pdMS_TO_TICKS(1)); });
+
+        // comms.cpp's static-file and log routes check this before touching LittleFS -
+        // without it, a request landing in the next 10-30s (while the FS image below is
+        // being raw-flashed) is a use-after-unmount in the VFS layer. Never cleared: a
+        // reboot always follows this write, successful or not. See fs-health.h.
+        markFsUnmountedForUpdate();
         LittleFS.end();
 
         if (!flashFromUrl(e.fsUrl, e.fsMd5, e.fsBytes, U_SPIFFS, State::WritingFs))

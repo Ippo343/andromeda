@@ -234,6 +234,11 @@ void setUp()
     CommsTestAccess::setWifiManager(Comms::Instance(), fakeWifiManager());
     CommsTestAccess::setupRoutes(Comms::Instance());
 
+    // fs-health.h's flag is a boot-lifetime global, not per-Comms-instance state - reset it
+    // so a previous test's markFsUnmountedForUpdate() (see the fs-health tests below) never
+    // leaks into the next one.
+    g_fsUnmountedForUpdate.store(false);
+
     // Needed only for test_ws_valid_text_frame_queues_command's
     // MissionControl::Instance().update(0) call - see MissionControlTestAccess.
     GEOMETRY.initializeForTest(ModelId::SINGLE_STRIP_TEST_DEVICE);
@@ -1075,6 +1080,62 @@ void test_metrics_http_route_still_returns_full_payload()
 }
 
 // ---------------------------------------------------------------------------
+// fs-health gate (OTA filesystem write) - src/ota-updater.cpp's updateTask()
+// calls markFsUnmountedForUpdate() right before LittleFS.end(); comms.cpp's LittleFS-backed
+// routes must answer 503 without touching LittleFS for the rest of that boot rather than a
+// use-after-unmount crash or a silently-empty 200.
+// ---------------------------------------------------------------------------
+
+// Good weather: normal operation (mayServeFromFs() true, the default) is untouched - a
+// static route still serves the file. The mock's send(Fs&, path, contentType) overload
+// (test/mocks/ESPAsyncWebServer.h) stands in with a "<file:path>" body, so seeing that
+// (rather than the 503 plain-text reason) is proof LittleFS was actually reached.
+void test_static_route_serves_normally_when_fs_available()
+{
+    auto* handler = CommsTestAccess::server(Comms::Instance()).findHandler("/index.html", HTTP_GET);
+    TEST_ASSERT_NOT_NULL(handler);
+
+    AsyncWebServerRequest req;
+    (*handler)(&req);
+
+    TEST_ASSERT_EQUAL_INT(200, req.responseCode);
+    TEST_ASSERT_TRUE(req.responseBody == String("<file:/index.html>"));
+}
+
+// Bad weather: once the OTA path has unmounted LittleFS, the same route must answer 503
+// instead of reaching send(LittleFS, ...) at all - the responseBody is the plain-text
+// reason, never the mock's "<file:...>" marker that only send(Fs&, ...) produces.
+void test_static_route_returns_503_when_fs_unmounted_for_update()
+{
+    g_fsUnmountedForUpdate.store(true);
+
+    auto* handler = CommsTestAccess::server(Comms::Instance()).findHandler("/index.html", HTTP_GET);
+    TEST_ASSERT_NOT_NULL(handler);
+
+    AsyncWebServerRequest req;
+    (*handler)(&req);
+
+    TEST_ASSERT_EQUAL_INT(503, req.responseCode);
+    TEST_ASSERT_FALSE(req.responseBody == String("<file:/index.html>"));
+}
+
+// Same gate, the log routes' separate code path (serveTextFileOrEmpty(), which normally
+// returns an empty 200 for a not-yet-rotated file rather than touching send(LittleFS, ...)
+// at all) - must not read LittleFS.exists()/open() via fileExistsQuiet() either.
+void test_log_route_returns_503_when_fs_unmounted_for_update()
+{
+    g_fsUnmountedForUpdate.store(true);
+
+    auto* handler = CommsTestAccess::server(Comms::Instance()).findHandler("/log0.txt", HTTP_GET);
+    TEST_ASSERT_NOT_NULL(handler);
+
+    AsyncWebServerRequest req;
+    (*handler)(&req);
+
+    TEST_ASSERT_EQUAL_INT(503, req.responseCode);
+}
+
+// ---------------------------------------------------------------------------
 // Captive portal
 // ---------------------------------------------------------------------------
 
@@ -1277,6 +1338,10 @@ int main(int argc, char** argv)
     RUN_TEST(test_metrics_disconnect_drops_subscriber_without_crashing);
     RUN_TEST(test_metrics_never_subscribed_client_receives_nothing);
     RUN_TEST(test_metrics_http_route_still_returns_full_payload);
+
+    RUN_TEST(test_static_route_serves_normally_when_fs_available);
+    RUN_TEST(test_static_route_returns_503_when_fs_unmounted_for_update);
+    RUN_TEST(test_log_route_returns_503_when_fs_unmounted_for_update);
 
     RUN_TEST(test_not_found_redirects_in_ap_mode);
     RUN_TEST(test_not_found_returns_404_in_station_mode);
