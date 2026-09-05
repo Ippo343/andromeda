@@ -1,5 +1,9 @@
 #pragma once
 
+// Disabled for v1.0 (issue #199, follow-up #238) - not yet decided whether Multi
+// Pendulum earns a rotation slot. Comment out to bring it back into the build.
+#define ANDROMEDA_DISABLE_MULTI_PENDULUM
+
 #include "effects-base.h"
 #include "effects/angular-palette-rotation.h"
 #include "effects/bezier-swarm.h"
@@ -10,9 +14,10 @@
 #include "effects/heat-diffusion-ring.h"
 #include "effects/hexagonal-ripple-galaxy.h"
 #include "effects/individual-strip-drift.h"
-#include "effects/individual-strip-moodlight.h"
 #include "effects/jelly-frame.h"
+#ifndef ANDROMEDA_DISABLE_MULTI_PENDULUM
 #include "effects/multi-pendulum.h"
+#endif
 #include "effects/ninja-star.h"
 #include "effects/palette-wave.h"
 #include "effects/polar-moodlight.h"
@@ -39,7 +44,6 @@ enum class EffectId : uint8_t
     HeatDiffusionRing,
     HexagonalRippleGalaxy,
     IndividualStripDrift,
-    IndividualStripMoodlight,
     JellyFrame,
     MultiPendulum,
     NinjaStar,

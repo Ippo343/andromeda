@@ -113,18 +113,6 @@ void test_static_color_converges_within_one_second()
 }
 
 // ---------------------------------------------------------------------------
-// IndividualStripMoodlight
-// ---------------------------------------------------------------------------
-
-void test_individual_strip_moodlight_evaluates()
-{
-    IndividualStripMoodlight fx;
-    exerciseEvaluate(fx, 1000);
-    LedStrip& strip = GEOMETRY.getStrip(0);
-    TEST_ASSERT_TRUE(fx.evaluate(&strip, &strip.leds[0], 0, 1000) == fx.colors[0]);
-}
-
-// ---------------------------------------------------------------------------
 // ElectricSparks
 // ---------------------------------------------------------------------------
 
@@ -973,6 +961,8 @@ void test_bezier_swarm_single_emitter_hue_changes_over_time()
 // MultiPendulum
 // ---------------------------------------------------------------------------
 
+#ifndef ANDROMEDA_DISABLE_MULTI_PENDULUM
+
 void test_multi_pendulum_evaluates()
 {
     MultiPendulum fx;
@@ -1031,6 +1021,8 @@ void test_multi_pendulum_initial_reach_uses_narrower_screen_dimension()
         for (auto& p : fx.positions) TEST_ASSERT_TRUE(p.length() <= bound * 1.01f);
     }
 }
+
+#endif  // ANDROMEDA_DISABLE_MULTI_PENDULUM
 
 // ---------------------------------------------------------------------------
 // BouncingBallGlow
@@ -1549,16 +1541,16 @@ void test_get_random_effect_produces_valid_effects()
         namesSeen.insert(fx->GetName());
         delete fx;
     }
-    // 18 possible effects; 300 draws (never repeating consecutively) should
+    // 16 possible effects; 300 draws (never repeating consecutively) should
     // realistically hit all of them.
-    TEST_ASSERT_TRUE(namesSeen.size() >= 15);
+    TEST_ASSERT_TRUE(namesSeen.size() >= 13);
 }
 
 // ---------------------------------------------------------------------------
 // EFFECT_REGISTRY / createEffect()
 // ---------------------------------------------------------------------------
 
-void test_num_effects_matches_registry_length() { TEST_ASSERT_EQUAL_INT(18, NUM_EFFECTS); }
+void test_num_effects_matches_registry_length() { TEST_ASSERT_EQUAL_INT(16, NUM_EFFECTS); }
 
 void test_create_effect_matches_registry_name_for_every_entry()
 {
@@ -1578,8 +1570,6 @@ void run_test_effects_tests()
     RUN_TEST(test_static_color_default_constructor);
     RUN_TEST(test_static_color_blend_scales_with_dt_not_call_count);
     RUN_TEST(test_static_color_converges_within_one_second);
-
-    RUN_TEST(test_individual_strip_moodlight_evaluates);
 
     RUN_TEST(test_electric_sparks_runs_full_frame_cycle);
     RUN_TEST(test_electric_sparks_avg38_clamps);
@@ -1641,10 +1631,12 @@ void run_test_effects_tests()
     RUN_TEST(test_bezier_swarm_sets_rotate_space_hint);
     RUN_TEST(test_bezier_swarm_single_emitter_hue_changes_over_time);
 
+#ifndef ANDROMEDA_DISABLE_MULTI_PENDULUM
     RUN_TEST(test_multi_pendulum_evaluates);
     RUN_TEST(test_multi_pendulum_brighter_near_an_emitter_than_far_away);
     RUN_TEST(test_multi_pendulum_sets_rotate_space_hint);
     RUN_TEST(test_multi_pendulum_initial_reach_uses_narrower_screen_dimension);
+#endif
 
     RUN_TEST(test_bouncing_ball_glow_evaluates);
     RUN_TEST(test_bouncing_ball_glow_brighter_near_a_ball_than_far_away);
