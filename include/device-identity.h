@@ -52,6 +52,12 @@ String getMdnsHostname();
 // stays reachable at its factory name even after the custom one changes.
 String getDefaultMdnsHostname();
 
+// Lowercased, UID-free model token (e.g. "l70"), or "andromeda" if the running model is
+// unresolvable - the bare-model half of the mDNS host pair Comms::startMdns() falls back to
+// when "<model-token>-<uid>" (getDefaultMdnsHostname()) turns out to be taken (see
+// include/mdns-hosts.h).
+String getModelMdnsHostname();
+
 // Lowercased "andromeda-<uid>" mDNS label - model-independent, so
 // docs/stickers can give one formula for every board regardless of which
 // model it is ("your device answers to andromeda-" + the 4-character UID on

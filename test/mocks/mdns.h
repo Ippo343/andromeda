@@ -43,3 +43,7 @@ struct mdns_ip_addr_t
 inline esp_err_t mdns_delegate_hostname_add(const char*, const mdns_ip_addr_t*) { return ESP_OK; }
 inline esp_err_t mdns_delegate_hostname_remove(const char*) { return ESP_OK; }
 inline bool mdns_hostname_exists(const char*) { return false; }
+inline esp_err_t mdns_init() { return ESP_OK; }
+// Always "not found" (available) - deterministic for tests, and comms.cpp only ever branches
+// on == ESP_OK, so any non-ESP_OK value is equivalent here (see include/mdns-hosts.h, #210).
+inline esp_err_t mdns_query_a(const char*, uint32_t, esp_ip4_addr_t*) { return ESP_FAIL; }

@@ -41,12 +41,15 @@ class Comms
     SetupOutcome setup();
     void printWifiStatus();
 
-    // The mDNS names this device currently answers to, "andromeda.local" included, as a
-    // JSON array literal (e.g. `["kitchen.local","l70-a1b2.local","andromeda-a1b2.local",
-    // "andromeda.local"]`) - shared by GET /device-info and (once mDNS-aware) the WiFi
-    // setup page (see include/mdns-hosts.h, issue #135). Safe to call before mDNS has
-    // started (AP mode's setup page needs this before any radio work has happened).
-    static String mdnsHostsJson();
+    // The mDNS names this device currently answers to, as a JSON array literal (e.g.
+    // `["kitchen.local","l70-a1b2.local","andromeda.local"]`) - shared by GET /device-info and
+    // the WiFi setup page. Each entry is the resolved winner of a device/model/andromeda name
+    // pair (see include/mdns-hosts.h, issues #135/#210); a pair only shows its "-<uid>" half
+    // once a real network connection has confirmed the plain half is already taken by someone
+    // else. Safe to call before mDNS has started (AP mode's setup page needs this before any
+    // radio work has happened, and before there's a network to check availability against at
+    // all - it falls back to the plain, unchecked names then).
+    String mdnsHostsJson();
 
     // Hot-switches an already-running station-mode device into the setup AP, without
     // restarting the web server (AsyncTCP listens on 0.0.0.0, so it keeps serving once the AP
@@ -230,6 +233,28 @@ class Comms
     // WiFi-recovery monitor while station mode's MDNS.begin() already ran) but always
     // re-registers the delegated addresses, since those must track the current IP.
     bool mdnsStarted = false;
+
+    // The three resolved name-pair winners (device/model/andromeda - see include/mdns-hosts.h),
+    // decided once by startMdns()'s first call and reused by every later call (IP renewal) and
+    // by mdnsHostsJson()/printWifiStatus() - availability can only be probed once there's a real
+    // network to ask (WL_CONNECTED), so an AP-mode-only boot never resolves anything beyond the
+    // plain, unchecked defaults. A device that boots to AP mode always reboots before it can
+    // join a real network (a successful /save credential test ends in ESP.restart(), same as a
+    // rename - see setDeviceName()'s comment), so there's no live AP-to-station transition within
+    // one boot that would need re-resolving mid-flight.
+    String resolvedDeviceHost;
+    String resolvedModelHost;
+    String resolvedAndromedaHost;
+
+    // The exact hostname registered with MDNS.begin() at boot - captured once, alongside the
+    // resolved* members above, and reused for every later startMdns() call (IP renewal). Must
+    // never be recomputed live from DeviceIdentity::getMdnsHostname(): a rename only takes
+    // effect after reboot (see DeviceIdentity's header comment), so a live rename would make a
+    // fresh call return a name this device hasn't actually registered as its primary yet - and
+    // registerMdnsDelegates() would then mistake the still-real primary for an unclaimed name
+    // and push it through the delegate-remove/re-add path, which is meant for delegated
+    // hostnames only.
+    String primaryMdnsHostname;
 
     bool startAPMode();
     bool startStationMode();
