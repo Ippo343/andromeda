@@ -40,11 +40,9 @@ extern const ModelConfig CONFIG = {
 
     .min_frame_duration_ms = 7,  // 7ms = ~142fps
 
-    // Same 1200mAh 3.7V Li-Ion 18650 as L10 MK0, continuous discharge rated
-    // 0.6-1.8A (2.4A peak), stepped up to the 5V LED rail through a boost converter
-    // (~85% assumed efficiency). Budget derived from the continuous rating, not
-    // peak: 1800mA * 3.7V * 0.85 / 5V =~ 1130mA. See #159.
-    .max_milliamps = 1130,
+    // Same cell, boost converter and 5V LED rail as L10 MK0 - see the budget
+    // derivation in L10_mk0.cpp (#216).
+    .max_milliamps = 650,
 };
 
 }  // namespace L10_MK1
