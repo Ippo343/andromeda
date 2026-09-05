@@ -34,11 +34,28 @@ extern const ModelConfig CONFIG = {
 
     .min_frame_duration_ms = 7,  // 7ms = ~142fps
 
-    // 1200mAh 3.7V Li-Ion 18650, continuous discharge rated 0.6-1.8A (2.4A peak),
-    // stepped up to the 5V LED rail through a boost converter (~85% assumed
-    // efficiency). Budget derived from the continuous rating, not peak, since this
-    // caps sustained draw: 1800mA * 3.7V * 0.85 / 5V =~ 1130mA. See #159.
-    .max_milliamps = 1130,
+    // 1200mAh Li-Ion 18650, continuous discharge rated 0.6-1.8A, stepped up to the
+    // 5V LED rail through a boost converter. Derived at the worst-case operating
+    // point rather than the nominal one (#216 - the earlier 1130mA budget used the
+    // cell's 3.7V nominal and browned out on a partly-discharged battery):
+    //
+    //   cell:    1.8A * 3.2V = 5.8W    3.2V, not 3.7V - the boost is a constant-power
+    //                                  load, so the binding case is a low-SoC cell
+    //                                  (~3.4V open-circuit) sagging ~0.2V under 1.8A
+    //                                  across ~110mOhm of DC internal resistance.
+    //   - MCU:   5.8W - 0.6W = 5.2W    the ESP32 runs off the same cell and is not in
+    //                                  FastLED's estimate (its gMCU_mW reserves 25mA
+    //                                  @5V and wrongly scales even that by brightness).
+    //                                  An ESP32-C3 draws ~84mA @3.3V connected-idle and
+    //                                  bursts to 335mA on WiFi TX - those bursts are
+    //                                  what actually trips the brownout detector.
+    //   * boost: 5.2W * 0.80 = 4.2W    80%, not 85%, for a 3.2V->5V step-up near the
+    //                                  module's full load.
+    //   / 5V:    4.2W / 5V  =  830mA
+    //   * 0.8:                 650mA   FastLED's own model is documented approximate
+    //                                  (~10%) and is a per-frame average; the brownout
+    //                                  detector trips on microsecond dips.
+    .max_milliamps = 650,
 };
 
 }  // namespace L10_MK0
