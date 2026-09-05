@@ -23,6 +23,7 @@
 inline uint32_t estimateCurrentMa(uint32_t unscaledMilliwattsAt255, uint8_t appliedBrightness,
                                   uint16_t railMillivolts = 5000)
 {
+    if (railMillivolts == 0) return 0;
     uint64_t scaledMilliwatts = (uint64_t)unscaledMilliwattsAt255 * appliedBrightness / 255;
     return (uint32_t)(scaledMilliwatts * 1000 / railMillivolts);
 }
