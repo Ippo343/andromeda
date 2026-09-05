@@ -1,5 +1,6 @@
 #include <unity.h>
 
+#include "geometry/model_registry.h"
 #include "power-monitor.h"
 
 // Exposes PowerMonitor's private sample buffer to this test file via the
@@ -52,6 +53,21 @@ void test_estimate_current_ma_zero_power_is_zero()
     TEST_ASSERT_EQUAL_UINT32(0, estimateCurrentMa(0, 255));
 }
 
+void test_estimate_current_ma_zero_rail_millivolts_returns_zero_no_trap()
+{
+    // A zero rail_millivolts (bad ModelConfig, e.g. a designated-initializer
+    // typo) must not divide by zero on the per-frame path - see #221.
+    TEST_ASSERT_EQUAL_UINT32(0, estimateCurrentMa(5000, 255, 0));
+}
+
+void test_every_registered_model_has_a_nonzero_rail_voltage()
+{
+    // Guards against a future ModelConfig shipping rail_millivolts == 0, which
+    // would reach estimateCurrentMa() on every rendered frame - see #221.
+    for (size_t i = 0; i < NUM_MODELS; i++)
+        TEST_ASSERT_GREATER_THAN_UINT16(0, MODEL_REGISTRY[i]->rail_millivolts);
+}
+
 void test_estimate_current_ma_does_not_overflow_on_a_large_panel()
 {
     // A large panel at full white can approach UINT32_MAX in unscaled mW;
@@ -98,6 +114,8 @@ void run_test_power_monitor_tests()
     RUN_TEST(test_estimate_current_ma_at_a_non_default_rail_voltage);
     RUN_TEST(test_estimate_current_ma_zero_brightness_is_zero);
     RUN_TEST(test_estimate_current_ma_zero_power_is_zero);
+    RUN_TEST(test_estimate_current_ma_zero_rail_millivolts_returns_zero_no_trap);
+    RUN_TEST(test_every_registered_model_has_a_nonzero_rail_voltage);
     RUN_TEST(test_estimate_current_ma_does_not_overflow_on_a_large_panel);
     RUN_TEST(test_current_ma_averages_uniform_samples);
     RUN_TEST(test_current_ma_averages_varying_samples);
