@@ -13,7 +13,7 @@
 class RGBodyProblem : public EmitterFieldEffect
 {
    public:
-    const char* GetName() override { return "RG Body Problem"; }
+    const char* GetName() override { return "RGBody Problem"; }
 
     NBodySystem sim;
 

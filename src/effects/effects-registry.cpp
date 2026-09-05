@@ -9,14 +9,15 @@ const EffectInfo EFFECT_REGISTRY[] = {
     {EffectId::HeatDiffusionRing, "Heat Diffusion Ring"},
     {EffectId::HexagonalRippleGalaxy, "Hexagonal Ripple Galaxy"},
     {EffectId::IndividualStripDrift, "Individual Strip Drift"},
-    {EffectId::IndividualStripMoodlight, "Individual Strip Moodlight"},
     {EffectId::JellyFrame, "Jelly Frame"},
+#ifndef ANDROMEDA_DISABLE_MULTI_PENDULUM
     {EffectId::MultiPendulum, "Multi Pendulum"},
+#endif
     {EffectId::NinjaStar, "Ninja Star"},
     {EffectId::PaletteWave, "Palette Wave"},
     {EffectId::PolarMoodlight, "Polar Moodlight"},
     {EffectId::PolarSwipe, "Polar Swipe"},
-    {EffectId::RGBodyProblem, "RG Body Problem"},
+    {EffectId::RGBodyProblem, "RGBody Problem"},
     {EffectId::SaturationGlow, "Saturation Glow"},
     {EffectId::StandingWaveRing, "Standing Wave Ring"},
 };
@@ -44,12 +45,12 @@ AbstractEffect* createEffect(EffectId id)
             return new HexagonalRippleGalaxy();
         case EffectId::IndividualStripDrift:
             return new IndividualStripDrift();
-        case EffectId::IndividualStripMoodlight:
-            return new IndividualStripMoodlight();
         case EffectId::JellyFrame:
             return new JellyFrame();
+#ifndef ANDROMEDA_DISABLE_MULTI_PENDULUM
         case EffectId::MultiPendulum:
             return new MultiPendulum();
+#endif
         case EffectId::NinjaStar:
             return new NinjaStar();
         case EffectId::PaletteWave:
