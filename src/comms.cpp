@@ -651,10 +651,15 @@ void Comms::setupRoutes()
     server.on("/device-info", HTTP_GET,
               [](AsyncWebServerRequest* r)
               {
+                  // connectedSsid lets the WiFi setup page (#210) show the already-joined
+                  // network directly instead of always kicking off a fresh scan on load -
+                  // empty when in AP mode (WiFi.SSID() returns "" there).
+                  bool connected = WiFi.status() == WL_CONNECTED;
                   String json = "{\"name\":\"" + DeviceIdentity::getDeviceName() +
                                 "\",\"defaultName\":\"" + DeviceIdentity::getDefaultName() +
                                 "\",\"uid\":\"" + String(DeviceIdentity::getUid()) +
-                                "\",\"hosts\":" + Comms::mdnsHostsJson() + "}";
+                                "\",\"hosts\":" + Comms::mdnsHostsJson() + ",\"connectedSsid\":\"" +
+                                (connected ? jsonEscape(WiFi.SSID()) : "") + "\"}";
                   r->send(200, "application/json", json);
               });
     server.on(

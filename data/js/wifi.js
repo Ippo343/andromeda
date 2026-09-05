@@ -335,49 +335,49 @@ function resetCredentials() {
     }
 }
 
-// Fills #deviceAddresses from GET /device-info, and leaves it there for the rest of the
-// page's life - see wifi-setup.html's comment on why this can't wait until /save-status
+// Fills #deviceAddresses from a /device-info response, and leaves it there for the rest of
+// the page's life - see wifi-setup.html's comment on why this can't wait until /save-status
 // resolves. formatDeviceAddresses (wifi-logic.js) already tolerates a missing/malformed
-// payload; a network failure here just leaves the panel hidden rather than blocking setup.
-function loadDeviceAddresses() {
+// payload; nothing to render just leaves the panel hidden rather than blocking setup.
+function renderDeviceAddresses(info) {
     const panel = document.getElementById('deviceAddresses');
     if (!panel) return;
 
-    fetch('/device-info')
-        .then(response => (response.ok ? response.json() : null))
-        .then(info => {
-            const addresses = formatDeviceAddresses(info);
-            if (addresses.length === 0) return;
+    const addresses = formatDeviceAddresses(info);
+    if (addresses.length === 0) return;
 
-            const items = addresses
-                .map((addr, i) => `
-                    <li>
-                        <code>${escapeHtml(addr)}</code>
-                        <button type="button" class="copy-btn" data-addr="${escapeHtml(addr)}">Copy</button>
-                    </li>
-                `)
-                .join('');
+    const items = addresses
+        .map((addr, i) => `
+            <li>
+                <code>${escapeHtml(addr)}</code>
+                <button type="button" class="copy-btn" data-addr="${escapeHtml(addr)}">Copy</button>
+            </li>
+        `)
+        .join('');
 
-            panel.innerHTML = `
-                <p>Once connected, this device will be reachable at:</p>
-                <ul>${items}</ul>
-            `;
-            panel.classList.remove('hidden');
+    panel.innerHTML = `
+        <p>Once connected, this device will be reachable at:</p>
+        <ul>${items}</ul>
+    `;
+    panel.classList.remove('hidden');
 
-            panel.querySelectorAll('.copy-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    navigator.clipboard.writeText(btn.dataset.addr).then(() => {
-                        const original = btn.textContent;
-                        btn.textContent = 'Copied!';
-                        setTimeout(() => { btn.textContent = original; }, 1500);
-                    }).catch(() => {});
-                });
-            });
-        })
-        .catch(() => {
-            // No addresses shown is a worse UX than none, but not a broken page - the
-            // reset-and-try-again path (or the eventual success message) still works.
+    panel.querySelectorAll('.copy-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            navigator.clipboard.writeText(btn.dataset.addr).then(() => {
+                const original = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => { btn.textContent = original; }, 1500);
+            }).catch(() => {});
         });
+    });
+}
+
+// Shows the network the device is already joined to instead of the scan list (#210) - a
+// rescan (e.g. to switch networks) only ever happens if the user explicitly clicks
+// #scanBtn from here, same button as the AP-mode path.
+function showConnectedNetwork(ssid) {
+    document.getElementById('status').innerHTML =
+        '<div class="status success">Connected to "' + escapeHtml(ssid) + '"</div>';
 }
 
 function showStatus(message, type) {
@@ -386,13 +386,30 @@ function showStatus(message, type) {
     status.innerHTML = `<div class="status ${type}">${spinner}${message}</div>`;
 }
 
-// Initialize page
+// Initialize page. A single /device-info fetch drives both the address panel and whether
+// to auto-scan (#210): if the device is already joined to a network, show that directly
+// instead of kicking off a scan - a rescan then only happens if the user explicitly asks
+// for one via #scanBtn. Falls back to scanning if the fetch fails, matching the pre-#210
+// AP-mode behavior.
 function initWifiPage() {
     const h1 = document.getElementById("logo");
     h1.style.setProperty('--grad', randomGradient());
 
-    setTimeout(scanNetworks, 500);
-    loadDeviceAddresses();
+    fetch('/device-info')
+        .then(response => (response.ok ? response.json() : null))
+        .then(info => {
+            renderDeviceAddresses(info);
+
+            const connectedSsid = getConnectedSsid(info);
+            if (connectedSsid) {
+                showConnectedNetwork(connectedSsid);
+            } else {
+                setTimeout(scanNetworks, 500);
+            }
+        })
+        .catch(() => {
+            setTimeout(scanNetworks, 500);
+        });
 }
 
 // If the page is restored from the bfcache (user navigated away mid-submit and

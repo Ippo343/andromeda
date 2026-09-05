@@ -14,8 +14,19 @@ function formatDeviceAddresses(info) {
         .map(host => 'http://' + host);
 }
 
+// The SSID the device is already joined to, per /device-info's connectedSsid field (#210) -
+// empty/absent while in AP mode or when talking to older firmware that doesn't serve the
+// field yet. Lets the setup page show the current network directly instead of always
+// kicking off a fresh scan on load.
+function getConnectedSsid(info) {
+    if (!info || typeof info.connectedSsid !== 'string') return null;
+    const ssid = info.connectedSsid.trim();
+    return ssid.length > 0 ? ssid : null;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         formatDeviceAddresses,
+        getConnectedSsid,
     };
 }
