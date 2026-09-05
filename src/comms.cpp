@@ -31,16 +31,18 @@ mdns_ip_addr_t makeMdnsIp(IPAddress ip)
     return addr;
 }
 
-// (Re)points every delegated hostname in `hosts[1..n)` at `ip` - hosts[0] is always the
-// primary name, which MDNS.begin() already owns and probes for itself. A delegate that's
-// already registered from an earlier call must be removed before it can be re-added with a
-// new address; mdns_delegate_hostname_add() on an existing name just fails
-// (ESP_ERR_INVALID_ARG), it doesn't update it in place.
-void registerMdnsDelegates(const char* hosts[], size_t n, IPAddress ip)
+// (Re)points every delegated hostname in `hosts[0..n)` at `ip`, skipping whichever one equals
+// `primaryHostname` (the name MDNS.begin() already owns and probes for itself - never one of
+// the resolved fallbacks, see startMdns()'s "never rename the primary" comment, so it isn't
+// necessarily hosts[0]). A delegate that's already registered from an earlier call must be
+// removed before it can be re-added with a new address; mdns_delegate_hostname_add() on an
+// existing name just fails (ESP_ERR_INVALID_ARG), it doesn't update it in place.
+void registerMdnsDelegates(const char* primaryHostname, const char* hosts[], size_t n, IPAddress ip)
 {
     mdns_ip_addr_t addr = makeMdnsIp(ip);
-    for (size_t i = 1; i < n; i++)
+    for (size_t i = 0; i < n; i++)
     {
+        if (strcmp(hosts[i], primaryHostname) == 0) continue;
         if (mdns_hostname_exists(hosts[i])) mdns_delegate_hostname_remove(hosts[i]);
         esp_err_t err = mdns_delegate_hostname_add(hosts[i], &addr);
         if (err != ESP_OK)
@@ -49,18 +51,22 @@ void registerMdnsDelegates(const char* hosts[], size_t n, IPAddress ip)
     }
 }
 
-// The current deduped host list (include/mdns-hosts.h) - shared by Comms::startMdns() and
-// Comms::mdnsHostsJson() so the two can't independently drift on how it's derived. Returns
-// the same String objects the `out` pointers alias into, so the caller must keep them alive
-// for as long as `out` is used (mirrors buildHostList()'s own no-copy contract).
-size_t currentHostList(const char* out[MdnsHosts::MAX_HOSTS], String& primary, String& defaultHost,
-                       String& andromedaHost)
+// How long to wait for a reply before concluding a candidate hostname is free (issue #210).
+// Responses to a query for a hostname's A record aren't subject to mDNS's usual 20-120ms
+// shared-record jitter (RFC 6762 5.2 - that delay only applies to shared records, and a
+// hostname's own address record is unique to its owner), so a genuinely-taken name answers
+// almost immediately; 100ms leaves headroom for normal WiFi latency without adding much to
+// boot time (3 names checked serially, so ~300ms worst case when everything is free).
+constexpr uint32_t MDNS_AVAILABILITY_TIMEOUT_MS = 100;
+
+// True if some other device on the network is already answering for `host`. Only meaningful
+// once actually joined to a real network (see startMdns()'s WL_CONNECTED gate) - calling this
+// against a name this device itself hasn't registered yet, which is exactly how startMdns()
+// uses it (always before registering anything for that name), so it can never just find itself.
+bool isHostnameTaken(const String& host)
 {
-    primary = DeviceIdentity::getMdnsHostname();
-    defaultHost = DeviceIdentity::getDefaultMdnsHostname();
-    andromedaHost = DeviceIdentity::getAndromedaMdnsHostname();
-    return MdnsHosts::buildHostList(primary.c_str(), defaultHost.c_str(), andromedaHost.c_str(),
-                                    out);
+    esp_ip4_addr_t addr{};
+    return mdns_query_a(host.c_str(), MDNS_AVAILABILITY_TIMEOUT_MS, &addr) == ESP_OK;
 }
 }  // namespace
 
@@ -193,9 +199,20 @@ Comms::SetupOutcome Comms::setup()
 
 String Comms::mdnsHostsJson()
 {
-    String primary, defaultHost, andromedaHost;
+    // Before startMdns() has ever run (a fresh AP-mode boot's setup page can ask before the
+    // radio's done any work at all - see this function's header comment) there's nothing
+    // resolved yet: fall back to the plain, unchecked defaults, same as an AP-only boot ends up
+    // resolving anyway (see startMdns()'s WL_CONNECTED gate).
+    String deviceHost =
+        resolvedDeviceHost.length() ? resolvedDeviceHost : DeviceIdentity::getMdnsHostname();
+    String modelHost =
+        resolvedModelHost.length() ? resolvedModelHost : DeviceIdentity::getDefaultMdnsHostname();
+    String andromedaHost =
+        resolvedAndromedaHost.length() ? resolvedAndromedaHost : String("andromeda");
+
     const char* hosts[MdnsHosts::MAX_HOSTS];
-    size_t n = currentHostList(hosts, primary, defaultHost, andromedaHost);
+    size_t n = MdnsHosts::buildHostList(deviceHost.c_str(), modelHost.c_str(),
+                                        andromedaHost.c_str(), hosts);
 
     String json = "[";
     for (size_t i = 0; i < n; i++)
@@ -217,16 +234,57 @@ void Comms::startMdns(IPAddress ip)
 {
     if (!mdnsStarted)
     {
+        String deviceHost = DeviceIdentity::getMdnsHostname();
+        primaryMdnsHostname = deviceHost;
+
+        // Availability can only be checked once there's a real network to ask - an AP-mode-only
+        // boot (WiFi.status() != WL_CONNECTED there) has nothing else to collide with, and
+        // that's also exactly the case where /device-info's "hosts" list gets asked for before
+        // this ever runs (issue #210), so there'd be nothing to show for the checked state
+        // anyway. mdns_init() runs early (idempotent - MDNS.begin() below calls it again) so
+        // mdns_query_a() has a responder to query against before this device claims any name of
+        // its own; querying only ever targets names not yet registered to us (each check runs
+        // before that pair's winner is registered anywhere), so a query can never just find
+        // ourselves.
+        bool checkAvailability = WiFi.status() == WL_CONNECTED;
+        if (checkAvailability)
+        {
+            mdns_init();
+            resolvedDeviceHost =
+                MdnsHosts::resolveFallback(isHostnameTaken(deviceHost), deviceHost.c_str(),
+                                           (deviceHost + "-" + DeviceIdentity::getUid()).c_str());
+
+            String modelUidHost = DeviceIdentity::getDefaultMdnsHostname();
+            resolvedModelHost =
+                MdnsHosts::resolveFallback(isHostnameTaken(modelUidHost), modelUidHost.c_str(),
+                                           DeviceIdentity::getModelMdnsHostname().c_str());
+
+            resolvedAndromedaHost =
+                MdnsHosts::resolveFallback(isHostnameTaken("andromeda"), "andromeda",
+                                           DeviceIdentity::getAndromedaMdnsHostname().c_str());
+        }
+        else
+        {
+            resolvedDeviceHost = deviceHost;
+            resolvedModelHost = DeviceIdentity::getDefaultMdnsHostname();
+            resolvedAndromedaHost = "andromeda";
+        }
+
         // Worth a couple of retries rather than giving up on the first transient failure and
         // leaving the device unreachable by name for the rest of the boot. Runs before the web
         // server task exists in the station-mode path, so blocking briefly here is harmless
         // (same reasoning as WifiManager's connect()); in the AP-mode path it can also run at
-        // runtime from the WiFi-recovery monitor task, off the render loop.
+        // runtime from the WiFi-recovery monitor task, off the render loop. Always registers
+        // `deviceHost` as-is, even if the availability check above found it taken - resolving
+        // that would mean actively renaming the device's own primary identity out from under a
+        // running ESP-IDF mDNS instance, not just picking what else to list/delegate; simpler
+        // and safer to leave the primary alone and only steer the delegated/display list (see
+        // registerMdnsDelegates()) toward the free alternative.
         bool ok = false;
         for (int attempt = 0; !ok && attempt < 3; attempt++)
         {
             if (attempt > 0) delay(200);
-            ok = MDNS.begin(DeviceIdentity::getMdnsHostname().c_str());
+            ok = MDNS.begin(deviceHost.c_str());
         }
         if (!ok)
         {
@@ -260,10 +318,10 @@ void Comms::startMdns(IPAddress ip)
         }
     }
 
-    String primary, defaultHost, andromedaHost;
     const char* hosts[MdnsHosts::MAX_HOSTS];
-    size_t n = currentHostList(hosts, primary, defaultHost, andromedaHost);
-    registerMdnsDelegates(hosts, n, ip);
+    size_t n = MdnsHosts::buildHostList(resolvedDeviceHost.c_str(), resolvedModelHost.c_str(),
+                                        resolvedAndromedaHost.c_str(), hosts);
+    registerMdnsDelegates(primaryMdnsHostname.c_str(), hosts, n, ip);
 }
 
 // Shared by startAPMode() (boot-time fallback) and enterAPFallbackMode() (runtime fallback
@@ -658,7 +716,8 @@ void Comms::setupRoutes()
                   String json = "{\"name\":\"" + DeviceIdentity::getDeviceName() +
                                 "\",\"defaultName\":\"" + DeviceIdentity::getDefaultName() +
                                 "\",\"uid\":\"" + String(DeviceIdentity::getUid()) +
-                                "\",\"hosts\":" + Comms::mdnsHostsJson() + ",\"connectedSsid\":\"" +
+                                "\",\"hosts\":" + Comms::Instance().mdnsHostsJson() +
+                                ",\"connectedSsid\":\"" +
                                 (connected ? jsonEscape(WiFi.SSID()) : "") + "\"}";
                   r->send(200, "application/json", json);
               });

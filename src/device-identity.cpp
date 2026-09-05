@@ -24,20 +24,21 @@ const char* getUid()
     return cachedUid;
 }
 
-String getDefaultName()
+namespace
 {
-    // Reads the *running* model (GEOMETRY, already in RAM) rather than
-    // FactoryConfig::getModelId() (NVS): the SSID/hostname are only ever
-    // applied at boot (Comms::setup()), so the name should track what's
-    // actually running, not a model change queued for next boot - and this
-    // is called on every WS state push (Comms::buildCurrentStateJson()), so
-    // it must not cost an NVS read.
+// Shared by getDefaultName() and getModelMdnsHostname(): the sanitized first space-delimited
+// token of the running model's display name (e.g. "L10 MK1" -> "L10", "Andromeda MK0" ->
+// "Andromeda"), read from the *running* model (GEOMETRY, already in RAM) rather than
+// FactoryConfig::getModelId() (NVS) - the SSID/hostname are only ever applied at boot
+// (Comms::setup()), so the name should track what's actually running, not a model change
+// queued for next boot - and getDefaultName() is called on every WS state push
+// (Comms::buildCurrentStateJson()), so it must not cost an NVS read. "" if the model is
+// unresolvable or sanitizes to nothing - both callers fall back to "Andromeda" themselves.
+String modelPrefix()
+{
     const ModelConfig* config = GEOMETRY.getConfig();
-    if (!config || config->name[0] == '\0') return String("Andromeda-") + getUid();
+    if (!config || config->name[0] == '\0') return "";
 
-    // First space-delimited token of the display name, e.g. "L10 MK1" ->
-    // "L10", "Andromeda MK0" -> "Andromeda" (preserving today's default for
-    // that one model). Sanitized the same way a user-supplied name is.
     const char* space = strchr(config->name, ' ');
     size_t tokenLen = space ? (size_t)(space - config->name) : strlen(config->name);
     char prefix[DeviceUid::MAX_NAME_LENGTH + 1];
@@ -47,9 +48,15 @@ String getDefaultName()
 
     char sanitized[DeviceUid::MAX_NAME_LENGTH + 1];
     DeviceUid::sanitize(prefix, sanitized, sizeof(sanitized));
-    if (sanitized[0] == '\0') return String("Andromeda-") + getUid();
+    return String(sanitized);
+}
+}  // namespace
 
-    return String(sanitized) + "-" + getUid();
+String getDefaultName()
+{
+    String prefix = modelPrefix();
+    if (prefix.length() == 0) return String("Andromeda-") + getUid();
+    return prefix + "-" + getUid();
 }
 
 String getCustomName()
@@ -87,6 +94,12 @@ String toMdnsLabel(const String& name)
 String getMdnsHostname() { return toMdnsLabel(getDeviceName()); }
 
 String getDefaultMdnsHostname() { return toMdnsLabel(getDefaultName()); }
+
+String getModelMdnsHostname()
+{
+    String prefix = modelPrefix();
+    return toMdnsLabel(prefix.length() == 0 ? String("Andromeda") : prefix);
+}
 
 String getAndromedaMdnsHostname() { return toMdnsLabel(String("Andromeda-") + getUid()); }
 

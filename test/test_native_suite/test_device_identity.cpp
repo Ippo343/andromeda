@@ -102,6 +102,20 @@ void test_mdns_hostname_matches_lowercased_default_name()
     TEST_ASSERT_EQUAL_STRING(expected.c_str(), DeviceIdentity::getMdnsHostname().c_str());
 }
 
+// --- Bare (UID-free) model mDNS label (#210) --------------------------------
+
+void test_model_mdns_hostname_is_bare_lowercased_prefix()
+{
+    GEOMETRY.initializeForTest(ModelId::L70_MK1);
+    TEST_ASSERT_EQUAL_STRING("l70", DeviceIdentity::getModelMdnsHostname().c_str());
+}
+
+void test_model_mdns_hostname_falls_back_to_andromeda_for_mk0()
+{
+    GEOMETRY.initializeForTest(ModelId::ANDROMEDA_MK0);
+    TEST_ASSERT_EQUAL_STRING("andromeda", DeviceIdentity::getModelMdnsHostname().c_str());
+}
+
 // --- Model-derived default name (#105/#187) ---------------------------------
 
 void test_default_name_derives_from_l70_mk1()
@@ -186,6 +200,8 @@ void run_test_device_identity_tests()
     RUN_TEST(test_mdns_hostname_is_lowercased_device_name);
     RUN_TEST(test_mdns_hostname_truncates_a_maximally_long_name);
     RUN_TEST(test_mdns_hostname_matches_lowercased_default_name);
+    RUN_TEST(test_model_mdns_hostname_is_bare_lowercased_prefix);
+    RUN_TEST(test_model_mdns_hostname_falls_back_to_andromeda_for_mk0);
     RUN_TEST(test_default_name_derives_from_l70_mk1);
     RUN_TEST(test_default_name_derives_from_l10_mk0_and_mk1);
     RUN_TEST(test_default_name_uses_a_single_token_name_whole);
