@@ -2,6 +2,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <map>
 #include <set>
 #include <string>
 #include <utility>
@@ -1150,6 +1153,93 @@ void test_hexagonal_ripple_galaxy_color_varies_with_position()
     TEST_ASSERT_FALSE(a == b);
 }
 
+// Regression guard for #67: angularHue(angle8, harmonic) must be periodic in
+// angle8 with period 256, so the theta-origin ray (where angle8 wraps from
+// 255 back to 0) never shows a hard color boundary. Pure/no-geometry version
+// of the check - the old (angle8 >> hueAngleShift) mapping stepped up to 128
+// across this exact wrap, which this catches directly.
+void test_hexagonal_ripple_galaxy_angular_hue_is_periodic()
+{
+    for (uint8_t harmonic = 1; harmonic <= 3; harmonic++)
+    {
+        uint8_t prev = HexagonalRippleGalaxy::angularHue(255, harmonic);
+        for (uint16_t angle16 = 0; angle16 <= 255; angle16++)
+        {
+            uint8_t angle8 = static_cast<uint8_t>(angle16);
+            uint8_t hue = HexagonalRippleGalaxy::angularHue(angle8, harmonic);
+            // Circular distance in hue space (0-255 wraps around).
+            uint8_t forward = static_cast<uint8_t>(hue - prev);
+            uint8_t backward = static_cast<uint8_t>(prev - hue);
+            uint8_t step = std::min(forward, backward);
+            TEST_ASSERT_TRUE_MESSAGE(step <= 8, "angular hue step too large - seam regression");
+            prev = hue;
+        }
+    }
+}
+
+// End-to-end regression guard for #67, on the actual geometry a seam was
+// reported on: the Grid Test Rig has no LED at exactly y == 0, so the rows
+// at y == -10 and y == +10 straddle the theta-origin ray (angle8 wraps
+// between them) without landing on it exactly. Pair up LEDs on those two
+// rows by x and assert the *hue* (via computeHueForTest(), see #ifdef
+// UNIT_TEST in hexagonal-ripple-galaxy.h) each pair gets is circularly close
+// - this is the check that would have caught the original bug on real
+// geometry. Compared in hue space rather than CHSV(hue,255,255)'s resulting
+// RGB: the rainbow conversion's per-channel slope near a segment boundary can
+// turn even a small, wrap-safe hue step into a large RGB delta, which would
+// make an RGB-distance threshold either too loose to catch a real seam or too
+// tight to tolerate ordinary rendering.
+void test_hexagonal_ripple_galaxy_no_seam_across_theta_origin()
+{
+    GEOMETRY.initializeForTest(ModelId::GRID_TEST_DEVICE);
+    LedStrip& strip = GEOMETRY.getStrip(0);
+
+    // Cover the randomized hueHarmonic/hueRadiusShift draws.
+    for (int trial = 0; trial < 32; trial++)
+    {
+        HexagonalRippleGalaxy fx;
+        fx.precompute(12345);
+
+        // Index the strip's LEDs by (x, y) so pairs can be matched by x.
+        std::map<int16_t, size_t> yMinus10ByX;
+        std::map<int16_t, size_t> yPlus10ByX;
+        for (size_t i = 0; i < strip.num_leds; i++)
+        {
+            int16_t x = strip.leds[i].cartesian.x;
+            int16_t y = strip.leds[i].cartesian.y;
+            if (y == -10) yMinus10ByX[x] = i;
+            if (y == 10) yPlus10ByX[x] = i;
+        }
+        TEST_ASSERT_TRUE(!yMinus10ByX.empty() && !yPlus10ByX.empty());
+
+        for (auto& [x, idxBelow] : yMinus10ByX)
+        {
+            if (x <= 200) continue;  // stay well clear of the center singularity
+            auto it = yPlus10ByX.find(x);
+            if (it == yPlus10ByX.end()) continue;
+            size_t idxAbove = it->second;
+
+            Led& below = strip.leds[idxBelow];
+            Led& above = strip.leds[idxAbove];
+            uint8_t r8Below = map(below.polar.radius, 0, GEOMETRY.getMaxLedRadius(), 0, 255);
+            uint8_t a8Below = map(below.polar.cdegrees % FULL_CIRCLE, 0, FULL_CIRCLE, 0, 255);
+            uint8_t r8Above = map(above.polar.radius, 0, GEOMETRY.getMaxLedRadius(), 0, 255);
+            uint8_t a8Above = map(above.polar.cdegrees % FULL_CIRCLE, 0, FULL_CIRCLE, 0, 255);
+
+            uint8_t hueBelow = fx.computeHueForTest(r8Below, a8Below);
+            uint8_t hueAbove = fx.computeHueForTest(r8Above, a8Above);
+
+            uint8_t forward = static_cast<uint8_t>(hueAbove - hueBelow);
+            uint8_t backward = static_cast<uint8_t>(hueBelow - hueAbove);
+            uint8_t step = std::min(forward, backward);
+
+            char msg[96];
+            snprintf(msg, sizeof(msg), "seam at x=%d, trial=%d", x, trial);
+            TEST_ASSERT_TRUE_MESSAGE(step <= 16, msg);
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // IndividualStripDrift
 // ---------------------------------------------------------------------------
@@ -1565,6 +1655,8 @@ void run_test_effects_tests()
     RUN_TEST(test_hexagonal_ripple_galaxy_evaluates);
     RUN_TEST(test_hexagonal_ripple_galaxy_color_varies_with_time);
     RUN_TEST(test_hexagonal_ripple_galaxy_color_varies_with_position);
+    RUN_TEST(test_hexagonal_ripple_galaxy_angular_hue_is_periodic);
+    RUN_TEST(test_hexagonal_ripple_galaxy_no_seam_across_theta_origin);
 
     RUN_TEST(test_individual_strip_drift_transitions_to_new_target);
     RUN_TEST(test_individual_strip_drift_does_not_strobe_across_millis_rollover);

@@ -16,11 +16,22 @@ class HexagonalRippleGalaxy : public AbstractEffect
     // Randomizable parameters for variation
     RandParam<uint8_t, 6, 9> hueShift;  // Hue cycling divisor (>> 6 to >> 9) - faster
 
-    RandParam<uint8_t, 0, 2> hueAngleShift;   // Hue angle contribution (>> 0 to >> 2)
+    RandParam<uint8_t, 1, 3> hueHarmonic;     // Hue cycles per revolution - must be an
+                                              // integer so the hue closes on itself (#67)
     RandParam<uint8_t, 3, 5> hueRadiusShift;  // Hue radius contribution (>> 3 to >> 5)
 
    public:
     const char* GetName() override { return "Hexagonal Ripple Galaxy"; }
+
+    // Wrap-safe angular hue term (#67). Periodic in angle8 with period 256, so
+    // the value at angle8 == 255 is adjacent in hue space to the value at
+    // angle8 == 0 - no seam along the theta-origin ray. The previous mapping
+    // (angle8 >> hueAngleShift) truncated the span instead of wrapping it,
+    // turning that wrap into a jump of up to half the color wheel.
+    static uint8_t angularHue(uint8_t angle8, uint8_t harmonic)
+    {
+        return static_cast<uint8_t>(angle8 * harmonic);
+    }
 
     void precompute(milliseconds_t t) override
     {
@@ -38,15 +49,32 @@ class HexagonalRippleGalaxy : public AbstractEffect
         uint8_t radius8 = radius8Cache[strip->idx][led_idx];
         uint8_t angle8 = angle8Cache[strip->idx][led_idx];
 
-        // Create color with randomized hue distribution
-        uint8_t hue = baseHue + (angle8 >> static_cast<uint8_t>(hueAngleShift)) +
-                      (radius8 >> static_cast<uint8_t>(hueRadiusShift));
-
         // Use FastLED's built-in HSV to RGB conversion
-        return CHSV(hue, 255, 255);  // Maximum saturation and brightness
+        return CHSV(computeHue(radius8, angle8), 255, 255);  // Maximum saturation and brightness
     }
 
+#ifdef UNIT_TEST
+   public:
+    // Test-only: exposes the hue actually assigned to a LED so native tests
+    // can assert on hue-space continuity across the theta-origin ray (#67)
+    // directly, rather than through CHSV(hue,255,255)'s RGB conversion - whose
+    // per-channel slope near a rainbow segment boundary can turn even a small,
+    // wrap-safe hue step into a large RGB delta and make a threshold on RGB
+    // unreliable.
+    uint8_t computeHueForTest(uint8_t radius8, uint8_t angle8)
+    {
+        return computeHue(radius8, angle8);
+    }
+#endif
+
    private:
+    // Create hue with randomized hue distribution
+    uint8_t computeHue(uint8_t radius8, uint8_t angle8)
+    {
+        return baseHue + angularHue(angle8, static_cast<uint8_t>(hueHarmonic)) +
+               (radius8 >> static_cast<uint8_t>(hueRadiusShift));
+    }
+
     std::vector<std::vector<uint8_t>> radius8Cache;
     std::vector<std::vector<uint8_t>> angle8Cache;
     bool perLedCacheReady = false;
