@@ -48,7 +48,7 @@ body {
 .device-addresses li {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    flex-wrap: wrap;
     gap: 0.5rem;
     margin-bottom: 0.4rem;
 }
@@ -56,6 +56,14 @@ body {
 .device-addresses code {
     color: #64b5f6;
     word-break: break-all;
+    /* Flex items can shrink to their min-content width, and break-all's
+       min-content is a single character - without a floor here the .copy-btn
+       (flex-shrink: 0) claims all the room and this collapses to one letter
+       per line. flex-wrap above is the other half: if there truly isn't
+       min-width available, the button drops to its own line instead of
+       squeezing this further. */
+    flex: 1 1 auto;
+    min-width: 10em;
 }
 
 .device-addresses .copy-btn {
