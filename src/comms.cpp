@@ -7,6 +7,7 @@
 
 #include <cstring>
 
+#include "fs-health.h"
 #include "mdns-hosts.h"
 #include "ota-config.h"
 #include "ota-updater.h"
@@ -107,15 +108,35 @@ static const char* otaStateToken(OtaUpdater::State s)
     return "idle";
 }
 
+// Answers a request that would otherwise touch LittleFS while it's unmounted for an OTA
+// filesystem write (fs-health.h) - a use-after-unmount in the VFS layer, not just a 404.
+// Shared by every route below that reads from LittleFS.
+static bool rejectIfFsUnavailable(AsyncWebServerRequest* r)
+{
+    if (mayServeFromFs()) return false;
+    r->send(503, "text/plain", "filesystem unavailable during firmware update");
+    return true;
+}
+
 // Serves a LittleFS text file if present, else an empty 200 - callers are
 // the log routes, where "file not created yet" is normal and the Advanced
 // page treats an empty body as an empty log.
 static void serveTextFileOrEmpty(AsyncWebServerRequest* r, const char* path)
 {
+    if (rejectIfFsUnavailable(r)) return;
     if (fileExistsQuiet(path))
         r->send(LittleFS, path, "text/plain");
     else
         r->send(200, "text/plain", "");
+}
+
+// Serves a static LittleFS asset - the STATIC_FILE_ROUTE macro below and the "/" and
+// "/wifi" routes (which don't fit that macro's single-path shape) all funnel through this
+// so the fs-unavailable-during-OTA gate lives in exactly one place.
+static void serveStaticFile(AsyncWebServerRequest* r, const char* path, const char* contentType)
+{
+    if (rejectIfFsUnavailable(r)) return;
+    r->send(LittleFS, path, contentType);
 }
 
 // Narrow stopgap against the classic drive-by CSRF one-click case: a foreign page's
@@ -136,7 +157,7 @@ static bool isCrossOriginPost(AsyncWebServerRequest* request)
 
 #define STATIC_FILE_ROUTE(path, contentType) \
     server.on(path, HTTP_GET,                \
-              [](AsyncWebServerRequest* request) { request->send(LittleFS, path, contentType); })
+              [](AsyncWebServerRequest* request) { serveStaticFile(request, path, contentType); })
 
 Comms::Comms()
     : server(80),
@@ -549,7 +570,7 @@ void Comms::setupRoutes()
 
     // Global static files
     server.on("/", HTTP_GET,
-              [](AsyncWebServerRequest* r) { r->send(LittleFS, "/index.html", "text/html"); });
+              [](AsyncWebServerRequest* r) { serveStaticFile(r, "/index.html", "text/html"); });
 
     // TODO: I am confident there must exist a better way.
     // Virtually certain the ESPAsyncWebServer can serve directly from LittleFS with the correct
@@ -578,8 +599,8 @@ void Comms::setupRoutes()
     STATIC_FILE_ROUTE("/device-name.html", "text/html");
     STATIC_FILE_ROUTE("/logs.html", "text/html");
 
-    server.on("/wifi", HTTP_GET,
-              [](AsyncWebServerRequest* r) { r->send(LittleFS, "/wifi-setup.html", "text/html"); });
+    server.on("/wifi", HTTP_GET, [](AsyncWebServerRequest* r)
+              { serveStaticFile(r, "/wifi-setup.html", "text/html"); });
 
     // Log files, served from LittleFS via serveTextFileOrEmpty so a
     // not-yet-created file returns an empty 200 instead of letting the FS
@@ -977,13 +998,16 @@ size_t Comms::buildCurrentStateJson(char* outBuffer, size_t outBufferSize)
     strncpy(runningNameSnapshot, runningDeviceName, sizeof(runningNameSnapshot));
     portEXIT_CRITICAL(&apStateMux);
 
+    // Single load into a local so all 3 channels come from the same snapshot - see
+    // MissionControl::liveColor()'s comment on why this is one atomic word.
+    CRGB color = mc.liveColor();
     WsStateBuilder::DeviceState state{
         .power = mc.isOn(),
         .holding = mc.isHolding() || mc.isHoldPending(),
         .brightness = mc.getMaxBrightness(),
-        .colorR = mc.staticColor.r,
-        .colorG = mc.staticColor.g,
-        .colorB = mc.staticColor.b,
+        .colorR = color.r,
+        .colorG = color.g,
+        .colorB = color.b,
         .colorActive = mc.isColorActive(),
         .effectName = mc.getTargetEffectName(),
         .runningModel = {static_cast<uint16_t>(runningConfig->id), runningConfig->name},

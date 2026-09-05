@@ -1,5 +1,7 @@
 #include <unity.h>
 
+#include <vector>
+
 // mission-control.cpp is #included directly (not compiled via
 // platformio.ini's build_src_filter) so this test binary stays fully
 // self-contained: it needs getRandomEffect() (declared in effects.h,
@@ -61,6 +63,38 @@ class RotatingEffectStub : public AbstractEffect
     CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
     {
         return CRGB::Black;
+    }
+};
+
+// Effect stub for the liveColor() atomicity tests (mission-control.h's staticColorPacked -
+// see setLiveColor()/liveColor()). setColor() is the real per-frame call site
+// (update() -> effect->setColor(liveColor())) and records every color it's handed;
+// optionally, it re-enters MissionControl::setLiveColor() from inside that call -
+// standing in for async_tcp writing a fresh color while the render task (or, via
+// comms.cpp's state broadcast, the WebServer task) is reading the current one.
+class ColorCapturingEffect : public AbstractEffect
+{
+   public:
+    bool wantsLiveColorUpdates() const override { return true; }
+    const char* GetName() override { return "ColorCapturingEffect"; }
+    CRGB evaluate(LedStrip* strip, Led* led, size_t led_idx, milliseconds_t t) override
+    {
+        return CRGB::Black;
+    }
+
+    std::vector<CRGB> observed;
+    MissionControl* reentrantTarget = nullptr;
+    CRGB reentrantColor;
+    bool reentered = false;
+
+    void setColor(CRGB c) override
+    {
+        observed.push_back(c);
+        if (reentrantTarget && !reentered)
+        {
+            reentered = true;
+            reentrantTarget->setLiveColor(reentrantColor.r, reentrantColor.g, reentrantColor.b);
+        }
     }
 };
 
@@ -533,9 +567,9 @@ void test_queue_color_command_sets_static_color_and_enters_static_mode()
     mc.update(0);
 
     TEST_ASSERT_TRUE(mc.isColorActive());
-    TEST_ASSERT_EQUAL_UINT8(10, mc.staticColor.r);
-    TEST_ASSERT_EQUAL_UINT8(20, mc.staticColor.g);
-    TEST_ASSERT_EQUAL_UINT8(30, mc.staticColor.b);
+    TEST_ASSERT_EQUAL_UINT8(10, mc.liveColor().r);
+    TEST_ASSERT_EQUAL_UINT8(20, mc.liveColor().g);
+    TEST_ASSERT_EQUAL_UINT8(30, mc.liveColor().b);
 }
 
 void test_queue_color_command_while_already_in_static_mode_updates_color()
@@ -547,9 +581,9 @@ void test_queue_color_command_while_already_in_static_mode_updates_color()
     mc.update(0);
 
     TEST_ASSERT_TRUE(mc.isColorActive());
-    TEST_ASSERT_EQUAL_UINT8(40, mc.staticColor.r);
-    TEST_ASSERT_EQUAL_UINT8(50, mc.staticColor.g);
-    TEST_ASSERT_EQUAL_UINT8(60, mc.staticColor.b);
+    TEST_ASSERT_EQUAL_UINT8(40, mc.liveColor().r);
+    TEST_ASSERT_EQUAL_UINT8(50, mc.liveColor().g);
+    TEST_ASSERT_EQUAL_UINT8(60, mc.liveColor().b);
 }
 
 // Regression guard: isColorActive() must not read the stale outgoing effect
@@ -575,9 +609,9 @@ void test_color_command_mid_transition_cancels_transition_and_applies_color()
 
     TEST_ASSERT_EQUAL(RenderMode::HOLDING, MissionControlTestAccess::getMode(mc));
     TEST_ASSERT_TRUE(mc.isColorActive());
-    TEST_ASSERT_EQUAL_UINT8(70, mc.staticColor.r);
-    TEST_ASSERT_EQUAL_UINT8(80, mc.staticColor.g);
-    TEST_ASSERT_EQUAL_UINT8(90, mc.staticColor.b);
+    TEST_ASSERT_EQUAL_UINT8(70, mc.liveColor().r);
+    TEST_ASSERT_EQUAL_UINT8(80, mc.liveColor().g);
+    TEST_ASSERT_EQUAL_UINT8(90, mc.liveColor().b);
 }
 
 // Selecting a specific effect by id must start a transition to that exact
@@ -1220,7 +1254,7 @@ void test_restore_startup_state_applies_holding_color()
 
     TEST_ASSERT_EQUAL(RenderMode::HOLDING, MissionControlTestAccess::getMode(mc));
     TEST_ASSERT_TRUE(mc.isColorActive());
-    TEST_ASSERT_TRUE(mc.staticColor == CRGB(10, 20, 30));
+    TEST_ASSERT_TRUE(mc.liveColor() == CRGB(10, 20, 30));
 }
 
 void test_restore_startup_state_applies_holding_effect()
@@ -1376,9 +1410,63 @@ void test_ws_json_color_command_flows_through_to_static_color()
     mc.update(0);
 
     TEST_ASSERT_TRUE(mc.isColorActive());
-    TEST_ASSERT_EQUAL_UINT8(5, mc.staticColor.r);
-    TEST_ASSERT_EQUAL_UINT8(6, mc.staticColor.g);
-    TEST_ASSERT_EQUAL_UINT8(7, mc.staticColor.b);
+    TEST_ASSERT_EQUAL_UINT8(5, mc.liveColor().r);
+    TEST_ASSERT_EQUAL_UINT8(6, mc.liveColor().g);
+    TEST_ASSERT_EQUAL_UINT8(7, mc.liveColor().b);
+}
+
+// Good weather: setLiveColor() delivers exactly that color to the live effect on the
+// very next update() tick, and liveColor() reads the same value back - the two call
+// sites (render task's setColor() call, comms.cpp's state-broadcast read) that used to
+// read the bare CRGB field directly now both go through this one getter.
+void test_set_live_color_updates_effect_and_reads_back_exactly()
+{
+    MissionControl& mc = MissionControl::Instance();
+    ColorCapturingEffect* stub = new ColorCapturingEffect();
+    MissionControlTestAccess::setEffect(mc, stub);
+    MissionControlTestAccess::setMode(mc, RenderMode::HOLDING);
+
+    mc.setLiveColor(10, 20, 30);
+    mc.update(0);
+
+    TEST_ASSERT_FALSE(stub->observed.empty());
+    CRGB got = stub->observed.back();
+    TEST_ASSERT_EQUAL_UINT8(10, got.r);
+    TEST_ASSERT_EQUAL_UINT8(20, got.g);
+    TEST_ASSERT_EQUAL_UINT8(30, got.b);
+    TEST_ASSERT_TRUE(mc.liveColor() == CRGB(10, 20, 30));
+}
+
+// Bad weather: a setColor() callback that re-enters setLiveColor() with a brand-new
+// color - standing in for async_tcp racing the render/WebServer tasks' reads
+// (comms.cpp:490 vs. mission-control.cpp's update() and comms.cpp's state broadcast).
+// staticColor used to be a bare 3-byte CRGB - three independent stores a racing read
+// could catch mid-write, observing a mixed triple that was never actually set. Now
+// backed by one atomic word, every color update() ever hands the effect across many
+// interleaved read/write rounds must be exactly one of the two colors written, never
+// a third, mixed one.
+void test_live_color_is_never_observed_torn_across_a_racing_write()
+{
+    MissionControl& mc = MissionControl::Instance();
+    ColorCapturingEffect* stub = new ColorCapturingEffect();
+    MissionControlTestAccess::setEffect(mc, stub);
+    MissionControlTestAccess::setMode(mc, RenderMode::HOLDING);
+
+    const CRGB colorA(255, 0, 0);
+    const CRGB colorB(0, 255, 0);
+    mc.setLiveColor(colorA.r, colorA.g, colorA.b);
+
+    stub->reentrantTarget = &mc;
+    for (int i = 0; i < 50; i++)
+    {
+        stub->reentered = false;
+        stub->reentrantColor = (i % 2 == 0) ? colorB : colorA;
+        mc.update(0);
+    }
+
+    TEST_ASSERT_TRUE(stub->observed.size() >= 50);
+    for (const CRGB& observed : stub->observed)
+        TEST_ASSERT_TRUE(observed == colorA || observed == colorB);
 }
 
 int main(int argc, char** argv)
@@ -1411,6 +1499,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_queue_model_command_updates_factory_config);
     RUN_TEST(test_queue_device_name_command_persists_via_device_identity);
     RUN_TEST(test_ws_json_color_command_flows_through_to_static_color);
+    RUN_TEST(test_set_live_color_updates_effect_and_reads_back_exactly);
+    RUN_TEST(test_live_color_is_never_observed_torn_across_a_racing_write);
     RUN_TEST(test_reboot_command_calls_esp_restart_without_crashing);
     RUN_TEST(test_power_off_while_already_off_preserves_mode_before_off);
     RUN_TEST(test_update_throttles_frames_faster_than_the_minimum_duration);

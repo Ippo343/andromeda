@@ -202,9 +202,8 @@ void MissionControl::processWebCommands()
                 StartupStateConfig::persistPower(true);
                 break;
             case CommandType::COLOR:
-                staticColor = CRGB(command.r, command.g, command.b);
+                setLiveColor(command.r, command.g, command.b);
                 if (!isColorActiveLive()) transitionToStaticColor();
-                stateDirty = true;
                 // Only on the drag-release "commit" message (see Command::Color()'s
                 // comment) - never on every drag-speed update, same NVS-wear reasoning as
                 // BrightnessConfig.
@@ -577,7 +576,7 @@ void MissionControl::update(milliseconds_t t)
     // Only effects that opt in via wantsLiveColorUpdates() receive this - see
     // AbstractEffect::setColor in effects-base.h for the breadcrumb on using
     // this same seam for palette-reference colors in a future effect.
-    if (effect && effect->wantsLiveColorUpdates()) effect->setColor(staticColor);
+    if (effect && effect->wantsLiveColorUpdates()) effect->setColor(liveColor());
 
     Energy::set(slowSin(t, 0.5, 0, 255));
 
@@ -624,7 +623,7 @@ void MissionControl::update(milliseconds_t t)
 
 void MissionControl::transitionToStaticColor()
 {
-    handleTransition(new StaticColor(staticColor), false);
+    handleTransition(new StaticColor(liveColor()), false);
     holdEffect();
 }
 
@@ -681,7 +680,7 @@ void MissionControl::restoreStartupState()
             }
             break;
         case StartupStateConfig::Mode::HoldingColor:
-            staticColor = CRGB(saved.colorR, saved.colorG, saved.colorB);
+            setLiveColor(saved.colorR, saved.colorG, saved.colorB);
             transitionToStaticColor();
             break;
         case StartupStateConfig::Mode::RandomRotation:

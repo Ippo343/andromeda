@@ -135,13 +135,16 @@ void emitStateIfDirty()
     const ModelConfig* configuredConfig = getModelConfig(configuredId);
     String deviceName = DeviceIdentity::getDeviceName();
 
+    // Single load into a local so all 3 channels come from the same snapshot - see
+    // MissionControl::liveColor()'s comment on why this is one atomic word.
+    CRGB color = mc.liveColor();
     WsStateBuilder::DeviceState state{
         .power = mc.isOn(),
         .holding = mc.isHolding() || mc.isHoldPending(),
         .brightness = mc.getMaxBrightness(),
-        .colorR = mc.staticColor.r,
-        .colorG = mc.staticColor.g,
-        .colorB = mc.staticColor.b,
+        .colorR = color.r,
+        .colorG = color.g,
+        .colorB = color.b,
         .colorActive = mc.isColorActive(),
         .effectName = mc.getEffectName(),
         .runningModel = {static_cast<uint16_t>(runningConfig->id), runningConfig->name},

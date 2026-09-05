@@ -263,7 +263,23 @@ class MissionControl
     // broadcast then stayed stale until some unrelated change happened to set the flag again.
     inline bool consumeStateDirty() { return stateDirty.exchange(false); }
 
-    CRGB staticColor = CRGB::White;
+    // Packed 0x00RRGGBB, behind liveColor()/setLiveColor() - see those for why. A bare CRGB
+    // here (3 independent byte stores) let async_tcp's setLiveColor() write tear against the
+    // render task's/WebServer's every-frame reads into a color that was never actually set.
+    static inline uint32_t packColor(CRGB c)
+    {
+        return (static_cast<uint32_t>(c.r) << 16) | (static_cast<uint32_t>(c.g) << 8) |
+               static_cast<uint32_t>(c.b);
+    }
+    static inline CRGB unpackColor(uint32_t packed)
+    {
+        return CRGB(static_cast<uint8_t>(packed >> 16), static_cast<uint8_t>(packed >> 8),
+                    static_cast<uint8_t>(packed));
+    }
+
+    // Single atomic load/store instead of 3 independent byte stores - see setLiveColor() and
+    // the comment on staticColorPacked below.
+    inline CRGB liveColor() const { return unpackColor(staticColorPacked.load()); }
 
     // Whether a live COLOR write goes straight into the current effect. False
     // during TRANSITIONING even if the outgoing effect is a StaticColor: that
@@ -279,7 +295,7 @@ class MissionControl
     // its route decision is never a frame stale.
     inline bool isColorActive() const { return colorActiveSnapshot.load(); }
 
-    // Fast path for isColorActive() callers: update() re-reads staticColor
+    // Fast path for isColorActive() callers: update() re-reads liveColor()
     // every frame and pushes it into the live effect, so a color drag can
     // write it directly from the network task instead of round-tripping
     // through the command queue - restores the pre-queue slider/wheel
@@ -288,7 +304,7 @@ class MissionControl
     // transitionToStaticColor()).
     inline void setLiveColor(uint8_t r, uint8_t g, uint8_t b)
     {
-        staticColor = CRGB(r, g, b);
+        staticColorPacked.store(packColor(CRGB(r, g, b)));
         stateDirty = true;
     }
 
@@ -369,6 +385,12 @@ class MissionControl
     // Set whenever broadcast-worthy state changes; consumed (read-and-cleared, atomically -
     // see consumeStateDirty()) from Comms' web server task. Written from the render task.
     std::atomic<bool> stateDirty{false};
+
+    // Backing storage for liveColor()/setLiveColor() - written from async_tcp on every
+    // colour-wheel drag message, read every frame by the render task and by the WebServer
+    // task's state broadcast. See liveColor()'s comment for why this is one atomic word
+    // rather than a bare CRGB.
+    std::atomic<uint32_t> staticColorPacked{packColor(CRGB::White)};
 
     // These parameters control how long an effect lasts and how quickly it fades in and out.
     // The fades are deliberately sub-second: FastLED's output is very coarse at the bottom of
