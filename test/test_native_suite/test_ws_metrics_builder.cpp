@@ -37,6 +37,7 @@ MetricsSnapshot makeFullSnapshot()
     s.resetReason = 1;
     s.version = "v0.9-quiet-orbit";
     s.maxMilliamps = 9000;
+    s.brightnessCeiling = 152;
     s.includeOta = true;
     s.updateAvailable = false;
     s.latestTag[0] = '\0';
@@ -78,6 +79,7 @@ void test_volatile_frame_omits_static_and_ota_keys()
     TEST_ASSERT_FALSE(doc.containsKey("resetReason"));
     TEST_ASSERT_FALSE(doc.containsKey("version"));
     TEST_ASSERT_FALSE(doc.containsKey("maxMilliamps"));
+    TEST_ASSERT_FALSE(doc.containsKey("brightnessCeiling"));
     TEST_ASSERT_FALSE(doc.containsKey("updateAvailable"));
     TEST_ASSERT_FALSE(doc.containsKey("latestTag"));
     TEST_ASSERT_FALSE(doc.containsKey("otaChannel"));
@@ -93,14 +95,30 @@ void test_full_frame_has_all_fields()
     StaticJsonDocument<WsMetricsBuilder::JSON_CAPACITY> doc;
     deserializeJson(doc, buf, len);
     const char* keys[] = {
-        "type",    "uptimeMs",     "heapFree",        "heapMin",   "heapTotal",  "tempC",
-        "fps",     "rssi",         "currentMa",       "chip",      "cpuMhz",     "resetReason",
-        "version", "maxMilliamps", "updateAvailable", "latestTag", "otaChannel",
+        "type",
+        "uptimeMs",
+        "heapFree",
+        "heapMin",
+        "heapTotal",
+        "tempC",
+        "fps",
+        "rssi",
+        "currentMa",
+        "chip",
+        "cpuMhz",
+        "resetReason",
+        "version",
+        "maxMilliamps",
+        "brightnessCeiling",
+        "updateAvailable",
+        "latestTag",
+        "otaChannel",
     };
     for (const char* key : keys) { TEST_ASSERT_TRUE_MESSAGE(doc.containsKey(key), key); }
     TEST_ASSERT_EQUAL_STRING("ESP32-S3", doc["chip"]);
     TEST_ASSERT_EQUAL_STRING("v0.9-quiet-orbit", doc["version"]);
     TEST_ASSERT_EQUAL_STRING("stable", doc["otaChannel"]);
+    TEST_ASSERT_EQUAL_UINT8(152, doc["brightnessCeiling"].as<uint8_t>());
 }
 
 void test_nan_temp_and_fps_serialize_as_null()

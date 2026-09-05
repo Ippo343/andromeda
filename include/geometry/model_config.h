@@ -87,5 +87,18 @@ struct ModelConfig
     // #159). Not a PSU rating for any actual hardware.
     uint16_t max_milliamps = 2000;
 
+    // Calibrates the brightness slider to that budget (#237, see
+    // include/brightness-ceiling.h): at boot, main.cpp works out the highest
+    // FastLED brightness at which a frame of every LED lit to
+    // CRGB(v,v,v), v = brightness_reference_level, still fits max_milliamps,
+    // and maps the whole 0-255 slider onto 0..that ceiling.
+    //
+    // 255 (full white, the true worst case) is a no-op default: the ceiling
+    // computes to 255 and the slider behaves exactly as if uncalibrated. Only
+    // worth lowering on a model where the worst-case reference is far brighter
+    // than what its effects actually render, at the cost of FastLED's limiter
+    // being able to still clamp a frame brighter than the reference.
+    uint8_t brightness_reference_level = 255;
+
     bool isInFamily(FamilyID family) const { return ((uint16_t)id >> 8) == ((uint16_t)family); }
 };

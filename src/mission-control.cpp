@@ -295,7 +295,8 @@ uint8_t MissionControl::calcBrightness(milliseconds_t t)
     // A held effect sits at its plateau forever - there is no scheduled fade
     // out to ramp towards. Handled explicitly rather than via a sentinel
     // fadeOutStart, which a rollover-safe comparison can't represent.
-    if (mode == RenderMode::HOLDING) return dim8_raw(constrain(maxBrightness, 0, 255));
+    if (mode == RenderMode::HOLDING)
+        return applyBrightnessCeiling(constrain(maxBrightness, 0, 255), brightnessCeiling);
 
     uint8_t brightness = 0;
 
@@ -322,7 +323,7 @@ uint8_t MissionControl::calcBrightness(milliseconds_t t)
         brightness = map(dt, 0, FADE_OUT_DURATION, this->maxBrightness, 0);
     }
 
-    return dim8_raw(constrain(brightness, 0, 255));
+    return applyBrightnessCeiling(constrain(brightness, 0, 255), brightnessCeiling);
 }
 
 // Tears down an in-flight transition's animation without installing any
@@ -372,7 +373,7 @@ void MissionControl::updateTransition(milliseconds_t t)
 
     if (transitionWindow.animationFinishedAt == 0)
     {
-        FastLED.setBrightness(dim8_raw(maxBrightness));
+        FastLED.setBrightness(applyBrightnessCeiling(maxBrightness, brightnessCeiling));
         milliseconds_t animationT = t - transitionWindow.preDelayEnd;
         if (animation->renderFrame(animationT))
         {

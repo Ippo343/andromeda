@@ -56,6 +56,15 @@ extern const ModelConfig CONFIG = {
     //                                  (~10%) and is a per-frame average; the brownout
     //                                  detector trips on microsecond dips.
     .max_milliamps = 650,
+
+    // The 650mA budget above is calibrated against full white, the true
+    // worst case - but the effects that actually run on the L10 are mostly
+    // sparse, so a slider calibrated against that worst case leaves the top
+    // ~45% of its travel doing nothing once FastLED's limiter engages (#237).
+    // 128 trades away some of that safety margin for a slider whose whole
+    // range is usable on typical content; FastLED's limiter still catches
+    // any frame brighter than this reference.
+    .brightness_reference_level = 128,
 };
 
 }  // namespace L10_MK0

@@ -43,6 +43,9 @@ extern const ModelConfig CONFIG = {
     // Same cell, boost converter and 5V LED rail as L10 MK0 - see the budget
     // derivation in L10_mk0.cpp (#216).
     .max_milliamps = 650,
+
+    // Same reasoning as L10 MK0's brightness_reference_level (#237).
+    .brightness_reference_level = 128,
 };
 
 }  // namespace L10_MK1

@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "animations.h"
+#include "brightness-ceiling.h"
 #include "comms.h"
 #include "effects.h"
 #include "energy-param.h"
@@ -118,8 +119,25 @@ void setup()
     //
     // Computed from rail_millivolts rather than FastLED's own setMaxPowerInVoltsAndMilliamps()
     // - that helper takes an integer volts argument, which can't represent a 3.3V rail.
-    FastLED.setMaxPowerInMilliWatts((uint32_t)config->max_milliamps * config->rail_millivolts /
-                                    1000);
+    uint32_t budgetMilliwatts = (uint32_t)config->max_milliamps * config->rail_millivolts / 1000;
+    FastLED.setMaxPowerInMilliWatts(budgetMilliwatts);
+
+    // Calibrates the brightness slider to that same budget (#237) - see
+    // brightness-ceiling.h for why a static per-boot ceiling, rather than the
+    // limiter above, is what makes the whole slider range useful. One CRGB,
+    // not a real buffer: calculate_unscaled_power_mW() scales linearly with
+    // LED count for a uniform color, so a single reference pixel times the
+    // panel's total LED count is exact and avoids allocating a buffer this
+    // early in boot.
+    uint8_t referenceLevel = config->brightness_reference_level;
+    CRGB referencePixel(referenceLevel, referenceLevel, referenceLevel);
+    uint32_t totalLeds = 0;
+    for (size_t i = 0; i < GEOMETRY.getNumStrips(); i++) totalLeds += GEOMETRY.getStrip(i).num_leds;
+    uint32_t referenceMilliwatts = calculate_unscaled_power_mW(&referencePixel, 1) * totalLeds;
+    uint8_t brightnessCeiling = computeBrightnessCeiling(referenceMilliwatts, budgetMilliwatts);
+    MissionControl::Instance().setBrightnessCeiling(brightnessCeiling);
+    Log.noticeln("Brightness ceiling: %d/255 (reference level %d, budget %d mA)", brightnessCeiling,
+                 referenceLevel, config->max_milliamps);
 
     seedRNGs();
 
@@ -149,7 +167,7 @@ void setup()
     }
 
     MissionControl::Instance().setMaxBrightness(maxBrightness);
-    FastLED.setBrightness(dim8_raw(maxBrightness));
+    FastLED.setBrightness(applyBrightnessCeiling(maxBrightness, brightnessCeiling));
 
     // Restores power state and, if the user explicitly picked one, the held effect/color -
     // so the device comes back exactly as it was left instead of always starting in random

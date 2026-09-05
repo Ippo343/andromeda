@@ -209,6 +209,9 @@ void setUp()
     MissionControlTestAccess::setEffect(mc, new StaticColor());
     MissionControlTestAccess::setAnimation(mc, nullptr);
     MissionControlTestAccess::setMode(mc, RenderMode::FX_LOOP);
+    // Reset to the "uncalibrated" default so a test that sets a ceiling
+    // (test_calc_brightness_scales_by_ceiling) can't leak it into the next one.
+    mc.setBrightnessCeiling(255);
     // Keep the network-visible snapshot in step with the reset state, so a
     // test reading getTargetEffectName()/isColorActive() before its first
     // update() doesn't see a value left by the previous test.
@@ -294,6 +297,24 @@ void test_calc_brightness_is_max_during_hold()
     uint8_t brightness = MissionControlTestAccess::calcBrightness(mc, mid);
     // dim8_raw(255) == 255 (dim8_raw is the identity at the top of its range)
     TEST_ASSERT_EQUAL_UINT8(dim8_raw(200), brightness);
+}
+
+void test_calc_brightness_scales_by_ceiling()
+{
+    // #237: a model with a calibrated ceiling below 255 must scale the
+    // hold-plateau brightness down proportionally, not ignore the ceiling.
+    MissionControl& mc = MissionControl::Instance();
+    MissionControlTestAccess::setMaxBrightness(mc, 255);
+    mc.setBrightnessCeiling(128);
+    MissionControlTestAccess::setNextTransition(mc);
+
+    milliseconds_t fadeInEnd = MissionControlTestAccess::fadeInEnd(mc);
+    milliseconds_t fadeOutStart = MissionControlTestAccess::fadeOutStart(mc);
+    milliseconds_t mid = fadeInEnd + (fadeOutStart - fadeInEnd) / 2;
+
+    uint8_t brightness = MissionControlTestAccess::calcBrightness(mc, mid);
+    TEST_ASSERT_EQUAL_UINT8(applyBrightnessCeiling(255, 128), brightness);
+    TEST_ASSERT_TRUE(brightness < 255);
 }
 
 void test_calc_brightness_ramps_down_during_fade_out()
@@ -1478,6 +1499,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_calc_brightness_ramps_up_during_fade_in);
     RUN_TEST(test_effect_fades_are_sub_second);
     RUN_TEST(test_calc_brightness_is_max_during_hold);
+    RUN_TEST(test_calc_brightness_scales_by_ceiling);
     RUN_TEST(test_calc_brightness_ramps_down_during_fade_out);
     RUN_TEST(test_calc_brightness_after_transition_is_zero);
 
