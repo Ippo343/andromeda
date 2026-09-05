@@ -149,6 +149,22 @@ std::string buildLatestRelease(const std::string& tag)
     return R"({"tag_name":")" + tag + R"(","assets":)" + buildAssets(tag) + "}";
 }
 
+// A single release grown past today's 10 assets, for the headroom probe
+// further down: the same real shape plus `extra` more assets on the end.
+std::string buildOneReleasePageWithExtraAssets(const std::string& tag, int extra)
+{
+    std::string base = "https://github.com/Ippo343/andromeda/releases/download/" + tag + "/";
+    std::string assets = buildAssets(tag);
+    std::string tail;
+    for (int i = 0; i < extra; ++i)
+    {
+        std::string name = "extra-asset-" + std::to_string(i) + "-" + tag + ".bin";
+        tail += R"(,{"name":")" + name + R"(","browser_download_url":")" + base + name + R"("})";
+    }
+    assets.insert(assets.size() - 1, tail);  // before the closing ']'
+    return R"([{"tag_name":")" + tag + R"(","prerelease":false,"assets":)" + assets + "}]";
+}
+
 // The old misconfiguration this fix replaces: a full page of many releases,
 // each with the real 10-asset shape. Reproduces the exact overflow closed by
 // cutting RELEASES_API_URL down to per_page=1 - see the capacity constants'
@@ -445,6 +461,31 @@ void test_select_from_latest_release_does_not_find_manifest_among_unrelated_asse
 // which is the "raise the capacity" alternative this project deliberately
 // didn't take (MIN_FREE_HEAP is 60 KB and the TLS session is already open
 // when this document is allocated).
+// Bad weather / headroom: one release carrying 14 assets - four more than
+// today's 10 - must still parse without overflowing. #162 grew a release from
+// 7 assets to 10 and silently blew the buffer; this proves the capacity has
+// room above today's count for the next such growth, rather than sitting
+// exactly on it.
+void test_a_release_grown_past_ten_assets_still_fits()
+{
+    std::string json = buildOneReleasePageWithExtraAssets("v0.9-deep-space-network", /*extra=*/4);
+
+    DynamicJsonDocument doc(OtaManifest::RELEASE_LIST_DOC_CAPACITY);
+    DeserializationError err =
+        deserializeJson(doc, json, DeserializationOption::Filter(OtaManifest::releaseListFilter()));
+    TEST_ASSERT_TRUE_MESSAGE(err == DeserializationError::Ok,
+                             "a 14-asset release must still fit RELEASE_LIST_DOC_CAPACITY - the "
+                             "capacity must not be sized right up against today's 10 assets");
+    TEST_ASSERT_FALSE(doc.overflowed());
+
+    char url[256] = {};
+    TEST_ASSERT_TRUE(OtaManifest::selectRelease(doc, /*devChannel=*/true, url, sizeof(url)));
+    TEST_ASSERT_EQUAL_STRING(
+        "https://github.com/Ippo343/andromeda/releases/download/v0.9-deep-space-network/"
+        "manifest.json",
+        url);
+}
+
 void test_the_old_twenty_release_page_would_still_overflow_the_capacity()
 {
     std::string json = buildManyReleasesPage(20);
@@ -480,5 +521,6 @@ void run_test_ota_manifest_tests()
     RUN_TEST(test_stable_channel_shape_fits_a_real_release_with_headroom);
     RUN_TEST(test_select_from_latest_release_rejects_non_object_and_missing_assets);
     RUN_TEST(test_select_from_latest_release_does_not_find_manifest_among_unrelated_assets);
+    RUN_TEST(test_a_release_grown_past_ten_assets_still_fits);
     RUN_TEST(test_the_old_twenty_release_page_would_still_overflow_the_capacity);
 }
