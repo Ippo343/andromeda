@@ -9,6 +9,7 @@
 #include <cstring>
 
 #include "animations.h"
+#include "brightness-ceiling.h"
 #include "control-hints.h"
 #include "device-uid.h"
 #include "effects.h"
@@ -226,6 +227,14 @@ class MissionControl
         stateDirty = true;
     }
 
+    // The highest FastLED brightness the model's power budget permits (#237,
+    // see brightness-ceiling.h) - computed once at boot from ModelConfig and
+    // never touched by a live command, unlike maxBrightness above. Not part
+    // of the wire protocol: the slider itself stays 0-255, this just scales
+    // what the render loop asks FastLED for.
+    inline uint8_t getBrightnessCeiling() const { return brightnessCeiling; }
+    inline void setBrightnessCeiling(uint8_t c) { brightnessCeiling = c; }
+
     inline bool isOn() const { return mode != RenderMode::OFF; }
     inline bool isHolding() const { return mode == RenderMode::HOLDING; }
 
@@ -381,6 +390,11 @@ class MissionControl
     // Note that this is different from FastLED's global brightness,
     // which is also used for the fade in/out ramps.
     uint8_t maxBrightness = 255;
+
+    // See getBrightnessCeiling(). Defaults to 255 (no calibration) so any
+    // path that never calls setBrightnessCeiling() - native tests, the
+    // simulator - keeps today's uncalibrated behavior.
+    uint8_t brightnessCeiling = 255;
 
     // Set whenever broadcast-worthy state changes; consumed (read-and-cleared, atomically -
     // see consumeStateDirty()) from Comms' web server task. Written from the render task.

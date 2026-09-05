@@ -41,6 +41,7 @@ struct MetricsSnapshot
     int resetReason;
     const char* version;
     uint32_t maxMilliamps;
+    uint8_t brightnessCeiling;
 
     // --- OTA tier: changes rarely, sent only when includeOta is set (the
     // full frame, or the periodic slow-tier push). ---
@@ -59,12 +60,12 @@ struct MetricsSnapshot
 
 // StaticJsonDocument capacity for the schema below. Fixed, zero-heap - bump
 // this if fields are added. Measured via StaticJsonDocument::memoryUsage()
-// on this toolchain: the full (static+volatile+OTA) frame's 17 keys with a
-// worst-case 47-char latestTag (ArduinoJson copies a mutable char[] like
-// MetricsSnapshot::latestTag into its own pool, unlike the const char*
-// fields here, which it stores by reference - see that field's own comment)
-// need ~592 bytes; 768 keeps real headroom above that rather than sitting
-// right at the edge. NOTE: buf[JSON_CAPACITY] plus a
+// on this toolchain: the full (static+volatile+OTA) frame's 18 keys (#237
+// added brightnessCeiling) with a worst-case 47-char latestTag (ArduinoJson
+// copies a mutable char[] like MetricsSnapshot::latestTag into its own pool,
+// unlike the const char* fields here, which it stores by reference - see
+// that field's own comment) need ~592 bytes; 768 keeps real headroom above
+// that rather than sitting right at the edge. NOTE: buf[JSON_CAPACITY] plus a
 // StaticJsonDocument<JSON_CAPACITY> both land on the caller's stack, entirely
 // separate from ws-state-builder.h's own buf[JSON_CAPACITY=4096] +
 // StaticJsonDocument<4096> (the two are never nested - see
@@ -110,6 +111,7 @@ inline size_t buildMetricsJson(const MetricsSnapshot& snapshot, char* outBuffer,
         doc["resetReason"] = snapshot.resetReason;
         doc["version"] = snapshot.version;
         doc["maxMilliamps"] = snapshot.maxMilliamps;
+        doc["brightnessCeiling"] = snapshot.brightnessCeiling;
     }
 
     if (snapshot.includeOta)

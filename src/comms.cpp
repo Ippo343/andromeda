@@ -1176,6 +1176,7 @@ void Comms::fillMetricsSnapshot(WsMetricsBuilder::MetricsSnapshot& out, bool inc
         out.resetReason = static_cast<int>(esp_reset_reason());
         out.version = VERSION;
         out.maxMilliamps = GEOMETRY.getConfig()->max_milliamps;
+        out.brightnessCeiling = MissionControl::Instance().getBrightnessCeiling();
     }
 
     out.includeOta = includeOta;

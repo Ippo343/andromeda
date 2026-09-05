@@ -43,6 +43,7 @@ void tearDown()
 DECLARE_SUITE(test_animations);
 DECLARE_SUITE(test_async_library_pin);
 DECLARE_SUITE(test_board_variant);
+DECLARE_SUITE(test_brightness_ceiling);
 DECLARE_SUITE(test_comms);
 DECLARE_SUITE(test_device_identity);
 DECLARE_SUITE(test_device_uid);
@@ -80,6 +81,7 @@ int main(int, char**)
     RUN_SUITE(test_animations);
     RUN_SUITE(test_async_library_pin);
     RUN_SUITE(test_board_variant);
+    RUN_SUITE(test_brightness_ceiling);
     RUN_SUITE(test_comms);
     RUN_SUITE(test_device_identity);
     RUN_SUITE(test_device_uid);

@@ -59,6 +59,13 @@ function formatCurrentDraw(currentMa, maxMilliamps) {
     return `${Math.round(currentMa)} / ${Math.round(maxMilliamps)} mA`;
 }
 
+// The slider ceiling the device computed at boot from its power budget (#237)
+// -> "152 / 255". Missing/non-finite -> '-'.
+function formatBrightnessCeiling(brightnessCeiling) {
+    if (!Number.isFinite(brightnessCeiling)) return '-';
+    return `${Math.round(brightnessCeiling)} / 255`;
+}
+
 // Turns the /metrics JSON payload into the ordered [{ label, value }] list the
 // Advanced page renders as tiles. Keeping it here (not in the DOM code) makes
 // the formatting testable. A missing payload yields an empty list.
@@ -74,6 +81,7 @@ function metricTiles(m) {
         { label: 'WiFi RSSI', value: m.rssi == null ? '-' : `${m.rssi} dBm` },
         { label: 'CPU', value: m.cpuMhz == null ? '-' : `${m.cpuMhz} MHz` },
         { label: 'Current draw', value: formatCurrentDraw(m.currentMa, m.maxMilliamps) },
+        { label: 'Brightness cap', value: formatBrightnessCeiling(m.brightnessCeiling) },
         { label: 'Chip', value: m.chip || '-' },
         { label: 'Last reset', value: resetReasonLabel(m.resetReason) },
     ];
@@ -199,6 +207,7 @@ if (typeof module !== 'undefined' && module.exports) {
         resetReasonLabel,
         formatTemp,
         formatCurrentDraw,
+        formatBrightnessCeiling,
         metricTiles,
         firmwareLabel,
         isNewer,
