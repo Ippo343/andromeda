@@ -1,0 +1,192 @@
+name: Pages
+
+# Publishes https://ippo343.github.io/andromeda/ - the browser flasher (#162).
+#
+# The binaries must be served same-origin: GitHub release-asset downloads
+# send no Access-Control-Allow-Origin header (verified against a real
+# release asset - api.github.com sends one, release downloads don't), so a
+# page fetching them straight from github.com/.../releases/download/...
+# fails in the browser. This job downloads the newest *stable* release's
+# assets and serves the exact released bits from the Pages artifact -
+# nothing is rebuilt, and no binary is ever committed to git (artifact
+# deploy via actions/deploy-pages, not a gh-pages branch).
+#
+# Triggered by release.yml (workflow_call) right after a stable release
+# publishes - see that workflow for why it can't just be `on: release`.
+# workflow_dispatch is kept for a manual re-deploy of the current newest
+# stable release. There is deliberately no dry-run/tag input here: that
+# whole pipeline (offsets, NVS-overlap validation, manifest shape, the
+# shared on-device styling) is exercised on every commit by
+# build-scripts/assemble_site.py through test.yml's hardware-build /
+# web-installer-assemble jobs - this workflow only adds the
+# download-release-assets and actually-deploy steps on top.
+#
+# One-time repo-settings prerequisite, outside this file's reach: GitHub
+# Pages must be enabled with Source = "GitHub Actions" (Settings > Pages) -
+# actions/configure-pages@v5 below runs with its default enablement: false,
+# and if Pages isn't already on, its own getPages() 404s and the step throws.
+# enablement: true is not a usable substitute: it requires a token other than
+# GITHUB_TOKEN (a PAT with repo scope, or a GitHub App with
+# administration:write), so it would swap this failure for a different one,
+# not fix it. Confirmed live: this setting was lost once already when the
+# webflasher-dryrun tags/releases were rolled back, silently turning a green
+# deploy into a Pages deployment nothing could reach.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      # Always re-resolved, never taken from an event payload: a re-run or a
+      # manual dispatch must converge on the same "newest stable" answer.
+      - name: Resolve the newest stable release
+        id: rel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Resolve by versionCode, not publish date. `sort_by(.publishedAt)
+          # | last` would serve OLDER firmware to every new device if an older
+          # stable release were re-published, or a hotfix cut from an older
+          # tag were un-drafted. This is the same bar
+          # build-scripts/check_version_code.py enforces for OTA: the highest
+          # versionCode any published manifest.json advertises wins;
+          # publishedAt only breaks a tie between equal codes.
+          stable=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 50 \
+                     --json tagName,isDraft,isPrerelease,publishedAt \
+                     --jq 'map(select(.isDraft==false and .isPrerelease==false))
+                           | sort_by(.publishedAt) | reverse | .[].tagName')
+          best_tag=""; best_code=-1
+          for tag in $stable; do
+            code=$(gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
+                     --pattern 'manifest.json' --output - 2>/dev/null \
+                   | jq -r '[.boards[].versionCode] | max // 0' 2>/dev/null || echo "")
+            case "$code" in
+              ''|*[!0-9]*) continue ;;
+            esac
+            if [ "$code" -gt "$best_code" ]; then best_code="$code"; best_tag="$tag"; fi
+          done
+          if [ -z "$best_tag" ]; then
+            echo "::error::no published stable release with a manifest.json to publish a web installer for"
+            exit 1
+          fi
+          echo "resolved $best_tag (versionCode $best_code)"
+          echo "tag=$best_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Download the released assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Passed through the environment, never interpolated straight into
+          # the script: a git tag name isn't restricted from containing shell
+          # metacharacters (quotes, `$()`, backticks are all legal in a ref
+          # name), so a literal `${{ steps.rel.outputs.tag }}` inside `run:`
+          # would let anyone able to push a tag inject commands into a job
+          # holding pages:write/id-token:write. See test_web_installer.cpp's
+          # workflow-injection guard.
+          REL_TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          gh release download "$REL_TAG" --repo "$GITHUB_REPOSITORY" --dir dl \
+            --pattern 'manifest.json' \
+            --pattern 'flashparts-*.zip' --pattern 'firmware-*.bin' --pattern 'littlefs-*.bin'
+
+      # build-scripts/make_manifest.py records the size + md5 of exactly these
+      # bytes in manifest.json. Nothing downstream re-checks them, so a
+      # truncated or corrupted release-asset download would be assembled into
+      # _site and served as the image a stranger flashes onto a bare board -
+      # bricking it, with no error anywhere. Verify before assemble_site.py
+      # runs; a mismatch is a hard failure.
+      - name: Verify the downloaded binaries against the manifest md5
+        env:
+          REL_TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          test -f dl/manifest.json || { echo "::error::manifest.json is not a release asset"; exit 1; }
+          fail=0
+          for env in esp32_wroom esp32_s3_zero esp32_c3_zero; do
+            for pair in "fw:firmware" "fs:littlefs"; do
+              key=${pair%%:*}; name=${pair##*:}
+              file="dl/$name-$env-$REL_TAG.bin"
+              want=$(jq -r --arg b "$env" --arg k "$key" \
+                     '.boards[] | select(.board==$b) | .[$k].md5' dl/manifest.json)
+              if [ -z "$want" ] || [ "$want" = "null" ]; then
+                echo "::error::$env: manifest.json has no $key.md5"; fail=1; continue
+              fi
+              got=$(md5sum "$file" | cut -d' ' -f1)
+              if [ "$got" != "$want" ]; then
+                echo "::error::$file md5 $got does not match manifest $want"; fail=1
+              else
+                echo "ok  $file  $got"
+              fi
+            done
+          done
+          [ "$fail" -eq 0 ]
+
+      - name: Unpack each board's parts
+        env:
+          REL_TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          for env in esp32_wroom esp32_s3_zero esp32_c3_zero; do
+            mkdir -p "parts/$env"
+            unzip -q "dl/flashparts-$env-$REL_TAG.zip" -d "parts/$env"
+            cp "dl/firmware-$env-$REL_TAG.bin" "parts/$env/firmware.bin"
+            cp "dl/littlefs-$env-$REL_TAG.bin" "parts/$env/littlefs.bin"
+          done
+
+      - name: Assemble the site
+        env:
+          REL_TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          python build-scripts/assemble_site.py \
+            --parts-dir parts --out _site \
+            --tag "$REL_TAG" --repo "$GITHUB_REPOSITORY"
+          # assemble_site.py validates its inputs; check_site.py reads the
+          # manifest.json / version.json it just wrote and fails if they don't
+          # describe all 3 boards with every referenced part file present.
+          python build-scripts/check_site.py --site _site
+          du -sh _site
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+      # deploy-pages succeeding only means a deployment was *created*, not that
+      # the site answers. A truncated upload artifact, a Pages propagation
+      # failure, or an assemble_site.py change that wrote into the wrong
+      # subdirectory would all end this run green with an installer that 404s.
+      # Fetch the live URL and fail unless it actually serves the manifest and
+      # the binaries it points at. (Seen for real once: a rollback that
+      # disabled the Pages repo setting left configure/deploy green against an
+      # unreachable site.)
+      - name: Verify the deployed site answers
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          curl -fsS "${PAGE_URL}manifest.json" -o live-manifest.json
+          jq -e '.builds | length == 3' live-manifest.json > /dev/null
+          for path in $(jq -r '.builds[].parts[0].path' live-manifest.json); do
+            echo "HEAD ${PAGE_URL}${path}"
+            curl -fsI "${PAGE_URL}${path}" > /dev/null
+          done
+          echo "live site OK: ${PAGE_URL}"
