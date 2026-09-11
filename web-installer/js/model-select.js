@@ -24,6 +24,11 @@
     // Generous: setup() can block for several seconds (WiFi connect attempt,
     // boot animations) before loop() starts draining serial - see main.cpp.
     const ACK_TIMEOUT_MS = 15000;
+    // How often the MODEL command is re-sent while waiting for an ack (see
+    // the comment at the write site below) - frequent enough that a WROOM's
+    // post-reset boot window (well under ACK_TIMEOUT_MS) gets several
+    // chances, infrequent enough not to spam the UART.
+    const RETRY_INTERVAL_MS = 2000;
     // <ewt-install-dialog> closes itself right after telling the device to
     // reboot into the new firmware; give the OS a moment to actually free
     // the port before this script tries to reopen it.
@@ -76,22 +81,42 @@
             writer = port.writable.getWriter();
             reader = port.readable.getReader();
             const encoder = new TextEncoder();
+            const modelCommand = encoder.encode(buildModelCommand(modelId));
 
-            // Sent right away, not after waiting for a boot marker: on a
-            // board with native USB CDC (S3/C3, see platformio.ini's
-            // ARDUINO_USB_CDC_ON_BOOT), opening the port doesn't reset the
-            // chip, so it may already be well past its startup banner by
-            // now. Bytes written before the device's own loop() starts
-            // draining serial sit safely in its UART driver's RX buffer
-            // either way (main.cpp), so sending immediately works regardless
-            // of exactly when the device booted.
+            // Sent right away, not after waiting for a boot marker - but
+            // also *repeated* every RETRY_INTERVAL_MS until acked, rather
+            // than sent once. On a board with native USB CDC (S3/C3, see
+            // platformio.ini's ARDUINO_USB_CDC_ON_BOOT), opening the port
+            // doesn't reset the chip, so the first write almost always
+            // lands and acks well inside one retry interval. On a WROOM
+            // (external USB-UART bridge), opening the port asserts
+            // DTR/RTS and hard-resets the chip (#281): a write sent the
+            // instant port.open() resolves races that reset and can be
+            // lost entirely - during the ROM bootloader's ownership of the
+            // UART, or before Serial.begin() (main.cpp's
+            // initSerialAndFilesystem(), first thing in setup()) has even
+            // run - with no way to know it happened. Retrying periodically
+            // means some write eventually lands after Serial.begin() and
+            // loop() are both up and draining the UART (main.cpp), well
+            // within ACK_TIMEOUT_MS even accounting for setup()'s
+            // multi-second WiFi-connect blocking phase before loop()
+            // starts. Safe to repeat: WsCommandParser's MODEL handling
+            // just re-persists the same id and re-logs the same ack line.
             setStatus('Setting model…');
-            await writer.write(encoder.encode(buildModelCommand(modelId)));
-            const accepted = await waitForLine(
-                reader,
-                (line) => line.includes('Factory config: Set model ID'),
-                ACK_TIMEOUT_MS
-            );
+            await writer.write(modelCommand);
+            const retryTimer = setInterval(() => {
+                writer.write(modelCommand).catch(() => {});
+            }, RETRY_INTERVAL_MS);
+            let accepted;
+            try {
+                accepted = await waitForLine(
+                    reader,
+                    (line) => line.includes('Factory config: Set model ID'),
+                    ACK_TIMEOUT_MS
+                );
+            } finally {
+                clearInterval(retryTimer);
+            }
 
             if (!accepted) {
                 setStatus('No acknowledgement from the device - check the connection and set '
