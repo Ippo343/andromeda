@@ -29,8 +29,9 @@ newest **stable** release.
 - `.github/workflows/release.yml` syncs these sources into the release repo
   (`Ippo343/andromeda`); that repo's `pages.yml` runs `assemble_site.py`
   against the newest stable release's assets and deploys to GitHub Pages.
-- The pipeline (offset validation, manifest shape, styling) is exercised on
-  **every** commit by `test.yml`'s `web-installer-assemble` job — no release
-  needed.
+- The pipeline (offset validation, manifest shape, styling) is exercised by
+  `test.yml`'s `web-installer-assemble` job — no release needed. `test.yml` is
+  `workflow_call:`-only, so this runs when the release pipeline invokes it, not
+  on every commit.
 
 Full chain: [`../docs/release-pipeline.md`](../docs/release-pipeline.md).

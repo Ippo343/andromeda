@@ -40,6 +40,23 @@
             </select>
         </section>
 
+        <!-- Optional WiFi provisioning (#245): pushed over the same USB-serial connection
+             used for flashing, right before the model is set, so a freshly-flashed board
+             can join WiFi without ever entering its own AP-mode setup page. Entirely
+             optional - left blank, this step is skipped. -->
+        <details class="parts-drawer" id="wifi-provision">
+            <summary>WiFi (optional)</summary>
+            <p class="info-box">
+                Sent directly to the USB-connected device over the same cable used to flash
+                it - never over the network, and never stored or transmitted anywhere else by
+                this page.
+            </p>
+            <label for="wifi-ssid">Network name (SSID)</label>
+            <input type="text" id="wifi-ssid" autocomplete="off">
+            <label for="wifi-password">Password</label>
+            <input type="password" id="wifi-password" autocomplete="off">
+        </details>
+
         <!-- esp-web-install-button already renders its own fallback content
              into the unsupported/not-allowed slots below when Web Serial
              isn't available, so there's no separate browser-support banner
@@ -86,6 +103,7 @@
     <script src="js/installer.js"></script>
     <script src="js/models.js"></script>
     <script src="js/model-select-logic.js"></script>
+    <script src="js/wifi-provision-logic.js"></script>
     <script src="js/serial.js"></script>
     <script src="js/model-select.js"></script>
     <script src="js/console-logic.js"></script>

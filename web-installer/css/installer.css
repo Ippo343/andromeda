@@ -108,6 +108,30 @@ esp-web-install-button [slot="activate"] .icon {
     margin-bottom: 0.75rem;
 }
 
+/* Optional WiFi provisioning (#245) - same drawer chrome as .parts-drawer above, plus
+   labelled text inputs styled like .model-select select. */
+#wifi-provision .info-box {
+    margin: 0 0 0.75rem;
+    font-size: 0.8rem;
+}
+
+#wifi-provision label {
+    display: block;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 0.4rem;
+}
+
+#wifi-provision input {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.6rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    margin-bottom: 0.75rem;
+}
+
 .console-controls {
     display: flex;
     gap: 0.5rem;

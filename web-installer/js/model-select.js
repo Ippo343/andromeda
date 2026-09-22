@@ -18,6 +18,11 @@
 // Uses the plain Web Serial API directly, not esp-web-tools - no
 // esptool-js, no raw flash/NVS writes, just writing bytes to the same UART
 // the device already reads commands from.
+//
+// Also sends the optional WiFi credentials form (#245) on this same open port session,
+// BEFORE the model/reboot commands below - see sendWifiCredentialsIfProvided()'s own comment
+// for why that ordering (and doing it in the same session rather than a separate one)
+// matters.
 
 (function () {
     const BAUD_RATE = 115200;
@@ -33,10 +38,16 @@
     // reboot into the new firmware; give the OS a moment to actually free
     // the port before this script tries to reopen it.
     const REOPEN_DELAY_MS = 500;
+    // The device's own connect-and-persist probe can take ~10s (WiFi.begin() plus a status
+    // poll, see Comms::startCredentialTest/saveWorkerTask) before it emits the unsolicited
+    // wifi_result line - generous headroom past that, same spirit as ACK_TIMEOUT_MS above.
+    const WIFI_RESULT_TIMEOUT_MS = 20000;
 
     const select = document.getElementById('model-select');
     const installButton = document.querySelector('esp-web-install-button [slot="activate"]');
     const statusEl = document.getElementById('model-status');
+    const ssidInput = document.getElementById('wifi-ssid');
+    const passwordInput = document.getElementById('wifi-password');
     if (!select || !installButton || !statusEl) return;
 
     for (const opt of buildModelOptions(MODELS)) {
@@ -66,6 +77,77 @@
 
     let inProgress = false;
 
+    // Sends the optional WiFi credentials form over `writer`/`reader` (the same open port
+    // session setModelAndReboot() below uses for the model/reboot commands), if a SSID was
+    // entered - a no-op otherwise. MUST run before those commands, not after: on a
+    // successful probe, the device's own worker reboots itself ~3s after emitting
+    // wifi_result (see Comms::startCredentialTest's header comment) - sending credentials
+    // afterward would race that reboot (or the model-select step's own explicit reboot) and
+    // could easily be lost entirely. Reusing this same already-open session (rather than a
+    // separate connect) also means the WROOM reset-on-port.open() hazard #281 worked around
+    // doesn't recur here - the port is never reclosed between this step and the next.
+    async function sendWifiCredentialsIfProvided(writer, reader, encoder) {
+        const ssid = ssidInput ? ssidInput.value : '';
+        if (!isSsidValid(ssid)) return;
+        const password = passwordInput ? passwordInput.value : '';
+
+        setStatus('Sending WiFi credentials…');
+        await writer.write(encoder.encode(buildWifiCredentialsCommand(ssid, password)));
+
+        let ack = null;
+        const gotAck = await waitForLine(
+            reader,
+            (line) => {
+                const parsed = parseWifiCredentialsAck(line);
+                if (parsed) { ack = parsed; return true; }
+                return false;
+            },
+            ACK_TIMEOUT_MS
+        );
+        if (!gotAck) {
+            setStatus('No acknowledgement of the WiFi credentials - continuing with model '
+                + 'setup…');
+            return;
+        }
+        // ok:false means the device never queued a connection test at all (e.g. an
+        // over-length SSID/password, or a probe already in flight) - waiting for a
+        // wifi_result line that will never arrive would just burn the full 20s timeout below
+        // for nothing.
+        if (!ack.ok) {
+            setStatus(`WiFi credentials rejected${ack.error ? ` (${ack.error})` : ''}. `
+                + 'Continuing with model setup…');
+            return;
+        }
+
+        // serial.js's waitForLine() cancels the reader on a timeout, making it unusable for
+        // any later read() - safe to call again here regardless, since a cancelled reader's
+        // read() resolves immediately with done:true rather than hanging: a missed ack above
+        // just makes this second wait (and the model-set step's own wait afterward) return
+        // false right away instead of actually listening, which is the same "couldn't
+        // confirm, but did not hang" outcome as a real timeout would give anyway.
+        setStatus('WiFi credentials sent - testing the connection (this can take ~10s)…');
+        let result = null;
+        const gotResult = await waitForLine(
+            reader,
+            (line) => {
+                const parsed = parseWifiResultLine(line);
+                if (parsed) { result = parsed; return true; }
+                return false;
+            },
+            WIFI_RESULT_TIMEOUT_MS
+        );
+
+        if (!gotResult) {
+            setStatus('No WiFi result received - the device may still be joining. Continuing '
+                + 'with model setup…');
+        } else if (result.ok) {
+            setStatus('WiFi connected. Setting model…');
+        } else {
+            setStatus(`WiFi connection failed${result.reason ? ` (${result.reason})` : ''}. `
+                + 'Continuing with model setup…');
+        }
+    }
+
     async function setModelAndReboot() {
         if (inProgress || !select.value) return;
         inProgress = true;
@@ -81,6 +163,9 @@
             writer = port.writable.getWriter();
             reader = port.readable.getReader();
             const encoder = new TextEncoder();
+
+            await sendWifiCredentialsIfProvided(writer, reader, encoder);
+
             const modelCommand = encoder.encode(buildModelCommand(modelId));
 
             // Sent right away, not after waiting for a boot marker - but
