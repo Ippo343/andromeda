@@ -1,8 +1,8 @@
 // DOM-free logic for the optional WiFi provisioning step (#245) - lets the web installer
 // push a freshly-flashed board's WiFi SSID/password over the same USB-serial connection used
 // for flashing, so it can join WiFi without ever entering AP mode. Pulled out the same way
-// model-select-logic.js is - see test/js/wifi-provision-logic.test.js. wifi-provision.js does
-// the actual DOM/Web Serial wiring and stays untested, mirroring model-select.js/installer.js.
+// model-select-logic.js is - see test/js/wifi-provision-logic.test.js. model-select.js owns
+// the actual DOM/Web Serial wiring and stays untested, mirroring installer.js.
 //
 // Serial-only, not the WebSocket the on-device setup page's WiFi form uses (see
 // include/serial-command-dispatch.h's "wifi_credentials" case) - the device may have no WiFi

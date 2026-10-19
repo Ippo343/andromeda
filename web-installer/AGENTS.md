@@ -13,6 +13,7 @@ newest **stable** release.
 | `model-select.js` | `model-select-logic.js` | post-flash "set model" step — sends a `MODEL` command over the same serial link right after flashing (#105/#187) |
 | `console.js` | `console-logic.js` | recovery console drawer — read back a device's `.local` addresses over USB when nothing else worked (#135) |
 | `serial.js` | — | shared Web Serial helpers for the two post-flash steps |
+| — | `wifi-provision-logic.js` | the optional WiFi-provisioning step's DOM-free logic (#245) — builds the `wifi_credentials` line and parses the ack / `wifi_result` reply. The wiring lives inside `model-select.js` (there is no `wifi-provision.js`), which sends credentials on the same already-open port *before* the `model`/`reboot` commands. |
 | `models.js` | — | the model list the "set model" step offers — a hand-maintained mirror of `include/geometry/model_config.h`, guarded by `test/test_native_suite/test_installer_model_list.cpp` |
 
 `*-logic.test.js` files live in [`../test/js/`](../test/js/); run with
