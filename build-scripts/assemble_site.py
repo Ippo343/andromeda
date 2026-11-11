@@ -42,7 +42,7 @@ _KNOWN_CHIP_FAMILIES = {"ESP32", "ESP32-S3", "ESP32-C3"}
 
 _CINZEL_FONT_FACE_RE = re.compile(
     r"@font-face\s*\{\s*font-family:\s*'Cinzel Decorative';\s*"
-    r"src:\s*url\('/fonts/cinzel\.woff2'\)\s*format\('woff2'\);\s*"
+    r"src:\s*url\('(?:\.\./)?fonts/cinzel\.woff2'\)\s*format\('woff2'\);\s*"
     r"font-weight:\s*700;\s*font-style:\s*normal;\s*\}\s*"
 )
 
@@ -177,7 +177,7 @@ def _write_manifest(site_dir: Path, manifests: dict, tag: str):
     (site_dir / "manifest.json").write_text(json.dumps(site_manifest, indent=2) + "\n", encoding="utf-8")
 
 
-def _write_version_info(site_dir: Path, manifests: dict, tag: str, repo: str):
+def _write_version_info(site_dir: Path, manifests: dict, tag: str, repo: str, alternative=None):
     boards = []
     for env in BOARDS:
         manifest = manifests[env]
@@ -192,7 +192,20 @@ def _write_version_info(site_dir: Path, manifests: dict, tag: str, repo: str):
         })
     release_url = f"https://github.com/{repo}/releases/tag/{tag}" if repo and tag else ""
     version_info = {"tag": tag, "releaseUrl": release_url, "boards": boards}
+    if alternative:
+        version_info["alternativeRelease"] = alternative
     (site_dir / "version.json").write_text(json.dumps(version_info, indent=2) + "\n", encoding="utf-8")
+
+
+def assemble(parts_dir: Path, out: Path, tag: str, repo: str, alternative=None):
+    manifests = {env: _load_parts(parts_dir, env) for env in BOARDS}
+    _validate(parts_dir, manifests)
+    out.mkdir(parents=True, exist_ok=True)
+    _copy_board_parts(parts_dir, out)
+    _copy_shared_ui_assets(out)
+    _copy_installer_source(out)
+    _write_manifest(out, manifests, tag)
+    _write_version_info(out, manifests, tag, repo, alternative)
 
 
 def main():
@@ -202,17 +215,21 @@ def main():
     ap.add_argument("--out", required=True, type=Path, help="site output directory")
     ap.add_argument("--tag", default="local")
     ap.add_argument("--repo", default="")
+    ap.add_argument("--previous-parts-dir", type=Path)
+    ap.add_argument("--previous-tag")
     args = ap.parse_args()
 
-    manifests = {env: _load_parts(args.parts_dir, env) for env in BOARDS}
-    _validate(args.parts_dir, manifests)
-
-    args.out.mkdir(parents=True, exist_ok=True)
-    _copy_board_parts(args.parts_dir, args.out)
-    _copy_shared_ui_assets(args.out)
-    _copy_installer_source(args.out)
-    _write_manifest(args.out, manifests, args.tag)
-    _write_version_info(args.out, manifests, args.tag, args.repo)
+    if bool(args.previous_parts_dir) != bool(args.previous_tag):
+        ap.error("--previous-parts-dir and --previous-tag must be supplied together")
+    alternative = None
+    if args.previous_tag:
+        if args.previous_tag == args.tag:
+            ap.error("previous release must differ from the current release")
+        assemble(args.previous_parts_dir, args.out / "previous", args.previous_tag, args.repo,
+                 {"tag": args.tag, "path": "../", "label": "Return to latest stable"})
+        alternative = {"tag": args.previous_tag, "path": "previous/",
+                       "label": "Having trouble? Try the previous stable release"}
+    assemble(args.parts_dir, args.out, args.tag, args.repo, alternative)
 
     print(f"assemble_site: wrote {args.out} for tag={args.tag!r} ({len(BOARDS)} boards)")
 

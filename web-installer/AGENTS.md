@@ -3,7 +3,8 @@
 The source for `https://ippo343.github.io/andromeda/` — flashes a board over
 Web Serial (desktop Chrome / Edge / Opera) with no toolchain, using
 [ESP Web Tools](https://esphome.github.io/esp-web-tools/). Always serves the
-newest **stable** release.
+newest **stable** release by default, with a link to the previous stable release
+when available. Each choice has its own manifest and same-origin flash parts.
 
 ## Layout — same logic/wiring split as `data/`
 
@@ -29,7 +30,7 @@ newest **stable** release.
   `data/` (so the installer matches the on-device UI).
 - `.github/workflows/release.yml` syncs these sources into the release repo
   (`Ippo343/andromeda`); that repo's `pages.yml` runs `assemble_site.py`
-  against the newest stable release's assets and deploys to GitHub Pages.
+  against the two highest distinct stable version codes and deploys to GitHub Pages.
 - The pipeline (offset validation, manifest shape, styling) is exercised by
   `test.yml`'s `web-installer-assemble` job — no release needed. `test.yml` is
   `workflow_call:`-only, so this runs when the release pipeline invokes it, not

@@ -45,6 +45,8 @@ def _load(site: Path, name: str) -> dict:
 def check_site(site: Path):
     manifest = _load(site, "manifest.json")
     version = _load(site, "version.json")
+    if manifest.get("version") != version.get("tag"):
+        _fail("manifest.json version disagrees with version.json tag")
 
     builds = manifest.get("builds", [])
     families = [b.get("chipFamily") for b in builds]
@@ -73,6 +75,18 @@ def check_site(site: Path):
               f"expected {sorted(EXPECTED_BOARDS)}")
     if {b.get("chipFamily") for b in boards} != EXPECTED_CHIP_FAMILIES:
         _fail("version.json chipFamily set disagrees with manifest.json")
+
+    alternative = version.get("alternativeRelease")
+    if alternative:
+        if alternative.get("path") == "previous/":
+            previous = _load(site / "previous", "version.json")
+            if previous.get("tag") != alternative.get("tag"):
+                _fail("previous release tag disagrees with the advertised choice")
+            if previous.get("alternativeRelease", {}).get("path") != "../":
+                _fail("previous release has no return link")
+            check_site(site / "previous")
+        elif alternative.get("path") != "../":
+            _fail("unsupported alternative release path")
 
     print(f"check_site: OK - {site}/manifest.json + version.json describe all 3 boards, "
           "every part file present")

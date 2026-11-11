@@ -43,7 +43,7 @@ body {
 
 @font-face {
   font-family: 'Cinzel Decorative';
-  src: url('/fonts/cinzel.woff2') format('woff2');
+  src: url('../fonts/cinzel.woff2') format('woff2');
   font-weight: 700;
   font-style: normal;
 }
@@ -299,7 +299,7 @@ input.model-select {
    <svg fill="currentColor"> icons on the control page already do. Each glyph
    is a data-URI - the same "an icon in CSS without a server route" technique
    as .model-select's dropdown caret above - so no new file, route, or
-   STATIC_FILES entry is involved.
+   UiAssets entry is involved.
 
    Markup pattern for a control whose visible label becomes an icon:
        <button ... title="Foo">

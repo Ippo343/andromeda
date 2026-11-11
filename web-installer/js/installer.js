@@ -68,6 +68,15 @@
             }
 
             renderParts(versionInfo);
+            const alternative = versionInfo.alternativeRelease;
+            const alternativeEl = document.getElementById('alternative-release');
+            if (alternative && ['previous/', '../'].includes(alternative.path)) {
+                const link = document.createElement('a');
+                link.href = alternative.path;
+                link.textContent = `${alternative.label} (${alternative.tag})`;
+                alternativeEl.replaceChildren(link);
+                alternativeEl.hidden = false;
+            }
         })
         .catch(() => {
             document.getElementById('version').textContent =

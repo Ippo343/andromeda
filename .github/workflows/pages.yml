@@ -78,6 +78,7 @@ jobs:
                      --jq 'map(select(.isDraft==false and .isPrerelease==false))
                            | sort_by(.publishedAt) | reverse | .[].tagName')
           best_tag=""; best_code=-1
+          previous_tag=""; previous_code=-1
           for tag in $stable; do
             code=$(gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
                      --pattern 'manifest.json' --output - 2>/dev/null \
@@ -85,7 +86,12 @@ jobs:
             case "$code" in
               ''|*[!0-9]*) continue ;;
             esac
-            if [ "$code" -gt "$best_code" ]; then best_code="$code"; best_tag="$tag"; fi
+            if [ "$code" -gt "$best_code" ]; then
+              previous_code="$best_code"; previous_tag="$best_tag"
+              best_code="$code"; best_tag="$tag"
+            elif [ "$code" -lt "$best_code" ] && [ "$code" -gt "$previous_code" ]; then
+              previous_code="$code"; previous_tag="$tag"
+            fi
           done
           if [ -z "$best_tag" ]; then
             echo "::error::no published stable release with a manifest.json to publish a web installer for"
@@ -93,6 +99,7 @@ jobs:
           fi
           echo "resolved $best_tag (versionCode $best_code)"
           echo "tag=$best_tag" >> "$GITHUB_OUTPUT"
+          echo "previous_tag=$previous_tag" >> "$GITHUB_OUTPUT"
 
       - name: Download the released assets
         env:
@@ -105,10 +112,16 @@ jobs:
           # holding pages:write/id-token:write. See test_web_installer.cpp's
           # workflow-injection guard.
           REL_TAG: ${{ steps.rel.outputs.tag }}
+          PREV_TAG: ${{ steps.rel.outputs.previous_tag }}
         run: |
-          gh release download "$REL_TAG" --repo "$GITHUB_REPOSITORY" --dir dl \
-            --pattern 'manifest.json' \
-            --pattern 'flashparts-*.zip' --pattern 'firmware-*.bin' --pattern 'littlefs-*.bin'
+          for slot in current previous; do
+            tag="$REL_TAG"; dir=dl
+            if [ "$slot" = previous ]; then tag="$PREV_TAG"; dir=dl-previous; fi
+            [ -n "$tag" ] || continue
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir "$dir" \
+              --pattern 'manifest.json' \
+              --pattern 'flashparts-*.zip' --pattern 'firmware-*.bin' --pattern 'littlefs-*.bin'
+          done
 
       # build-scripts/make_manifest.py records the size + md5 of exactly these
       # bytes in manifest.json. Nothing downstream re-checks them, so a
@@ -119,15 +132,23 @@ jobs:
       - name: Verify the downloaded binaries against the manifest md5
         env:
           REL_TAG: ${{ steps.rel.outputs.tag }}
+          PREV_TAG: ${{ steps.rel.outputs.previous_tag }}
         run: |
-          test -f dl/manifest.json || { echo "::error::manifest.json is not a release asset"; exit 1; }
           fail=0
+          for slot in current previous; do
+            tag="$REL_TAG"; dir=dl
+            if [ "$slot" = previous ]; then tag="$PREV_TAG"; dir=dl-previous; fi
+            [ -n "$tag" ] || continue
+            test -f "$dir/manifest.json" || { echo "::error::manifest.json is not a release asset"; exit 1; }
           for env in esp32_wroom esp32_s3_zero esp32_c3_zero; do
             for pair in "fw:firmware" "fs:littlefs"; do
               key=${pair%%:*}; name=${pair##*:}
-              file="dl/$name-$env-$REL_TAG.bin"
+              file="$dir/$name-$env-$tag.bin"
+              # v2.0's manifest.json still has the physical rows; v2.1+ has
+              # only the _v2 rows. Accept either and take the first match.
               want=$(jq -r --arg b "$env" --arg k "$key" \
-                     '.boards[] | select(.board==$b) | .[$k].md5' dl/manifest.json)
+                     '[.boards[] | select(.board==$b or .board==($b+"_v2")) | .[$k].md5] | first' \
+                     "$dir/manifest.json")
               if [ -z "$want" ] || [ "$want" = "null" ]; then
                 echo "::error::$env: manifest.json has no $key.md5"; fail=1; continue
               fi
@@ -139,26 +160,38 @@ jobs:
               fi
             done
           done
+          done
           [ "$fail" -eq 0 ]
 
       - name: Unpack each board's parts
         env:
           REL_TAG: ${{ steps.rel.outputs.tag }}
+          PREV_TAG: ${{ steps.rel.outputs.previous_tag }}
         run: |
+          for slot in current previous; do
+            tag="$REL_TAG"; dir=dl; dest=parts
+            if [ "$slot" = previous ]; then tag="$PREV_TAG"; dir=dl-previous; dest=parts-previous; fi
+            [ -n "$tag" ] || continue
           for env in esp32_wroom esp32_s3_zero esp32_c3_zero; do
-            mkdir -p "parts/$env"
-            unzip -q "dl/flashparts-$env-$REL_TAG.zip" -d "parts/$env"
-            cp "dl/firmware-$env-$REL_TAG.bin" "parts/$env/firmware.bin"
-            cp "dl/littlefs-$env-$REL_TAG.bin" "parts/$env/littlefs.bin"
+            mkdir -p "$dest/$env"
+            unzip -q "$dir/flashparts-$env-$tag.zip" -d "$dest/$env"
+            cp "$dir/firmware-$env-$tag.bin" "$dest/$env/firmware.bin"
+            cp "$dir/littlefs-$env-$tag.bin" "$dest/$env/littlefs.bin"
+          done
           done
 
       - name: Assemble the site
         env:
           REL_TAG: ${{ steps.rel.outputs.tag }}
+          PREV_TAG: ${{ steps.rel.outputs.previous_tag }}
         run: |
+          previous_args=()
+          if [ -n "$PREV_TAG" ]; then
+            previous_args=(--previous-parts-dir parts-previous --previous-tag "$PREV_TAG")
+          fi
           python build-scripts/assemble_site.py \
             --parts-dir parts --out _site \
-            --tag "$REL_TAG" --repo "$GITHUB_REPOSITORY"
+            --tag "$REL_TAG" --repo "$GITHUB_REPOSITORY" "${previous_args[@]}"
           # assemble_site.py validates its inputs; check_site.py reads the
           # manifest.json / version.json it just wrote and fails if they don't
           # describe all 3 boards with every referenced part file present.
@@ -183,6 +216,7 @@ jobs:
       - name: Verify the deployed site answers
         env:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          PREV_TAG: ${{ steps.rel.outputs.previous_tag }}
         run: |
           set -euo pipefail
           curl -fsS "${PAGE_URL}manifest.json" -o live-manifest.json
@@ -191,4 +225,11 @@ jobs:
             echo "HEAD ${PAGE_URL}${path}"
             curl -fsI "${PAGE_URL}${path}" > /dev/null
           done
+          if [ -n "$PREV_TAG" ]; then
+            curl -fsS "${PAGE_URL}previous/manifest.json" -o previous-manifest.json
+            jq -e --arg tag "$PREV_TAG" '.version == $tag and (.builds | length == 3)' previous-manifest.json > /dev/null
+            for path in $(jq -r '.builds[].parts[0].path' previous-manifest.json); do
+              curl -fsI "${PAGE_URL}previous/${path}" > /dev/null
+            done
+          fi
           echo "live site OK: ${PAGE_URL}"
