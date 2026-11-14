@@ -21,7 +21,7 @@ make_manifest.py. Called two ways, both exercising the exact same code path:
 
 --parts-dir must contain one subdirectory per board in BOARDS, each holding
 parts.json plus every file it references (bootloader.bin/partitions.bin/
-boot_app0.bin/firmware.bin/littlefs.bin) - already flat, already board-named.
+boot_app0.bin/firmware.bin) - already flat, already board-named.
 Zipping/unzipping release assets into that shape is the caller's job, not
 this script's.
 """
@@ -40,6 +40,11 @@ BOARDS = ["esp32_wroom", "esp32_s3_zero", "esp32_c3_zero"]
 
 _KNOWN_CHIP_FAMILIES = {"ESP32", "ESP32-S3", "ESP32-C3"}
 
+# The bootloader's flash offset is the one address in the triplet that differs
+# per chip: ESP32 keeps it after the ROM's 0x1000-byte header, S3 and C3 at 0.
+# Everything else (partition table, otadata) lines up across all three.
+_BOOTLOADER_OFFSETS = {"ESP32": 0x1000, "ESP32-S3": 0x0, "ESP32-C3": 0x0}
+
 _CINZEL_FONT_FACE_RE = re.compile(
     r"@font-face\s*\{\s*font-family:\s*'Cinzel Decorative';\s*"
     r"src:\s*url\('(?:\.\./)?fonts/cinzel\.woff2'\)\s*format\('woff2'\);\s*"
@@ -52,7 +57,82 @@ _BOARD_LABELS = {
     "esp32_c3_zero": "ESP32-C3-Zero",
 }
 
+# ESP-IDF partition-table binary: 32-byte little-endian rows, magic 0x50AA,
+# terminated by the 0xEBEB md5 entry. Only the two rows the installer needs to
+# agree with are decoded.
+_PARTITION_MAGIC = 0x50AA
+_PARTITION_END_MAGIC = 0xEBEB
+_TYPE_APP = 0x00
+_TYPE_DATA = 0x01
+_SUBTYPE_OTA_0 = 0x10
+_SUBTYPE_OTADATA = 0x00
+
 _REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _partition_table(path: Path):
+    data = path.read_bytes()
+    rows = []
+    for start in range(0, len(data) - 31, 32):
+        magic = int.from_bytes(data[start:start + 2], "little")
+        if magic == _PARTITION_END_MAGIC:
+            break
+        if magic != _PARTITION_MAGIC:
+            sys.exit(f"assemble_site: {path}: bad partition-table magic at 0x{start:x}")
+        rows.append({
+            "type": data[start + 2],
+            "subtype": data[start + 3],
+            "offset": int.from_bytes(data[start + 4:start + 8], "little"),
+            "size": int.from_bytes(data[start + 8:start + 12], "little"),
+            "label": data[start + 12:start + 28].split(b"\0", 1)[0].decode("ascii", "replace"),
+        })
+    if not rows:
+        sys.exit(f"assemble_site: {path}: empty partition table")
+    return rows
+
+
+def _check_offsets_against_table(board_dir: Path, parts, sizes, chip_family: str):
+    """parts.json and partitions.bin must describe the same flash layout.
+
+    parts.json decides where the installer writes; partitions.bin is what the
+    bootloader will actually read. They come from one build, so a mismatch means
+    a stale or hand-assembled release - and firmware written to 0x20000 under a
+    table whose app slot starts at 0x10000 yields a board that cannot boot, with
+    no error anywhere.
+    """
+    table = _partition_table(board_dir / "partitions.bin")
+    app = next((r for r in table if r["type"] == _TYPE_APP and r["subtype"] == _SUBTYPE_OTA_0),
+               None)
+    otadata = next((r for r in table if r["type"] == _TYPE_DATA and r["subtype"] == _SUBTYPE_OTADATA),
+                   None)
+    if app is None:
+        sys.exit(f"assemble_site: {board_dir}: partition table has no ota_0 app slot")
+    if otadata is None:
+        sys.exit(f"assemble_site: {board_dir}: partition table has no otadata row")
+
+    by_name = {p["name"]: p for p in parts}
+    firmware = by_name["firmware"]
+    if firmware["offset"] != app["offset"]:
+        sys.exit(f"assemble_site: {board_dir}: firmware is written at "
+                 f"0x{firmware['offset']:x} but the partition table puts ota_0 at "
+                 f"0x{app['offset']:x}")
+    if sizes["firmware"] > app["size"]:
+        sys.exit(f"assemble_site: {board_dir}: firmware ({sizes['firmware']} bytes) does "
+                 f"not fit the 0x{app['size']:x}-byte ota_0 slot")
+
+    boot_app0 = by_name.get("boot_app0")
+    if boot_app0 is not None and boot_app0["offset"] != otadata["offset"]:
+        sys.exit(f"assemble_site: {board_dir}: boot_app0 is written at "
+                 f"0x{boot_app0['offset']:x} but the partition table puts otadata at "
+                 f"0x{otadata['offset']:x}")
+
+    bootloader = by_name.get("bootloader")
+    expected_bootloader = _BOOTLOADER_OFFSETS.get(chip_family)
+    if bootloader is not None and expected_bootloader is not None and \
+            bootloader["offset"] != expected_bootloader:
+        sys.exit(f"assemble_site: {board_dir}: bootloader is written at "
+                 f"0x{bootloader['offset']:x} but a {chip_family} board boots it from "
+                 f"0x{expected_bootloader:x}")
 
 
 def _load_parts(parts_dir: Path, env: str) -> dict:
@@ -65,11 +145,32 @@ def _load_parts(parts_dir: Path, env: str) -> dict:
     if manifest.get("board") != env:
         sys.exit(f"assemble_site: {parts_json} declares board={manifest.get('board')!r}, expected {env!r}")
 
+    sizes = {}
     for part in manifest.get("parts", []):
         f = board_dir / part["file"]
         if not f.is_file() or f.stat().st_size == 0:
             sys.exit(f"assemble_site: {env}: missing or empty part file {f}")
+        size = f.stat().st_size
+        name = part["name"]
+        sizes[name] = size
+        if ((name == "boot_app0" and size != 0x2000)
+                or (name == "partitions" and size != 0xC00)
+                or (name in ("firmware", "bootloader") and size < 0x1000)):
+            sys.exit(f"assemble_site: {env}: invalid {name} size ({size} bytes)")
+        if name == "firmware":
+            with f.open("rb") as image:
+                if image.read(1) != b"\xe9":
+                    sys.exit(f"assemble_site: {env}: invalid firmware magic")
 
+    # An installer manifest without the application image still flashes boot
+    # parts happily, and a bare board ends up with nothing to boot. It is the
+    # one part every build produces, so its absence means the parts dir was
+    # assembled by hand or half-copied.
+    if "firmware" not in sizes:
+        sys.exit(f"assemble_site: {env}: {parts_json} lists no firmware part")
+
+    _check_offsets_against_table(board_dir, manifest.get("parts", []), sizes,
+                                 str(manifest.get("chipFamily", "")))
     return manifest
 
 
@@ -107,17 +208,16 @@ def _validate(parts_dir: Path, manifests: dict):
 def _copy_shared_ui_assets(site_dir: Path):
     """Reuse the real on-device UI assets (data/) so the installer matches
     its look - see data/index.html / data/css/common.css / data/js/utils.js.
-    A one-way copy out of data/ costs the flashed filesystem nothing; nothing
-    is ever added *into* data/ here (that tree is size-gated by
-    check_fs_ceiling.py and route-diffed by test/test_native_suite/test_static_assets.cpp)."""
+    The installer copies assets out of data/. build_ui.cjs budgets the firmware
+    document independently."""
     data_dir = _REPO_ROOT / "data"
     (site_dir / "css").mkdir(parents=True, exist_ok=True)
     (site_dir / "js").mkdir(parents=True, exist_ok=True)
 
     common_css = (data_dir / "css" / "common.css").read_text(encoding="utf-8")
     # common.css's local @font-face loads data/fonts/cinzel.woff2 - a font
-    # subsetted down to just the glyph "A" to minimize the flashed
-    # filesystem's footprint (see check_fs_ceiling.py). The web installer has
+    # subsetted down to just the glyph "A" to reduce embedded document size.
+    # The web installer has
     # no such constraint, so it isn't worth shipping/maintaining a second copy
     # of that subset here; strip the local @font-face and load the real,
     # full "Cinzel Decorative" face from Google Fonts instead (see
