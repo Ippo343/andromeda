@@ -118,9 +118,13 @@ jobs:
             tag="$REL_TAG"; dir=dl
             if [ "$slot" = previous ]; then tag="$PREV_TAG"; dir=dl-previous; fi
             [ -n "$tag" ] || continue
+            # '*.bin' is every non-bundled part's own asset: firmware-*.bin on
+            # every release, and additionally littlefs-*.bin on releases cut
+            # before the filesystem image was retired (v1.3 and older) - the
+            # previous-stable slot is often exactly such a release.
             gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir "$dir" \
               --pattern 'manifest.json' \
-              --pattern 'flashparts-*.zip' --pattern 'firmware-*.bin'
+              --pattern 'flashparts-*.zip' --pattern '*.bin'
           done
 
       # build-scripts/make_manifest.py records the size + md5 of exactly these
@@ -141,22 +145,31 @@ jobs:
             [ -n "$tag" ] || continue
             test -f "$dir/manifest.json" || { echo "::error::manifest.json is not a release asset"; exit 1; }
           for env in esp32_wroom esp32_s3_zero esp32_c3_zero; do
-            key=fw; name=firmware
-            file="$dir/$name-$env-$tag.bin"
-            # v2.0's manifest.json still has the physical rows; v2.1+ has only
-            # the _v2 rows. Accept either and take the first match.
-            want=$(jq -r --arg b "$env" --arg k "$key" \
-                   '[.boards[] | select(.board==$b or .board==($b+"_v2")) | .[$k].md5] | first' \
-                   "$dir/manifest.json")
-            if [ -z "$want" ] || [ "$want" = "null" ]; then
-              echo "::error::$env: manifest.json has no $key.md5"; fail=1; continue
-            fi
-            got=$(md5sum "$file" | cut -d' ' -f1)
-            if [ "$got" != "$want" ]; then
-              echo "::error::$file md5 $got does not match manifest $want"; fail=1
-            else
-              echo "ok  $file  $got"
-            fi
+            # fw -> firmware-*.bin on every release; fs -> littlefs-*.bin on
+            # releases old enough to still ship a filesystem image (v1.3 and
+            # older). Both end up flashed to a bare board, so both are checked.
+            for key in fw fs; do
+              case "$key" in fw) name=firmware ;; fs) name=littlefs ;; esac
+              file="$dir/$name-$env-$tag.bin"
+              if [ ! -f "$file" ]; then
+                if [ "$key" = fs ]; then continue; fi
+                echo "::error::$file is not a release asset"; fail=1; continue
+              fi
+              # v2.0's manifest.json still has the physical rows; v2.1+ has only
+              # the _v2 rows. Accept either and take the first match.
+              want=$(jq -r --arg b "$env" --arg k "$key" \
+                     '[.boards[] | select(.board==$b or .board==($b+"_v2")) | .[$k].md5] | first' \
+                     "$dir/manifest.json")
+              if [ -z "$want" ] || [ "$want" = "null" ]; then
+                echo "::error::$env: manifest.json has no $key.md5"; fail=1; continue
+              fi
+              got=$(md5sum "$file" | cut -d' ' -f1)
+              if [ "$got" != "$want" ]; then
+                echo "::error::$file md5 $got does not match manifest $want"; fail=1
+              else
+                echo "ok  $file  $got"
+              fi
+            done
           done
           done
           [ "$fail" -eq 0 ]
@@ -173,7 +186,14 @@ jobs:
           for env in esp32_wroom esp32_s3_zero esp32_c3_zero; do
             mkdir -p "$dest/$env"
             unzip -q "$dir/flashparts-$env-$tag.zip" -d "$dest/$env"
-            cp "$dir/firmware-$env-$tag.bin" "$dest/$env/firmware.bin"
+            # The zip holds only the boot parts. Everything else is its own
+            # <part>-<env>-<tag>.bin asset, named by the board's own parts.json
+            # (firmware.bin everywhere; littlefs.bin on releases that still
+            # shipped a filesystem image - e.g. the previous-stable slot).
+            while read -r name file; do
+              cp "$dir/$name-$env-$tag.bin" "$dest/$env/$file"
+            done < <(jq -r '.parts[] | select(.bundled | not) | "\(.name) \(.file)"' \
+                       "$dest/$env/parts.json")
           done
           done
 
