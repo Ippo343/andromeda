@@ -189,10 +189,14 @@ jobs:
             # The zip holds only the boot parts. Everything else is its own
             # <part>-<env>-<tag>.bin asset, named by the board's own parts.json
             # (firmware.bin everywhere; littlefs.bin on releases that still
-            # shipped a filesystem image - e.g. the previous-stable slot).
+            # shipped a filesystem image - e.g. the previous-stable slot). Only
+            # an explicit bundled: false counts: a part listed without the flag
+            # is one the dump script zipped.
             while read -r name file; do
-              cp "$dir/$name-$env-$tag.bin" "$dest/$env/$file"
-            done < <(jq -r '.parts[] | select(.bundled | not) | "\(.name) \(.file)"' \
+              # ${file%$'\r'}: jq emits CRLF on Windows, and this step runs
+              # under the Python test's Git bash there too.
+              cp "$dir/$name-$env-$tag.bin" "$dest/$env/${file%$'\r'}"
+            done < <(jq -r '.parts[] | select(.bundled == false) | "\(.name) \(.file)"' \
                        "$dest/$env/parts.json")
           done
           done
