@@ -1,24 +1,20 @@
 name: Pages
 
-# Publishes https://ippo343.github.io/andromeda/ - the browser flasher (#162).
+# Publishes https://ippo343.github.io/andromeda/ - the browser flasher (#162)
+# and, since #733, the OTA index and images the device's SPA reads.
 #
-# The binaries must be served same-origin: GitHub release-asset downloads
-# send no Access-Control-Allow-Origin header (verified against a real
-# release asset - api.github.com sends one, release downloads don't), so a
-# page fetching them straight from github.com/.../releases/download/...
-# fails in the browser. This job downloads the newest *stable* release's
-# assets and serves the exact released bits from the Pages artifact -
-# nothing is rebuilt, and no binary is ever committed to git (artifact
-# deploy via actions/deploy-pages, not a gh-pages branch).
+# Dispatched by tools/release-local.ps1 after it verifies the published assets.
+# Every slot is resolved locally. This job downloads public releases with a
+# read-only token and checks the assembled site before it goes live.
 #
-# Runs on a published release - the automation that cuts releases uses a
-# non-default token, so `on: release` fires - and on manual dispatch for a
-# re-deploy of the current newest stable release. There is deliberately no
-# dry-run/tag input here: that whole pipeline (offsets, NVS-overlap
-# validation, manifest shape, the shared on-device styling) is exercised on
-# every commit by build-scripts/assemble_site.py in the hardware-build and
-# web-installer-assemble CI jobs - this workflow only adds the
-# download-release-assets and actually-deploy steps on top.
+# The binaries must be served same-origin: GitHub release-asset downloads send
+# no Access-Control-Allow-Origin header (verified against a real release asset
+# - api.github.com sends one, release downloads don't), so a page fetching them
+# straight from github.com/.../releases/download/... fails in the browser. This
+# job downloads the requested releases' assets and serves the exact released
+# bits from the Pages artifact - nothing is rebuilt, and no binary is ever
+# committed to git (artifact deploy via actions/deploy-pages, not a gh-pages
+# branch).
 #
 # One-time repo-settings prerequisite, outside this file's reach: GitHub
 # Pages must be enabled with Source = "GitHub Actions" (Settings > Pages) -
@@ -30,9 +26,23 @@ name: Pages
 # not fix it. If that setting is ever turned off, configure-pages 404s and
 # this job fails loudly rather than deploying to an unreachable site.
 on:
-  release:
-    types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Stable release tag to publish as current/"
+        required: true
+      previous_tag:
+        description: "Previous stable tag for the flasher's downgrade slot (optional)"
+        required: false
+        default: ""
+      dev_tag:
+        description: "Newest dev/pre-release tag to publish under dev/ (optional)"
+        required: false
+        default: ""
+      rehearsal_repo:
+        description: "Explicit owner/repo for a non-production Pages rehearsal"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -43,11 +53,14 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+env:
+  REL_TAG: ${{ inputs.tag }}
+  PREV_TAG: ${{ inputs.previous_tag }}
+  DEV_TAG: ${{ inputs.dev_tag }}
+
 jobs:
   deploy:
-    # Only the repo that hosts Pages + the releases; inert anywhere else this
-    # file is checked out.
-    if: github.repository == 'Ippo343/andromeda'
+    if: github.repository == 'Ippo343/andromeda' || github.repository == inputs.rehearsal_repo
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -59,64 +72,16 @@ jobs:
         with:
           python-version: "3.x"
 
-      # Always re-resolved, never taken from an event payload: a re-run or a
-      # manual dispatch must converge on the same "newest stable" answer.
-      - name: Resolve the newest stable release
-        id: rel
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # Resolve by versionCode, not publish date. `sort_by(.publishedAt)
-          # | last` would serve OLDER firmware to every new device if an older
-          # stable release were re-published, or a hotfix cut from an older
-          # tag were un-drafted. This is the same bar
-          # build-scripts/check_version_code.py enforces for OTA: the highest
-          # versionCode any published manifest.json advertises wins;
-          # publishedAt only breaks a tie between equal codes.
-          stable=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 50 \
-                     --json tagName,isDraft,isPrerelease,publishedAt \
-                     --jq 'map(select(.isDraft==false and .isPrerelease==false))
-                           | sort_by(.publishedAt) | reverse | .[].tagName')
-          best_tag=""; best_code=-1
-          previous_tag=""; previous_code=-1
-          for tag in $stable; do
-            code=$(gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
-                     --pattern 'manifest.json' --output - 2>/dev/null \
-                   | jq -r '[.boards[].versionCode] | max // 0' 2>/dev/null || echo "")
-            case "$code" in
-              ''|*[!0-9]*) continue ;;
-            esac
-            if [ "$code" -gt "$best_code" ]; then
-              previous_code="$best_code"; previous_tag="$best_tag"
-              best_code="$code"; best_tag="$tag"
-            elif [ "$code" -lt "$best_code" ] && [ "$code" -gt "$previous_code" ]; then
-              previous_code="$code"; previous_tag="$tag"
-            fi
-          done
-          if [ -z "$best_tag" ]; then
-            echo "::error::no published stable release with a manifest.json to publish a web installer for"
-            exit 1
-          fi
-          echo "resolved $best_tag (versionCode $best_code)"
-          echo "tag=$best_tag" >> "$GITHUB_OUTPUT"
-          echo "previous_tag=$previous_tag" >> "$GITHUB_OUTPUT"
-
       - name: Download the released assets
         env:
           GH_TOKEN: ${{ github.token }}
-          # Passed through the environment, never interpolated straight into
-          # the script: a git tag name isn't restricted from containing shell
-          # metacharacters (quotes, `$()`, backticks are all legal in a ref
-          # name), so a literal `${{ steps.rel.outputs.tag }}` inside `run:`
-          # would let anyone able to push a tag inject commands into a job
-          # holding pages:write/id-token:write. See test_web_installer.cpp's
-          # workflow-injection guard.
-          REL_TAG: ${{ steps.rel.outputs.tag }}
-          PREV_TAG: ${{ steps.rel.outputs.previous_tag }}
         run: |
-          for slot in current previous; do
-            tag="$REL_TAG"; dir=dl
-            if [ "$slot" = previous ]; then tag="$PREV_TAG"; dir=dl-previous; fi
+          for slot in current previous dev; do
+            case "$slot" in
+              current)  tag="$REL_TAG";  dir=dl ;;
+              previous) tag="$PREV_TAG"; dir=dl-previous ;;
+              dev)      tag="$DEV_TAG";  dir=dl-dev ;;
+            esac
             [ -n "$tag" ] || continue
             # '*.bin' is every non-bundled part's own asset: firmware-*.bin on
             # every release, and additionally littlefs-*.bin on releases cut
@@ -134,16 +99,16 @@ jobs:
       # bricking it, with no error anywhere. Verify before assemble_site.py
       # runs; a mismatch is a hard failure.
       - name: Verify the downloaded binaries against the manifest md5
-        env:
-          REL_TAG: ${{ steps.rel.outputs.tag }}
-          PREV_TAG: ${{ steps.rel.outputs.previous_tag }}
         run: |
           fail=0
-          for slot in current previous; do
-            tag="$REL_TAG"; dir=dl
-            if [ "$slot" = previous ]; then tag="$PREV_TAG"; dir=dl-previous; fi
+          for slot in current previous dev; do
+            case "$slot" in
+              current)  tag="$REL_TAG";  dir=dl ;;
+              previous) tag="$PREV_TAG"; dir=dl-previous ;;
+              dev)      tag="$DEV_TAG";  dir=dl-dev ;;
+            esac
             [ -n "$tag" ] || continue
-            test -f "$dir/manifest.json" || { echo "::error::manifest.json is not a release asset"; exit 1; }
+            test -f "$dir/manifest.json" || { echo "::error::$tag: manifest.json is not a release asset"; exit 1; }
           for env in esp32_wroom esp32_s3_zero esp32_c3_zero; do
             # fw -> firmware-*.bin on every release; fs -> littlefs-*.bin on
             # releases old enough to still ship a filesystem image (v1.3 and
@@ -175,13 +140,14 @@ jobs:
           [ "$fail" -eq 0 ]
 
       - name: Unpack each board's parts
-        env:
-          REL_TAG: ${{ steps.rel.outputs.tag }}
-          PREV_TAG: ${{ steps.rel.outputs.previous_tag }}
         run: |
-          for slot in current previous; do
-            tag="$REL_TAG"; dir=dl; dest=parts
-            if [ "$slot" = previous ]; then tag="$PREV_TAG"; dir=dl-previous; dest=parts-previous; fi
+          fail=0
+          for slot in current previous dev; do
+            case "$slot" in
+              current)  tag="$REL_TAG";  dir=dl;           dest=parts ;;
+              previous) tag="$PREV_TAG"; dir=dl-previous;  dest=parts-previous ;;
+              dev)      tag="$DEV_TAG";  dir=dl-dev;       dest=parts-dev ;;
+            esac
             [ -n "$tag" ] || continue
           for env in esp32_wroom esp32_s3_zero esp32_c3_zero; do
             mkdir -p "$dest/$env"
@@ -202,21 +168,26 @@ jobs:
           done
 
       - name: Assemble the site
-        env:
-          REL_TAG: ${{ steps.rel.outputs.tag }}
-          PREV_TAG: ${{ steps.rel.outputs.previous_tag }}
         run: |
-          previous_args=()
+          current_args=()
           if [ -n "$PREV_TAG" ]; then
-            previous_args=(--previous-parts-dir parts-previous --previous-tag "$PREV_TAG")
+            current_args=(--previous-parts-dir parts-previous --previous-tag "$PREV_TAG")
           fi
           python build-scripts/assemble_site.py \
             --parts-dir parts --out _site \
-            --tag "$REL_TAG" --repo "$GITHUB_REPOSITORY" "${previous_args[@]}"
-          # assemble_site.py validates its inputs; check_site.py reads the
-          # manifest.json / version.json it just wrote and fails if they don't
-          # describe all 3 boards with every referenced part file present.
-          python build-scripts/check_site.py --site _site
+            --tag "$REL_TAG" --repo "$GITHUB_REPOSITORY" \
+            --ota-manifest dl/manifest.json --ota-channel stable "${current_args[@]}"
+          # The on-device SPA reads ota.json; --require-ota is what proves the
+          # slot it reads actually carries one.
+          python build-scripts/check_site.py --site _site --require-ota --ota-channel stable
+
+          if [ -n "$DEV_TAG" ]; then
+            python build-scripts/assemble_site.py \
+              --parts-dir parts-dev --out _site/dev \
+              --tag "$DEV_TAG" --repo "$GITHUB_REPOSITORY" \
+              --ota-manifest dl-dev/manifest.json --ota-channel dev
+            python build-scripts/check_site.py --site _site/dev --require-ota --ota-channel dev
+          fi
           du -sh _site
 
       - uses: actions/configure-pages@v5
@@ -237,8 +208,6 @@ jobs:
       - name: Verify the deployed site answers
         env:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
-          REL_TAG: ${{ steps.rel.outputs.tag }}
-          PREV_TAG: ${{ steps.rel.outputs.previous_tag }}
         run: |
           set -euo pipefail
           # A cache-buster (GitHub Pages caches by full URL, query string
@@ -254,15 +223,34 @@ jobs:
           # [0] is the ~30 KB bootloader and the firmware - the one that has to
           # be there for the board to boot - was never fetched.
           for path in $(jq -r '.builds[].parts[].path' live-manifest.json); do
+            path="${path%$'\r'}"
             echo "HEAD ${PAGE_URL}${path}"
             curl -fsI "${PAGE_URL}${path}${bust}" > /dev/null
           done
+          verify_ota() {
+            local slot="$1" prefix="${PAGE_URL}$1"
+            # Compare the live index and complete bodies with the verified
+            # artifact. The device reads both cross-origin.
+            for path in ota.json $(jq -r '.boards[].path' "_site/${slot}ota.json"); do
+              path="${path%$'\r'}"
+              echo "GET ${prefix}${path}"
+              curl -fsS --max-time 30 -H 'Origin: http://andromeda.local' \
+                -D live-ota-headers.txt "${prefix}${path}${bust}" -o live-ota-body
+              grep -iqE '^access-control-allow-origin: \*\s*$' live-ota-headers.txt
+              cmp "_site/${slot}${path}" live-ota-body
+            done
+          }
+          verify_ota ""
           if [ -n "$PREV_TAG" ]; then
             curl -fsS "${PAGE_URL}previous/manifest.json${bust}" -o previous-manifest.json
             jq -e --arg tag "$PREV_TAG" '.version == $tag and (.builds | length == 3)' previous-manifest.json > /dev/null
             for path in $(jq -r '.builds[].parts[].path' previous-manifest.json); do
+              path="${path%$'\r'}"
               echo "HEAD ${PAGE_URL}previous/${path}"
               curl -fsI "${PAGE_URL}previous/${path}${bust}" > /dev/null
             done
+          fi
+          if [ -n "$DEV_TAG" ]; then
+            verify_ota "dev/"
           fi
           echo "live site OK: ${PAGE_URL}"

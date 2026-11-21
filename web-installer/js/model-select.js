@@ -196,7 +196,7 @@
             try {
                 accepted = await waitForLine(
                     reader,
-                    (line) => line.includes('Factory config: Set model ID'),
+                    (line) => parseModelAck(line),
                     ACK_TIMEOUT_MS
                 );
             } finally {

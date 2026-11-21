@@ -37,14 +37,21 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// fetch() with an abort timeout (ms). AbortController is optional - older
-// browsers and parts of the jsdom harness may not have it, in which case the
-// request is simply not time-limited rather than failing to start.
-function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
-    if (typeof AbortController === 'undefined') return fetch(url, options);
+// True when this page is on the cheap style: no accelerated compositing, or the
+// user asked for reduced motion (#231 - js/fx-profile.js decides and sets the
+// class before first paint). Guarded because the browser-installer page reuses
+// this file and has no shell class to read.
+function lowFxEnabled() {
+    return typeof document !== 'undefined' &&
+        document.documentElement.classList.contains('low-fx');
+}
+
+// Pass a reader to keep the abort deadline active while consuming the body.
+function fetchWithTimeout(url, options = {}, timeoutMs = 5000, read = (response) => response) {
+    if (typeof AbortController === 'undefined') return fetch(url, options).then(read);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeout));
+    return fetch(url, { ...options, signal: controller.signal }).then(read).finally(() => clearTimeout(timeout));
 }
 
 // Show/hide the "needs a reboot to take effect" button next to a row. The

@@ -75,6 +75,71 @@ h1 {
     100% { background-position: 100% 100%; }
 }
 
+/* #715: the palette wipe. An effect change sweeps the glyphs out, --grad is
+   swapped underneath while they are hidden, and the new palette sweeps back in
+   - so the palette changes at a single instant instead of both being on screen
+   at once. A mask is what makes that instant invisible, and sweeping to nothing
+   also mirrors the strip's own cut-to-black around a transition. Masked on the
+   glyph-clipped .logo, so only the letterform is swept and not its box.
+   --logo-wipe-ms is set from controls.js's LOGO_WIPE_MS: one number drives both
+   halves here and the two JS timers that swap and clear. */
+.logo.wipe-out,
+.logo.wipe-in {
+    -webkit-mask-image: linear-gradient(to right, #000 48%, transparent 52%, transparent 100%);
+    mask-image: linear-gradient(to right, #000 48%, transparent 52%, transparent 100%);
+    -webkit-mask-size: 200% 100%;
+    mask-size: 200% 100%;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+}
+
+/* Both animations are named, in both states: gradientShift scrolls the palette
+   (background-position) while the sweep runs (mask-position). The two animate
+   different properties, so they compose - but a bare `animation: logoWipeOut`
+   would drop gradientShift for the duration of the wipe. */
+.logo.wipe-out {
+    animation: gradientShift 8s linear infinite,
+               logoWipeOut var(--logo-wipe-ms, 400ms) ease-in-out forwards;
+}
+
+.logo.wipe-in {
+    animation: gradientShift 8s linear infinite,
+               logoWipeIn var(--logo-wipe-ms, 400ms) ease-in-out forwards;
+}
+
+@keyframes logoWipeOut {
+    from { -webkit-mask-position: 0% 0; mask-position: 0% 0; }
+    to   { -webkit-mask-position: 100% 0; mask-position: 100% 0; }
+}
+
+@keyframes logoWipeIn {
+    from { -webkit-mask-position: 100% 0; mask-position: 100% 0; }
+    to   { -webkit-mask-position: 0% 0; mask-position: 0% 0; }
+}
+
+/* #231: the cheap style. js/fx-profile.js puts .low-fx on <html> when the
+   browser cannot composite on a GPU, or when the user asked for reduced
+   motion; both want the same pixels. Everything below is a static equivalent,
+   so state stays legible: the palette still changes, it just stops moving.
+   The animation needs !important because the off / colour looks set it inline
+   from controls.js; the mask is nulled because a wipe class left on the
+   element would otherwise sit half-erased. */
+html.low-fx .logo,
+html.low-fx .logo.wipe-out,
+html.low-fx .logo.wipe-in {
+    animation: none !important;
+    -webkit-mask-image: none;
+    mask-image: none;
+}
+
+/* No blur left to lift the panel off the body gradient, so take the
+   translucency up instead. */
+html.low-fx .container {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: rgba(255, 255, 255, 0.08);
+}
+
 /* Button Styles */
 .btn, button {
     display: block;

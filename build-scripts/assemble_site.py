@@ -8,6 +8,12 @@ them against each other and against the partition table's NVS range, copies
 the shared on-device UI assets so the installer looks like the real web UI,
 and writes the ESP Web Tools manifest.json + a version.json for the page.
 
+With --ota-manifest it also writes ota.json, the update index the on-device
+SPA reads (channel, version code, layout, size and md5 per board). That file
+is derived from the release's own manifest.json but every number is re-derived
+from the bytes being served, so the site can never advertise an image it does
+not have.
+
 Not a PlatformIO extra_script - a plain CLI tool, same shape as
 make_manifest.py. Called two ways, both exercising the exact same code path:
 
@@ -27,6 +33,7 @@ this script's.
 """
 
 import argparse
+import hashlib
 import json
 import re
 import shutil
@@ -56,6 +63,14 @@ _BOARD_LABELS = {
     "esp32_s3_zero": "ESP32-S3-Zero",
     "esp32_c3_zero": "ESP32-C3-Zero",
 }
+
+# The OTA manifest's row token per board (`include/board-variant.h`'s
+# OTA_BOARD_VARIANT). Duplicated from build-scripts/board_meta.py on purpose:
+# only assemble_site.py and check_site.py are synced into the release repo
+# (tools/release-local.ps1), and importing board_meta there would need a third
+# file on that sync list. test_web_installer.cpp pins the tokens against
+# board-variant.h.
+_OTA_BOARD_TOKENS = {env: f"{env}_v2" for env in BOARDS}
 
 # ESP-IDF partition-table binary: 32-byte little-endian rows, magic 0x50AA,
 # terminated by the 0xEBEB md5 entry. Only the two rows the installer needs to
@@ -297,7 +312,90 @@ def _write_version_info(site_dir: Path, manifests: dict, tag: str, repo: str, al
     (site_dir / "version.json").write_text(json.dumps(version_info, indent=2) + "\n", encoding="utf-8")
 
 
-def assemble(parts_dir: Path, out: Path, tag: str, repo: str, alternative=None):
+def _md5_and_size(path: Path):
+    """(md5 hex, byte size) - one streaming pass, same shape as verify_release.py."""
+    digest = hashlib.md5()
+    size = 0
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+            size += len(chunk)
+    return digest.hexdigest(), size
+
+
+def _positive_int(value, what: str):
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        sys.exit(f"assemble_site: {what} is {value!r}, expected a positive integer")
+    return value
+
+
+def _write_ota_manifest(site_dir: Path, ota_manifest: Path, tag: str, channel: str):
+    """Write the machine-readable update index the on-device SPA reads.
+
+    Derived from the release's own manifest.json, but every number is
+    re-derived from the bytes that will actually be served: a site that
+    advertises a size or md5 its file does not have is worse than no site at
+    all, because the device would flash it and fail at Update.end().
+    """
+    try:
+        manifest = json.loads(ota_manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        sys.exit(f"assemble_site: {ota_manifest}: {e}")
+
+    if manifest.get("tag") != tag:
+        sys.exit(f"assemble_site: {ota_manifest} describes {manifest.get('tag')!r}, not {tag!r}")
+    if manifest.get("channel") != channel:
+        sys.exit(f"assemble_site: {ota_manifest} is the {manifest.get('channel')!r} channel, "
+                 f"asked to publish it as {channel!r}")
+
+    rows = {}
+    for row in manifest.get("boards", []):
+        if isinstance(row, dict) and row.get("board"):
+            rows[row["board"]] = row
+
+    boards = {}
+    for env in BOARDS:
+        token = _OTA_BOARD_TOKENS[env]
+        row = rows.get(token)
+        if row is None:
+            sys.exit(f"assemble_site: {ota_manifest} has no {token!r} row")
+
+        rel = f"{env}/firmware.bin"
+        path = site_dir / rel
+        if not path.is_file():
+            sys.exit(f"assemble_site: {path} is missing - did the parts copy run?")
+
+        fw = row.get("fw")
+        if not isinstance(fw, dict):
+            sys.exit(f"assemble_site: {token}: no fw object")
+        want_md5 = str(fw.get("md5", "")).lower()
+        want_bytes = _positive_int(fw.get("bytes"), f"{token}.fw.bytes")
+        got_md5, got_bytes = _md5_and_size(path)
+        if got_bytes != want_bytes:
+            sys.exit(f"assemble_site: {token}: firmware is {got_bytes} bytes, "
+                     f"the manifest says {want_bytes}")
+        if got_md5 != want_md5:
+            sys.exit(f"assemble_site: {token}: firmware md5 {got_md5} does not match "
+                     f"the manifest's {want_md5}")
+
+        boards[token] = {
+            "versionCode": _positive_int(row.get("versionCode"), f"{token}.versionCode"),
+            # Fail closed exactly like the device does: a row that does not
+            # declare its partition layout cannot be published for OTA.
+            "partitionLayoutVersion": _positive_int(row.get("partitionLayoutVersion"),
+                                                    f"{token}.partitionLayoutVersion"),
+            "minSourceVersionCode": int(row.get("minSourceVersionCode") or 0),
+            "bytes": got_bytes,
+            "md5": got_md5,
+            "path": rel,
+        }
+
+    ota = {"schema": 1, "channel": channel, "tag": tag, "boards": boards}
+    (site_dir / "ota.json").write_text(json.dumps(ota, indent=2) + "\n", encoding="utf-8")
+
+
+def assemble(parts_dir: Path, out: Path, tag: str, repo: str, alternative=None,
+             ota_manifest: Path = None, ota_channel: str = None):
     manifests = {env: _load_parts(parts_dir, env) for env in BOARDS}
     _validate(parts_dir, manifests)
     out.mkdir(parents=True, exist_ok=True)
@@ -306,6 +404,8 @@ def assemble(parts_dir: Path, out: Path, tag: str, repo: str, alternative=None):
     _copy_installer_source(out)
     _write_manifest(out, manifests, tag)
     _write_version_info(out, manifests, tag, repo, alternative)
+    if ota_manifest is not None:
+        _write_ota_manifest(out, ota_manifest, tag, ota_channel)
 
 
 def main():
@@ -317,10 +417,16 @@ def main():
     ap.add_argument("--repo", default="")
     ap.add_argument("--previous-parts-dir", type=Path)
     ap.add_argument("--previous-tag")
+    ap.add_argument("--ota-manifest", type=Path,
+                    help="the release's OTA manifest.json; emits ota.json for the SPA")
+    ap.add_argument("--ota-channel", choices=["stable", "dev"],
+                    help="channel ota.json advertises (required with --ota-manifest)")
     args = ap.parse_args()
 
     if bool(args.previous_parts_dir) != bool(args.previous_tag):
         ap.error("--previous-parts-dir and --previous-tag must be supplied together")
+    if bool(args.ota_manifest) != bool(args.ota_channel):
+        ap.error("--ota-manifest and --ota-channel must be supplied together")
     alternative = None
     if args.previous_tag:
         if args.previous_tag == args.tag:
@@ -329,7 +435,8 @@ def main():
                  {"tag": args.tag, "path": "../", "label": "Return to latest stable"})
         alternative = {"tag": args.previous_tag, "path": "previous/",
                        "label": "Having trouble? Try the previous stable release"}
-    assemble(args.parts_dir, args.out, args.tag, args.repo, alternative)
+    assemble(args.parts_dir, args.out, args.tag, args.repo, alternative,
+             args.ota_manifest, args.ota_channel)
 
     print(f"assemble_site: wrote {args.out} for tag={args.tag!r} ({len(BOARDS)} boards)")
 

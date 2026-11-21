@@ -17,19 +17,33 @@ site back and fails loudly if:
   - manifest.json doesn't describe exactly the 3 expected chip families
   - version.json doesn't describe the same 3 boards
   - any part path either manifest references is missing or empty on disk
+  - with --require-ota: ota.json is missing, names another tag/channel, or its
+    size/md5 disagree with the bytes on disk
 """
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
 
 EXPECTED_CHIP_FAMILIES = {"ESP32", "ESP32-S3", "ESP32-C3"}
 EXPECTED_BOARDS = {"esp32_wroom", "esp32_s3_zero", "esp32_c3_zero"}
+EXPECTED_OTA_BOARDS = {f"{board}_v2" for board in EXPECTED_BOARDS}
 
 
 def _fail(msg: str):
     sys.exit(f"check_site: {msg}")
+
+
+def _md5_and_size(path: Path):
+    digest = hashlib.md5()
+    size = 0
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+            size += len(chunk)
+    return digest.hexdigest(), size
 
 
 def _load(site: Path, name: str) -> dict:
@@ -42,7 +56,46 @@ def _load(site: Path, name: str) -> dict:
         _fail(f"{path} is not valid JSON: {e}")
 
 
-def check_site(site: Path):
+def _check_ota(site: Path, version: dict, require: bool, channel: str):
+    path = site / "ota.json"
+    if not path.is_file():
+        if require:
+            _fail(f"{path} is missing - assemble_site.py needs --ota-manifest/--ota-channel")
+        return
+    ota = _load(site, "ota.json")
+    if ota.get("schema") != 1:
+        _fail(f"{path}: unsupported schema {ota.get('schema')!r}")
+    if ota.get("channel") != channel:
+        _fail(f"{path}: channel is {ota.get('channel')!r}, expected {channel!r}")
+    if ota.get("tag") != version.get("tag"):
+        _fail(f"{path}: tag {ota.get('tag')!r} disagrees with version.json's "
+              f"{version.get('tag')!r}")
+
+    boards = ota.get("boards", {})
+    if not isinstance(boards, dict) or set(boards) != EXPECTED_OTA_BOARDS:
+        _fail(f"{path}: boards are {sorted(boards) if isinstance(boards, dict) else boards!r}, "
+              f"expected {sorted(EXPECTED_OTA_BOARDS)}")
+    for token, row in boards.items():
+        if not isinstance(row, dict):
+            _fail(f"{path}: {token} row is not an object")
+        rel = row.get("path")
+        if not isinstance(rel, str) or not rel or rel.startswith(("/", "../")) or ".." in Path(rel).parts:
+            _fail(f"{path}: {token} path {rel!r} must stay inside the slot")
+        f = site / rel
+        if not f.is_file() or f.stat().st_size == 0:
+            _fail(f"{path}: {token} references {rel!r} but {f} is missing or empty")
+        md5, size = _md5_and_size(f)
+        if row.get("bytes") != size:
+            _fail(f"{path}: {token} advertises {row.get('bytes')!r} bytes, {rel} is {size}")
+        if str(row.get("md5", "")).lower() != md5:
+            _fail(f"{path}: {token} advertises md5 {row.get('md5')!r}, {rel} is {md5}")
+        for field in ("versionCode", "partitionLayoutVersion"):
+            value = row.get(field)
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                _fail(f"{path}: {token}.{field} is {value!r}")
+
+
+def check_site(site: Path, require_ota: bool = False, ota_channel: str = "stable"):
     manifest = _load(site, "manifest.json")
     version = _load(site, "version.json")
     if manifest.get("version") != version.get("tag"):
@@ -76,6 +129,8 @@ def check_site(site: Path):
     if {b.get("chipFamily") for b in boards} != EXPECTED_CHIP_FAMILIES:
         _fail("version.json chipFamily set disagrees with manifest.json")
 
+    _check_ota(site, version, require_ota, ota_channel)
+
     alternative = version.get("alternativeRelease")
     if alternative:
         if alternative.get("path") == "previous/":
@@ -95,10 +150,13 @@ def check_site(site: Path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--site", default="_site", type=Path, help="assembled site directory")
+    ap.add_argument("--require-ota", action="store_true",
+                    help="fail unless the slot carries a valid ota.json")
+    ap.add_argument("--ota-channel", default="stable", choices=["stable", "dev"])
     args = ap.parse_args()
     if not args.site.is_dir():
         _fail(f"{args.site} is not a directory")
-    check_site(args.site)
+    check_site(args.site, args.require_ota, args.ota_channel)
 
 
 if __name__ == "__main__":
