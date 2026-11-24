@@ -54,6 +54,39 @@ function fetchWithTimeout(url, options = {}, timeoutMs = 5000, read = (response)
     return fetch(url, { ...options, signal: controller.signal }).then(read).finally(() => clearTimeout(timeout));
 }
 
+// Copies `text`, calling `onCopied` when it worked.
+//
+// navigator.clipboard is a secure-context API and the lamp serves this page over
+// plain HTTP (http://192.168.4.1, http://andromeda.local), so it is *undefined*
+// on the device. The old call site used it unconditionally, so every Copy tap
+// threw a TypeError and did nothing - no copy, no feedback, no fallback. The
+// textarea + execCommand path works inside a user gesture on every browser that
+// ships this page, and is the graceful path when the async API is missing.
+function copyText(text, onCopied) {
+    const viaSelection = () => {
+        const area = document.createElement('textarea');
+        area.value = text;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.top = '-1000px';
+        document.body.appendChild(area);
+        area.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        document.body.removeChild(area);
+        if (ok && onCopied) onCopied();
+    };
+
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(text).then(
+            () => { if (onCopied) onCopied(); },
+            viaSelection
+        );
+        return;
+    }
+    viaSelection();
+}
+
 // Show/hide the "needs a reboot to take effect" button next to a row. The
 // element ids stay with the view; the class toggle is identical everywhere.
 function setRebootIndicator(rowId, buttonId, show) {
