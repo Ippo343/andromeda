@@ -329,13 +329,21 @@ def _positive_int(value, what: str):
     return value
 
 
-def _write_ota_manifest(site_dir: Path, ota_manifest: Path, tag: str, channel: str):
+def _write_ota_manifest(site_dir: Path, ota_manifest: Path, tag: str, channel: str,
+                        layout_version: int):
     """Write the machine-readable update index the on-device SPA reads.
 
     Derived from the release's own manifest.json, but every number is
     re-derived from the bytes that will actually be served: a site that
     advertises a size or md5 its file does not have is worse than no site at
     all, because the device would flash it and fail at Update.end().
+
+    `layout_version` is the `partitionLayoutVersion` of the parts.json files
+    actually staged here. #794: ota.json used to copy the row's value without
+    ever comparing it with the parts being served, so a stale cached
+    `flashparts/` or hand-staged assets after a `PARTITION_LAYOUT_VERSION` bump
+    would hand devices an image built for another table - and the device's only
+    layout guard is the client-supplied row (#582).
     """
     try:
         manifest = json.loads(ota_manifest.read_text(encoding="utf-8"))
@@ -389,6 +397,12 @@ def _write_ota_manifest(site_dir: Path, ota_manifest: Path, tag: str, channel: s
             "md5": got_md5,
             "path": rel,
         }
+        # #794: the row must describe the table these parts were built for.
+        if boards[token]["partitionLayoutVersion"] != layout_version:
+            sys.exit(f"assemble_site: {token}: the manifest row declares partition layout "
+                     f"{boards[token]['partitionLayoutVersion']} but the staged parts.json "
+                     f"says {layout_version} - a device would flash an image built for another "
+                     f"partition table")
 
     ota = {"schema": 1, "channel": channel, "tag": tag, "boards": boards}
     (site_dir / "ota.json").write_text(json.dumps(ota, indent=2) + "\n", encoding="utf-8")
@@ -405,7 +419,8 @@ def assemble(parts_dir: Path, out: Path, tag: str, repo: str, alternative=None,
     _write_manifest(out, manifests, tag)
     _write_version_info(out, manifests, tag, repo, alternative)
     if ota_manifest is not None:
-        _write_ota_manifest(out, ota_manifest, tag, ota_channel)
+        layout_version = next(iter(manifests.values()))["partitionLayoutVersion"]
+        _write_ota_manifest(out, ota_manifest, tag, ota_channel, layout_version)
 
 
 def main():
